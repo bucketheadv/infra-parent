@@ -18,6 +18,7 @@ public class ApiController {
 
     @GetMapping("/user")
     public String user() {
-        return "user";
+        System.out.println("hello");
+        return jedisTemplate.get("user");
     }
 }

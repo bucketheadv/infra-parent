@@ -48,7 +48,7 @@ public class DefaultJedisTemplate implements JedisTemplate {
     }
 
     private <T> T tryGetResource(JedisCallback<T> callback, boolean slave) {
-        if (loadBalance == LoadBalanceEnum.ROUND_ROBIN) {
+        if (loadBalance == LoadBalanceEnum.round_robin) {
             return roundRobinGetResource(callback, slave);
         } else {
             return randomGetResource(callback, slave);

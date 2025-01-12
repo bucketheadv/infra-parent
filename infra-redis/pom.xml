@@ -8,7 +8,6 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>infra-redis</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
     <name>infra-redis</name>
     <dependencies>
         <dependency>
@@ -16,8 +15,8 @@
             <artifactId>jedis</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-configuration-processor</artifactId>
+            <groupId>org.infra.structure</groupId>
+            <artifactId>infra-core</artifactId>
         </dependency>
     </dependencies>
 

@@ -8,16 +8,16 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>infra-web</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
     <name>infra-web</name>
     <description>infra-web</description>
-    <properties>
-        <java.version>21</java.version>
-    </properties>
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.infra.structure</groupId>
+            <artifactId>infra-core</artifactId>
         </dependency>
         <dependency>
             <groupId>org.infra.structure</groupId>

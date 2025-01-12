@@ -1,0 +1,3 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=org.infra.structure.core.autoconfiguration.InfraCoreAutoConfiguration
+org.springframework.context.ApplicationContextInitializer=org.infra.structure.core.context.ApplicationContextHolder,org.infra.structure.core.startup.StartupContextInitializer
+org.springframework.boot.env.EnvironmentPostProcessor=org.infra.structure.core.context.ApplicationContextHolder
