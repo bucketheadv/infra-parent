@@ -3,6 +3,7 @@ package org.infra.structure.redis.properties;
 import lombok.Data;
 import org.infra.structure.redis.constants.Const;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
 
 import java.util.Map;
 
@@ -11,6 +12,7 @@ import java.util.Map;
  * Created on 2022/1/14 10:35 下午
  */
 @Data
+@Configuration
 @ConfigurationProperties(prefix = Const.configPrefix)
 public class RedisConfig {
     /**

@@ -17,10 +17,7 @@ import redis.clients.jedis.resps.*;
 import redis.clients.jedis.util.KeyValue;
 import redis.clients.jedis.util.Pool;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -89,7 +86,7 @@ public class DefaultJedisTemplate implements JedisTemplate {
     private <T> T randomGetResource(JedisCallback<T> callback, boolean slave) {
         JedisPool jedisPool = masterPool;
         if (slave && CollectionUtils.isNotEmpty(slavePools)) {
-            int n = RandomTool.random(slavePools.size());
+            int n = new Random().nextInt(slavePools.size());
             jedisPool = slavePools.get(n);
         }
         try (Jedis jedis = jedisPool.getResource()){
@@ -424,6 +421,11 @@ public class DefaultJedisTemplate implements JedisTemplate {
     @Override
     public String clientNoTouchOff() {
         return tryGetResource(Jedis::clientNoTouchOff);
+    }
+
+    @Override
+    public TrackingInfo clientTrackingInfo() {
+        return tryGetResource(Jedis::clientTrackingInfo);
     }
 
     @Override
@@ -1128,8 +1130,78 @@ public class DefaultJedisTemplate implements JedisTemplate {
     }
 
     @Override
+    public ScanResult<byte[]> hscanNoValues(byte[] key, byte[] cursor, ScanParams params) {
+        return tryGetResource(jedis -> jedis.hscanNoValues(key, cursor, params));
+    }
+
+    @Override
     public long hstrlen(byte[] key, byte[] field) {
         return tryGetResource(jedis -> jedis.hstrlen(key, field));
+    }
+
+    @Override
+    public List<Long> hexpire(byte[] key, long seconds, byte[]... fields) {
+        return tryGetResource(jedis -> jedis.hexpire(key, seconds, fields));
+    }
+
+    @Override
+    public List<Long> hexpire(byte[] key, long seconds, ExpiryOption condition, byte[]... fields) {
+        return tryGetResource(jedis -> jedis.hexpire(key, seconds, condition, fields));
+    }
+
+    @Override
+    public List<Long> hpexpire(byte[] key, long milliseconds, byte[]... fields) {
+        return tryGetResource(jedis -> jedis.hpexpire(key, milliseconds, fields));
+    }
+
+    @Override
+    public List<Long> hpexpire(byte[] key, long milliseconds, ExpiryOption condition, byte[]... fields) {
+        return tryGetResource(jedis -> jedis.hpexpire(key, milliseconds, condition, fields));
+    }
+
+    @Override
+    public List<Long> hexpireAt(byte[] key, long unixTimeSeconds, byte[]... fields) {
+        return tryGetResource(jedis -> jedis.hexpireAt(key, unixTimeSeconds, fields));
+    }
+
+    @Override
+    public List<Long> hexpireAt(byte[] key, long unixTimeSeconds, ExpiryOption condition, byte[]... fields) {
+        return tryGetResource(jedis -> jedis.hexpireAt(key, unixTimeSeconds, condition, fields));
+    }
+
+    @Override
+    public List<Long> hpexpireAt(byte[] key, long unixTimeMillis, byte[]... fields) {
+        return tryGetResource(jedis -> jedis.hpexpireAt(key, unixTimeMillis, fields));
+    }
+
+    @Override
+    public List<Long> hpexpireAt(byte[] key, long unixTimeMillis, ExpiryOption condition, byte[]... fields) {
+        return tryGetResource(jedis -> jedis.hpexpireAt(key, unixTimeMillis, condition, fields));
+    }
+
+    @Override
+    public List<Long> hexpireTime(byte[] key, byte[]... fields) {
+        return tryGetResource(jedis -> jedis.hexpireTime(key, fields));
+    }
+
+    @Override
+    public List<Long> hpexpireTime(byte[] key, byte[]... fields) {
+        return tryGetResource(jedis -> jedis.hpexpireTime(key, fields));
+    }
+
+    @Override
+    public List<Long> httl(byte[] key, byte[]... fields) {
+        return tryGetResource(jedis -> jedis.httl(key, fields));
+    }
+
+    @Override
+    public List<Long> hpttl(byte[] key, byte[]... fields) {
+        return tryGetResource(jedis -> jedis.hpttl(key, fields));
+    }
+
+    @Override
+    public List<Long> hpersist(byte[] key, byte[]... fields) {
+        return tryGetResource(jedis -> jedis.hpersist(key, fields));
     }
 
     @Override
@@ -1223,8 +1295,78 @@ public class DefaultJedisTemplate implements JedisTemplate {
     }
 
     @Override
+    public ScanResult<String> hscanNoValues(String key, String cursor, ScanParams params) {
+        return tryGetResource(jedis -> jedis.hscanNoValues(key, cursor, params));
+    }
+
+    @Override
     public long hstrlen(String key, String field) {
         return tryGetResource(jedis -> jedis.hstrlen(key, field));
+    }
+
+    @Override
+    public List<Long> hexpire(String key, long seconds, String... fields) {
+        return tryGetResource(jedis -> jedis.hexpire(key, seconds, fields));
+    }
+
+    @Override
+    public List<Long> hexpire(String key, long seconds, ExpiryOption condition, String... fields) {
+        return tryGetResource(jedis -> jedis.hexpire(key, seconds, condition, fields));
+    }
+
+    @Override
+    public List<Long> hpexpire(String key, long milliseconds, String... fields) {
+        return tryGetResource(jedis -> jedis.hpexpire(key, milliseconds, fields));
+    }
+
+    @Override
+    public List<Long> hpexpire(String key, long milliseconds, ExpiryOption condition, String... fields) {
+        return tryGetResource(jedis -> jedis.hpexpire(key, milliseconds, condition, fields));
+    }
+
+    @Override
+    public List<Long> hexpireAt(String key, long unixTimeSeconds, String... fields) {
+        return tryGetResource(jedis -> jedis.hexpireAt(key, unixTimeSeconds, fields));
+    }
+
+    @Override
+    public List<Long> hexpireAt(String key, long unixTimeSeconds, ExpiryOption condition, String... fields) {
+        return tryGetResource(jedis -> jedis.hexpireAt(key, unixTimeSeconds, condition, fields));
+    }
+
+    @Override
+    public List<Long> hpexpireAt(String key, long unixTimeMillis, String... fields) {
+        return tryGetResource(jedis -> jedis.hpexpireAt(key, unixTimeMillis, fields));
+    }
+
+    @Override
+    public List<Long> hpexpireAt(String key, long unixTimeMillis, ExpiryOption condition, String... fields) {
+        return tryGetResource(jedis -> jedis.hpexpireAt(key, unixTimeMillis, condition, fields));
+    }
+
+    @Override
+    public List<Long> hexpireTime(String key, String... fields) {
+        return tryGetResource(jedis -> jedis.hexpireTime(key, fields));
+    }
+
+    @Override
+    public List<Long> hpexpireTime(String key, String... fields) {
+        return tryGetResource(jedis -> jedis.hpexpireTime(key, fields));
+    }
+
+    @Override
+    public List<Long> httl(String key, String... fields) {
+        return tryGetResource(jedis -> jedis.httl(key, fields));
+    }
+
+    @Override
+    public List<Long> hpttl(String key, String... fields) {
+        return tryGetResource(jedis -> jedis.hpttl(key, fields));
+    }
+
+    @Override
+    public List<Long> hpersist(String key, String... fields) {
+        return tryGetResource(jedis -> jedis.hpersist(key, fields));
     }
 
     @Override
@@ -2419,12 +2561,27 @@ public class DefaultJedisTemplate implements JedisTemplate {
 
     @Override
     public String reset() {
-        return tryGetResource(jedis -> jedis.reset());
+        return tryGetResource(Jedis::reset);
     }
 
     @Override
     public String latencyDoctor() {
         return tryGetResource(Jedis::latencyDoctor);
+    }
+
+    @Override
+    public Map<String, LatencyLatestInfo> latencyLatest() {
+        return tryGetResource(jedis -> jedis.latencyLatest());
+    }
+
+    @Override
+    public List<LatencyHistoryInfo> latencyHistory(LatencyEvent events) {
+        return tryGetResource(jedis -> jedis.latencyHistory(events));
+    }
+
+    @Override
+    public long latencyReset(LatencyEvent... events) {
+        return tryGetResource(jedis -> jedis.latencyReset(events));
     }
 
     @Override
@@ -3735,8 +3892,18 @@ public class DefaultJedisTemplate implements JedisTemplate {
     }
 
     @Override
+    public Map<String, List<StreamEntry>> xreadAsMap(XReadParams xReadParams, Map<String, StreamEntryID> streams) {
+        return tryGetResource(jedis -> jedis.xreadAsMap(xReadParams, streams));
+    }
+
+    @Override
     public List<Map.Entry<String, List<StreamEntry>>> xreadGroup(String groupname, String consumer, XReadGroupParams xReadGroupParams, Map<String, StreamEntryID> streams) {
         return tryGetResource(jedis -> jedis.xreadGroup(groupname, consumer, xReadGroupParams, streams));
+    }
+
+    @Override
+    public Map<String, List<StreamEntry>> xreadGroupAsMap(String groupName, String consumer, XReadGroupParams xReadGroupParams, Map<String, StreamEntryID> streams) {
+        return tryGetResource(jedis -> jedis.xreadGroupAsMap(groupName, consumer, xReadGroupParams, streams));
     }
 
     @Override
