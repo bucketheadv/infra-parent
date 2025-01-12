@@ -23,6 +23,7 @@
         <mybatis.version>3.0.4</mybatis.version>
         <mybatis.flex.version>1.10.4</mybatis.flex.version>
         <joda.version>2.12.7</joda.version>
+        <xxl.job.version>2.5.0</xxl.job.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -53,6 +54,12 @@
                 <version>${infra.structure.version}</version>
             </dependency>
             <dependency>
+                <groupId>org.infra.structure</groupId>
+                <artifactId>infra-job</artifactId>
+                <version>${infra.structure.version}</version>
+            </dependency>
+
+            <dependency>
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
                 <version>${guava.version}</version>
@@ -81,6 +88,12 @@
                 <groupId>joda-time</groupId>
                 <artifactId>joda-time</artifactId>
                 <version>${joda.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.xuxueli</groupId>
+                <artifactId>xxl-job-core</artifactId>
+                <version>${xxl.job.version}</version>
             </dependency>
 
             <dependency>

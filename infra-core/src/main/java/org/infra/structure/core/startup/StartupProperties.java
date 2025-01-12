@@ -14,7 +14,7 @@ import java.util.Set;
 @Configuration
 @ConfigurationProperties(prefix = StartupProperties.AUTOLOAD_PREFIX)
 public class StartupProperties {
-    public static final String AUTOLOAD_PREFIX = "infra.startup";
+    public static final String AUTOLOAD_PREFIX = "infra.structure.startup";
 
     private Set<String> includes;
 

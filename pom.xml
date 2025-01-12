@@ -17,6 +17,7 @@
         <module>infra-redis</module>
         <module>infra-pom</module>
         <module>infra-core</module>
+        <module>infra-job</module>
     </modules>
 
     <!-- dependencyManagement定义的数据不能通过 parent 标签多重继承 -->
