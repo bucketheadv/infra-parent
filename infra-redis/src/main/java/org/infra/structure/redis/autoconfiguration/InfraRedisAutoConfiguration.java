@@ -1,8 +1,9 @@
-package org.infra.structure.redis.configuration;
+package org.infra.structure.redis.autoconfiguration;
 
 import lombok.extern.slf4j.Slf4j;
 import org.infra.structure.core.tool.BinderTool;
 import org.infra.structure.redis.constants.Const;
+import org.infra.structure.redis.definition.RedisDefinitionRegistry;
 import org.infra.structure.redis.properties.RedisConfig;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

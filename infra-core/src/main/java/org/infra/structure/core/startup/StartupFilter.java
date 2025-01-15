@@ -1,7 +1,6 @@
 package org.infra.structure.core.startup;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
 import org.infra.structure.core.context.ApplicationContextHolder;
 import org.infra.structure.core.tool.BinderTool;
 import org.springframework.boot.context.TypeExcludeFilter;
@@ -10,6 +9,7 @@ import org.springframework.core.type.classreading.MetadataReader;
 import org.springframework.core.type.classreading.MetadataReaderFactory;
 
 import java.io.IOException;
+import java.util.Set;
 
 /**
  * @author sven
@@ -31,18 +31,18 @@ public class StartupFilter extends TypeExcludeFilter {
         if (startupProperties == null) {
             return false;
         }
-        if (CollectionUtils.isNotEmpty(startupProperties.getIncludes())) {
-            for (String whitelist : startupProperties.getIncludes()) {
-                if (className.matches(whitelist)) {
-                    return false;
-                }
+
+        Set<String> includes = startupProperties.getIncludes();
+        for (String whitelist : includes) {
+            if (className.matches(whitelist)) {
+                return false;
             }
         }
-        if (CollectionUtils.isNotEmpty(startupProperties.getExcludes())) {
-            for (String pattern : startupProperties.getExcludes()) {
-                if (className.matches(pattern)) {
-                    return true;
-                }
+
+        Set<String> excludes = startupProperties.getExcludes();
+        for (String pattern : excludes) {
+            if (className.matches(pattern)) {
+                return true;
             }
         }
         return false;

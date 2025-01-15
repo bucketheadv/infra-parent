@@ -4,6 +4,7 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -14,9 +15,18 @@ import java.util.Set;
 @Configuration
 @ConfigurationProperties(prefix = StartupProperties.AUTOLOAD_PREFIX)
 public class StartupProperties {
+    /**
+     * 配置前缀
+     */
     public static final String AUTOLOAD_PREFIX = "infra.structure.startup";
 
-    private Set<String> includes;
+    /**
+     * bean 加载路径白名单
+     */
+    private Set<String> includes = new HashSet<>();
 
-    private Set<String> excludes;
+    /**
+     * bean 加载路径黑名单
+     */
+    private Set<String> excludes = new HashSet<>();
 }
