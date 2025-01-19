@@ -1,5 +1,6 @@
 package org.infra.structure.core.tool;
 
+import lombok.experimental.UtilityClass;
 import org.apache.commons.lang3.StringUtils;
 
 import java.math.BigDecimal;
@@ -10,6 +11,7 @@ import java.text.DecimalFormat;
  * @author sven
  * Created on 2025/1/12 14:33
  */
+@UtilityClass
 public class StringTool extends StringUtils {
     public Integer convert2Int(Object o, Integer defaultVal) {
         return toBigDecimal(o, BigDecimal.valueOf(defaultVal)).intValue();

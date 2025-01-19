@@ -9,5 +9,5 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 @ComponentScan(basePackages = "org.infra.structure.db")
-public class InfraDbAutoConfiguration {
+public class InfraDBAutoConfiguration {
 }
