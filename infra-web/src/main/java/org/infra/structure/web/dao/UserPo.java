@@ -11,8 +11,8 @@ import lombok.EqualsAndHashCode;
  * @author sven
  * Created on 2025/1/16 13:35
  */
-@Data
 @Table("user_info")
+@Data(staticConstructor = "create")
 @EqualsAndHashCode(callSuper = true)
 public class UserPo extends Model<UserPo> {
     @Id(keyType = KeyType.Auto)

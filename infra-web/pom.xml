@@ -8,8 +8,6 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>infra-web</artifactId>
-    <name>infra-web</name>
-    <description>infra-web</description>
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>

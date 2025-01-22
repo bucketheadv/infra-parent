@@ -8,8 +8,6 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>infra-db</artifactId>
-    <name>infra-db</name>
-    <description>infra-db</description>
     <dependencies>
         <dependency>
             <groupId>org.mybatis.spring.boot</groupId>
@@ -31,7 +29,6 @@
         <dependency>
             <groupId>org.mybatis.spring.boot</groupId>
             <artifactId>mybatis-spring-boot-starter-test</artifactId>
-            <version>3.0.4</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
