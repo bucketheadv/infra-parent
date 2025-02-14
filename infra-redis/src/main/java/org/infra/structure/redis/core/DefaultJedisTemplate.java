@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @Slf4j
 public class DefaultJedisTemplate implements JedisTemplate {
+    private static final Random random = new Random();
     private final JedisPool masterPool;
 
     private final List<JedisPool> slavePools;
@@ -73,7 +74,7 @@ public class DefaultJedisTemplate implements JedisTemplate {
             }
             log.warn("no available redis slave nodes, template name: {}, trying to use master node", name);
         }
-        try (Jedis jedis = masterPool.getResource()){
+        try (Jedis jedis = masterPool.getResource()) {
             return callback.apply(jedis);
         }
     }
@@ -86,7 +87,7 @@ public class DefaultJedisTemplate implements JedisTemplate {
     private <T> T randomGetResource(JedisCallback<T> callback, boolean slave) {
         JedisPool jedisPool = masterPool;
         if (slave && CollectionUtils.isNotEmpty(slavePools)) {
-            int n = new Random().nextInt(slavePools.size());
+            int n = random.nextInt(slavePools.size());
             jedisPool = slavePools.get(n);
         }
         try (Jedis jedis = jedisPool.getResource()){
