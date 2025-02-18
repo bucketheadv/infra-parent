@@ -3,7 +3,7 @@ package org.infra.structure.redis.autoconfiguration;
 import lombok.extern.slf4j.Slf4j;
 import org.infra.structure.core.tool.BinderTool;
 import org.infra.structure.redis.constants.Const;
-import org.infra.structure.redis.definition.RedisDefinitionRegistry;
+import org.infra.structure.redis.definition.RedisBeanDefinitionRegistry;
 import org.infra.structure.redis.properties.RedisConfig;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -26,7 +26,7 @@ public class InfraRedisAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public static RedisDefinitionRegistry redisDefinitionRegistry(RedisConfig redisConfig) {
-        return new RedisDefinitionRegistry(redisConfig);
+    public static RedisBeanDefinitionRegistry redisDefinitionRegistry(RedisConfig redisConfig) {
+        return new RedisBeanDefinitionRegistry(redisConfig);
     }
 }

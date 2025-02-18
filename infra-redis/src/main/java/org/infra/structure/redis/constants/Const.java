@@ -5,5 +5,5 @@ package org.infra.structure.redis.constants;
  * Created on 2022/9/29 2:14 PM
  */
 public interface Const {
-	String configPrefix = "infra.structure.redis";
+	String configPrefix = "infra.redis";
 }

@@ -29,10 +29,10 @@ import java.util.Map;
  * Created on 2022/1/14 10:51 下午
  */
 @Slf4j
-public class RedisDefinitionRegistry implements BeanDefinitionRegistryPostProcessor {
+public class RedisBeanDefinitionRegistry implements BeanDefinitionRegistryPostProcessor {
     private final RedisConfig redisConfig;
 
-    public RedisDefinitionRegistry(RedisConfig redisConfig) {
+    public RedisBeanDefinitionRegistry(RedisConfig redisConfig) {
         this.redisConfig = redisConfig;
     }
 

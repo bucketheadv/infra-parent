@@ -18,7 +18,7 @@ public class StartupProperties {
     /**
      * 配置前缀
      */
-    public static final String AUTOLOAD_PREFIX = "infra.structure.startup";
+    public static final String AUTOLOAD_PREFIX = "infra.startup";
 
     /**
      * bean 加载路径白名单
