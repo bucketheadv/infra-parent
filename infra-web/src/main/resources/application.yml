@@ -1,0 +1,7 @@
+resilience4j:
+  bulkhead:
+    configs:
+      default:
+        max-concurrent-calls: 3
+        max-wait-duration:
+          seconds: 3
