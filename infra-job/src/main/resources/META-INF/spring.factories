@@ -1,1 +1,1 @@
-org.springframework.boot.autoconfigure.EnableAutoConfiguration=org.infra.structure.job.autoconfiguration.InfraJobAutoConfiguration
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=io.infra.structure.job.autoconfiguration.InfraJobAutoConfiguration

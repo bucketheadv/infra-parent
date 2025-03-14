@@ -1,2 +1,2 @@
-org.springframework.boot.autoconfigure.EnableAutoConfiguration=org.infra.structure.redis.autoconfiguration.InfraRedisAutoConfiguration
-org.springframework.boot.autoconfigure.AutoConfigurationImportFilter=org.infra.structure.redis.filter.SkipFilter
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=io.infra.structure.redis.autoconfiguration.InfraRedisAutoConfiguration
+org.springframework.boot.autoconfigure.AutoConfigurationImportFilter=io.infra.structure.redis.filter.SkipFilter

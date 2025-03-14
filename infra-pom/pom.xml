@@ -8,7 +8,7 @@
         <version>3.4.1</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
-    <groupId>org.infra.structure</groupId>
+    <groupId>io.infra.structure</groupId>
     <artifactId>infra-pom</artifactId>
     <version>${infra.structure.version}</version>
     <packaging>pom</packaging>
@@ -46,22 +46,22 @@
             </dependency>
 
             <dependency>
-                <groupId>org.infra.structure</groupId>
+                <groupId>io.infra.structure</groupId>
                 <artifactId>infra-core</artifactId>
                 <version>${infra.structure.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.infra.structure</groupId>
+                <groupId>io.infra.structure</groupId>
                 <artifactId>infra-db</artifactId>
                 <version>${infra.structure.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.infra.structure</groupId>
+                <groupId>io.infra.structure</groupId>
                 <artifactId>infra-redis</artifactId>
                 <version>${infra.structure.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.infra.structure</groupId>
+                <groupId>io.infra.structure</groupId>
                 <artifactId>infra-job</artifactId>
                 <version>${infra.structure.version}</version>
             </dependency>
