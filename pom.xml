@@ -10,21 +10,20 @@
     </parent>
     <groupId>io.infra.structure</groupId>
     <artifactId>infra-parent</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
+    <version>0.0.2-SNAPSHOT</version>
     <modules>
         <module>infra-db</module>
         <module>infra-redis</module>
         <module>infra-core</module>
         <module>infra-job</module>
-        <module>infra-web</module>
     </modules>
 
     <properties>
         <java.version>21</java.version>
         <spring.boot.version>3.4.4</spring.boot.version>
         <spring-cloud.version>2024.0.0</spring-cloud.version>
-        <infra.structure.version>0.0.1-SNAPSHOT</infra.structure.version>
+        <infra.structure.version>0.0.2-SNAPSHOT</infra.structure.version>
         <guava.version>33.3.1-jre</guava.version>
         <common.collections.version>4.4</common.collections.version>
         <mybatis.version>3.0.4</mybatis.version>

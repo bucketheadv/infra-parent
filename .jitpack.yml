@@ -2,4 +2,5 @@ jdk:
   - openjdk21
 build:
   script:
+    - FILE=infra-parent/pom.xml
     - mvn clean install -DskipTests
