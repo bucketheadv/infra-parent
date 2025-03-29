@@ -8,7 +8,9 @@
         <version>3.4.4</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
+    <groupId>io.infra.structure</groupId>
     <artifactId>infra-parent</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
     <modules>
         <module>infra-db</module>
