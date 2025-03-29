@@ -21,7 +21,13 @@ import java.util.Set;
  * Created on 2025/1/12 15:04
  */
 public class ValidationTool {
-    public static void validate(String objectName, Object obj) throws Exception {
+    /**
+     * 参数校验
+     * @param objectName
+     * @param obj
+     * @throws BindException
+     */
+    public static void validate(String objectName, Object obj) throws BindException {
         Locale locale = LocaleContextHolder.getLocale();
         Set<ConstraintViolation<Object>> result;
         try (ValidatorFactory validatorFactory = Validation.byDefaultProvider().configure()
