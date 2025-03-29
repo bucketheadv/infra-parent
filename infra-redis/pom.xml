@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>io.infra.structure</groupId>
-        <artifactId>infra-parent</artifactId>
+        <artifactId>infra-structure</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>infra-redis</artifactId>
