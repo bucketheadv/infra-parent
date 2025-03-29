@@ -3,34 +3,34 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>io.infra.structure</groupId>
-        <artifactId>infra-pom</artifactId>
-        <version>0.0.1-SNAPSHOT</version>
-        <relativePath>infra-pom/pom.xml</relativePath>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.4.4</version>
+        <relativePath/> <!-- lookup parent from repository -->
     </parent>
-    <artifactId>infra-structure</artifactId>
+    <artifactId>infra-parent</artifactId>
     <packaging>pom</packaging>
     <modules>
         <module>infra-db</module>
         <module>infra-redis</module>
-        <module>infra-pom</module>
         <module>infra-core</module>
         <module>infra-job</module>
         <module>infra-web</module>
     </modules>
 
-    <!-- dependencyManagement定义的数据不能通过 parent 标签多重继承 -->
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>io.infra.structure</groupId>
-                <artifactId>infra-pom</artifactId>
-                <scope>import</scope>
-                <type>pom</type>
-                <version>${infra.structure.version}</version>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
+    <properties>
+        <java.version>21</java.version>
+        <spring.boot.version>3.4.4</spring.boot.version>
+        <spring-cloud.version>2024.0.0</spring-cloud.version>
+        <infra.structure.version>0.0.1-SNAPSHOT</infra.structure.version>
+        <guava.version>33.3.1-jre</guava.version>
+        <common.collections.version>4.4</common.collections.version>
+        <mybatis.version>3.0.4</mybatis.version>
+        <mybatis.flex.version>1.10.4</mybatis.flex.version>
+        <joda.version>2.12.7</joda.version>
+        <xxl.job.version>3.0.0</xxl.job.version>
+        <rocketmq.version>5.1.4</rocketmq.version>
+    </properties>
 
     <dependencies>
         <dependency>
@@ -47,4 +47,142 @@
             <optional>true</optional>
         </dependency>
     </dependencies>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter</artifactId>
+                <version>${spring.boot.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-web</artifactId>
+                <version>${spring.boot.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>io.infra.structure</groupId>
+                <artifactId>infra-core</artifactId>
+                <version>${infra.structure.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.infra.structure</groupId>
+                <artifactId>infra-db</artifactId>
+                <version>${infra.structure.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.infra.structure</groupId>
+                <artifactId>infra-redis</artifactId>
+                <version>${infra.structure.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.infra.structure</groupId>
+                <artifactId>infra-job</artifactId>
+                <version>${infra.structure.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>${guava.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-collections4</artifactId>
+                <version>${common.collections.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.mybatis.spring.boot</groupId>
+                <artifactId>mybatis-spring-boot-starter</artifactId>
+                <version>${mybatis.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mybatis.spring.boot</groupId>
+                <artifactId>mybatis-spring-boot-starter-test</artifactId>
+                <version>${mybatis.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.mybatis-flex</groupId>
+                <artifactId>mybatis-flex-dependencies</artifactId>
+                <version>${mybatis.flex.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>joda-time</groupId>
+                <artifactId>joda-time</artifactId>
+                <version>${joda.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.xuxueli</groupId>
+                <artifactId>xxl-job-core</artifactId>
+                <version>${xxl.job.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.rocketmq</groupId>
+                <artifactId>rocketmq-client</artifactId>
+                <version>${rocketmq.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.intellij</groupId>
+                <artifactId>annotations</artifactId>
+                <version>12.0</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <repositories>
+        <repository>
+            <id>jitpack.io</id>
+            <url>https://jitpack.io</url>
+        </repository>
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+        <repository>
+            <id>spring-snapshots</id>
+            <name>Spring Snapshots</name>
+            <url>https://repo.spring.io/snapshot</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+        </repository>
+    </repositories>
+    <pluginRepositories>
+        <pluginRepository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </pluginRepository>
+        <pluginRepository>
+            <id>spring-snapshots</id>
+            <name>Spring Snapshots</name>
+            <url>https://repo.spring.io/snapshot</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+        </pluginRepository>
+    </pluginRepositories>
 </project>
