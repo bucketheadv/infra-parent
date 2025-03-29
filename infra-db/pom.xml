@@ -9,6 +9,8 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
     <artifactId>infra-db</artifactId>
+    <packaging>jar</packaging>
+
     <dependencies>
         <dependency>
             <groupId>org.mybatis.spring.boot</groupId>

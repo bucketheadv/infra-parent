@@ -9,6 +9,8 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
     <artifactId>infra-redis</artifactId>
+    <packaging>jar</packaging>
+
     <dependencies>
         <dependency>
             <groupId>redis.clients</groupId>
