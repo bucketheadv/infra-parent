@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- 定义 PID 属性 -->
+    <springProperty scope="context" name="PID" source="PID"/>
+    <springProperty scope="context" name="appName" source="spring.application.name" />
+
+    <!-- 不输出logback启动状态日志 -->
+    <statusListener class="ch.qos.logback.core.status.NopStatusListener"/>
+    <!-- 定义ANSI颜色代码 -->
+    <!-- 注册自定义颜色转换器 -->
+    <conversionRule conversionWord="levelColor"
+                    converterClass="io.infra.logging.converter.LevelColorConverter"/>
+    <conversionRule conversionWord="threadColor"
+                    converterClass="io.infra.logging.converter.ThreadColorConverter"/>
+    <conversionRule conversionWord="loggerColor"
+                    converterClass="io.infra.logging.converter.LoggerColorConverter"/>
+    <conversionRule conversionWord="classColor"
+                    converterClass="io.infra.logging.converter.ClassColorConverter"/>
+    <conversionRule conversionWord="msgColor"
+                    converterClass="io.infra.logging.converter.MsgColorConverter"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} %levelColor(%-5level) ${PID} ${appName} %threadColor([%thread]) %loggerColor(%logger{50}) %classColor((%file:%line\)) - %msgColor(%msg) %n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 设置日志级别 -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

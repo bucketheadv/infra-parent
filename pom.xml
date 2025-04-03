@@ -17,6 +17,7 @@
         <module>infra-redis</module>
         <module>infra-core</module>
         <module>infra-job</module>
+        <module>infra-logging</module>
     </modules>
 
     <repositories>
@@ -42,4 +43,19 @@
         </dependency>
     </dependencies>
 
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.14.0</version>
+                <configuration>
+                    <compilerArgs>
+                        <!-- 解决编译时警告问题 -->
+                        <arg>-Xlint:-options</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
