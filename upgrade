@@ -1,0 +1,24 @@
+#!/usr/bin/env sh
+
+# 检查参数
+if [ "$#" -lt 3 ]; then
+  echo "用法: $0 <目录> <原字符串> <新字符串>"
+  echo "示例: $0 ./ 0.0.5-RELEASE 0.0.6-RELEASE"
+  exit 1
+fi
+
+TARGET_DIR="$1"
+OLD_STR="$2"
+NEW_STR="$3"
+
+# 替换逻辑（不备份）
+find "$TARGET_DIR" -type f -name "pom.xml" | while read -r file; do
+  if file "$file" | grep -q text; then
+    echo "处理文件: $file"
+    # 替换内容（Linux 和 macOS 通用写法）
+    sed -i '' "s/${OLD_STR//\//\\/}/${NEW_STR//\//\\/}/g" "$file" 2>/dev/null || \
+    sed -i "s/${OLD_STR//\//\\/}/${NEW_STR//\//\\/}/g" "$file"
+  fi
+done
+
+echo "✅ 所有文件已替换完成。"
