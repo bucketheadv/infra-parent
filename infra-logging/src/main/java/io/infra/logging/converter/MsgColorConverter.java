@@ -28,11 +28,11 @@ public class MsgColorConverter extends CompositeConverter<ILoggingEvent> {
         StringBuilder coloredMessage = new StringBuilder();
         String[] parts = message.split("\\s+");
 
-        int index = 0;
-        for (String part : parts) {
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i];
             if (isVariable(part)) {
-                if (index == 0 && onlyBigLettersOrDigits(part)) {
-                    // 如果变量是第一个单词，且仅包含大写字母或数字时，不支持高亮显示
+                if (i == 0) {
+                    // 如果变量是第一个单词，有时不支持高亮显示，因此不设置高亮
                     coloredMessage.append(part);
                 } else {
                     // 变量使用亮白色
@@ -50,14 +50,9 @@ public class MsgColorConverter extends CompositeConverter<ILoggingEvent> {
                 coloredMessage.append(part);
             }
             coloredMessage.append(" ");
-            index++;
         }
 
         return coloredMessage.toString().trim();
-    }
-
-    private boolean onlyBigLettersOrDigits(String msg) {
-        return msg.matches("[A-Z0-9:,.]+");
     }
 
     private boolean isVariable(String text) {

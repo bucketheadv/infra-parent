@@ -1,4 +1,4 @@
-package io.infra.structure.core.tool;
+package io.infra.structure.core.support;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -29,7 +29,7 @@ public class ApiData<T> {
      */
     private T data;
 
-    public static <T> ApiData<T> success(T data) {
+    public static <T> ApiData<T> ok(T data) {
         return ApiData.<T>builder()
                 .code(0)
                 .msg("success")
@@ -37,8 +37,8 @@ public class ApiData<T> {
                 .build();
     }
 
-    public static <T> ApiData<T> success() {
-        return success(null);
+    public static <T> ApiData<T> ok() {
+        return ok(null);
     }
 
     public static <T> ApiData<T> fail(int code, String msg) {
