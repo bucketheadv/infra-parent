@@ -17,6 +17,7 @@
         <module>infra-redis</module>
         <module>infra-core</module>
         <module>infra-job</module>
+        <module>infra-doc</module>
         <module>infra-logging</module>
     </modules>
 
