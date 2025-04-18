@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API 文档</title>
+    <meta charset="utf-8"/>
+    <link rel="icon" href="https://redocly.github.io/redoc/favicon.ico" />
+    <style>
+        body {
+            margin: 0;
+            font-family: "Helvetica Neue", sans-serif;
+            background-color: #f5f8fd; /* 蓝色背景 */
+            color: #2c3e50;
+        }
+
+        redoc {
+            display: block;
+            padding: 24px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0px 6px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .http-verb.get {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .http-verb.post {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .http-verb.put {
+            background-color: #f39c12;
+            color: white;
+        }
+
+        .http-verb.delete {
+            background-color: #9b59b6;
+            color: white;
+        }
+
+        pre {
+            background-color: #ecf0f1;
+            border-radius: 6px;
+            padding: 12px;
+            border: 1px solid #ccc;
+            color: #34495e;
+        }
+
+        .request-body, .response-body {
+            background-color: #ecf0f1;
+            border-radius: 6px;
+            padding: 16px;
+            border: 1px solid #ddd;
+            margin-top: 16px;
+        }
+    </style>
+</head>
+<body>
+<redoc spec-url="/v3/api-docs"></redoc>
+<script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+</body>
+</html>

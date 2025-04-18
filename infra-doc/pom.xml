@@ -8,17 +8,17 @@
         <version>0.0.8-RELEASE</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
-    <artifactId>infra-redis</artifactId>
-    <packaging>jar</packaging>
+    <artifactId>infra-doc</artifactId>
 
     <dependencies>
         <dependency>
-            <groupId>redis.clients</groupId>
-            <artifactId>jedis</artifactId>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
         </dependency>
+        <!-- 解决kotlin下 @Schema 注解不生效问题 -->
         <dependency>
-            <groupId>io.infra.structure</groupId>
-            <artifactId>infra-core</artifactId>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-kotlin</artifactId>
         </dependency>
     </dependencies>
 
