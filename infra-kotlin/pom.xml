@@ -5,15 +5,11 @@
     <parent>
         <groupId>io.infra.structure</groupId>
         <artifactId>infra-parent</artifactId>
-        <version>0.1.1-RELEASE</version>
+        <version>0.1.2-RELEASE</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
     <groupId>io.infra</groupId>
     <artifactId>infra-kotlin</artifactId>
-
-    <properties>
-        <kotlin.version>2.1.20</kotlin.version>
-    </properties>
 
     <dependencies>
         <dependency>
@@ -23,10 +19,6 @@
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-stdlib</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.jetbrains.kotlin</groupId>
-            <artifactId>kotlin-maven-allopen</artifactId>
         </dependency>
     </dependencies>
 
@@ -54,6 +46,19 @@
                         </configuration>
                     </execution>
                 </executions>
+                <configuration>
+                    <!-- 自动 open 这些注解修饰的类 -->
+                    <compilerPlugins>
+                        <plugin>spring</plugin>
+                    </compilerPlugins>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.jetbrains.kotlin</groupId>
+                        <artifactId>kotlin-maven-allopen</artifactId>
+                        <version>${infra.kotlin.version}</version>
+                    </dependency>
+                </dependencies>
             </plugin>
         </plugins>
     </build>
