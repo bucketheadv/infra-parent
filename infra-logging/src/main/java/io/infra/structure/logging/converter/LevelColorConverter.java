@@ -1,4 +1,4 @@
-package io.infra.logging.converter;
+package io.infra.structure.logging.converter;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;

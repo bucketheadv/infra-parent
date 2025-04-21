@@ -1,4 +1,4 @@
-package io.infra.kotlin.utils
+package io.infra.structure.kotlin.utils
 
 import java.security.MessageDigest
 

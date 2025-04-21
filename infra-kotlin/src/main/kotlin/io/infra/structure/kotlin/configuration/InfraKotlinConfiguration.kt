@@ -1,4 +1,4 @@
-package io.infra.kotlin.configuration
+package io.infra.structure.kotlin.configuration
 
 import org.springframework.context.annotation.ComponentScan
 import org.springframework.context.annotation.Configuration
