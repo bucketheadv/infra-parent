@@ -1,4 +1,4 @@
-package io.infra.structure.kotlin.spring
+package io.infra.structure.core.spring
 
 import jakarta.annotation.PostConstruct
 import org.springframework.context.ApplicationContext

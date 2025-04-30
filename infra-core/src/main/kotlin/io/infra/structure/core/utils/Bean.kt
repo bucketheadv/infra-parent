@@ -1,4 +1,4 @@
-package io.infra.structure.kotlin.utils
+package io.infra.structure.core.utils
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper

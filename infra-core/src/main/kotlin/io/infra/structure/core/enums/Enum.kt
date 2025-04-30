@@ -1,4 +1,4 @@
-package io.infra.structure.kotlin.enums
+package io.infra.structure.core.enums
 
 /**
  * @author liuqinglin

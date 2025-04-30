@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.infra.structure</groupId>
         <artifactId>infra-parent</artifactId>
-        <version>0.1.4-RELEASE</version>
+        <version>0.1.5-RELEASE</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
     <artifactId>infra-redis</artifactId>
@@ -19,10 +19,6 @@
         <dependency>
             <groupId>io.infra.structure</groupId>
             <artifactId>infra-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.infra.structure</groupId>
-            <artifactId>infra-kotlin</artifactId>
         </dependency>
     </dependencies>
 

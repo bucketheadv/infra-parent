@@ -1,4 +1,4 @@
-package io.infra.structure.kotlin.utils
+package io.infra.structure.core.utils
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
