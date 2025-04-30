@@ -5,13 +5,13 @@
     <parent>
         <groupId>com.github.bucketheadv</groupId>
         <artifactId>infra-pom</artifactId>
-        <version>0.1.5-RELEASE</version>
+        <version>0.1.6-RELEASE</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>io.infra.structure</groupId>
     <artifactId>infra-parent</artifactId>
     <packaging>pom</packaging>
-    <version>0.1.5-RELEASE</version>
+    <version>0.1.6-RELEASE</version>
     <modules>
         <module>infra-db</module>
         <module>infra-redis</module>
@@ -19,7 +19,6 @@
         <module>infra-job</module>
         <module>infra-doc</module>
         <module>infra-logging</module>
-        <module>infra-api</module>
     </modules>
     <properties>
         <infra.kotlin.version>${kotlin.version}</infra.kotlin.version>
