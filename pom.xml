@@ -19,7 +19,6 @@
         <module>infra-job</module>
         <module>infra-doc</module>
         <module>infra-logging</module>
-        <module>infra-api</module>
     </modules>
     <properties>
         <infra.kotlin.version>${kotlin.version}</infra.kotlin.version>
