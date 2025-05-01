@@ -5,13 +5,13 @@
     <parent>
         <groupId>com.github.bucketheadv</groupId>
         <artifactId>infra-pom</artifactId>
-        <version>0.1.6-RELEASE</version>
+        <version>0.2.0-RELEASE</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>io.infra.structure</groupId>
     <artifactId>infra-parent</artifactId>
     <packaging>pom</packaging>
-    <version>0.1.6-RELEASE</version>
+    <version>0.2.0-RELEASE</version>
     <modules>
         <module>infra-db</module>
         <module>infra-redis</module>
@@ -19,6 +19,7 @@
         <module>infra-job</module>
         <module>infra-doc</module>
         <module>infra-logging</module>
+        <module>infra-api</module>
     </modules>
     <properties>
         <infra.kotlin.version>${kotlin.version}</infra.kotlin.version>
@@ -28,6 +29,10 @@
         <repository>
             <id>jitpack</id>
             <url>https://jitpack.io</url>
+        </repository>
+        <repository>
+            <id>ktor</id>
+            <url>https://maven.pkg.jetbrains.space/public/p/ktor/eap</url>
         </repository>
     </repositories>
 
@@ -51,6 +56,38 @@
         <dependency>
             <groupId>com.fasterxml.jackson.module</groupId>
             <artifactId>jackson-module-kotlin</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.ktor</groupId>
+            <artifactId>ktor-client-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.ktor</groupId>
+            <artifactId>ktor-client-core-jvm</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.ktor</groupId>
+            <artifactId>ktor-client-cio</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.ktor</groupId>
+            <artifactId>ktor-client-cio-jvm</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.ktor</groupId>
+            <artifactId>ktor-client-content-negotiation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.ktor</groupId>
+            <artifactId>ktor-client-content-negotiation-jvm</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.ktor</groupId>
+            <artifactId>ktor-serialization-jackson</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.ktor</groupId>
+            <artifactId>ktor-serialization-jackson-jvm</artifactId>
         </dependency>
 
         <dependency>

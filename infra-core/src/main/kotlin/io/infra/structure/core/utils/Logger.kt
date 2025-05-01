@@ -11,3 +11,8 @@ import org.slf4j.LoggerFactory
 inline fun <reified T>getLogger(): Logger = LoggerFactory.getLogger(T::class.java)
 
 fun getLogger(clazz: Class<*>): Logger = LoggerFactory.getLogger(clazz)
+
+interface Loggable {
+    val log: Logger
+    get() = LoggerFactory.getLogger(javaClass)
+}
