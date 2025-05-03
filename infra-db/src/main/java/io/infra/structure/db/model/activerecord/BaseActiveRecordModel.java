@@ -15,7 +15,7 @@ import java.util.Date;
  */
 @Getter
 @Setter
-public class BaseModel<M extends Model<M>, ID extends Serializable> extends Model<M> {
+public class BaseActiveRecordModel<M extends Model<M>, ID extends Serializable> extends Model<M> {
     /**
      * 主键id
      */

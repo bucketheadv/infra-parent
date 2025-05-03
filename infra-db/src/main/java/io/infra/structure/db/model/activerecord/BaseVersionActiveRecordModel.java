@@ -13,7 +13,7 @@ import java.io.Serializable;
  */
 @Getter
 @Setter
-public class BaseVersionModel<M extends Model<M>, ID extends Serializable> extends BaseModel<M, ID> {
+public class BaseVersionActiveRecordModel<M extends Model<M>, ID extends Serializable> extends BaseActiveRecordModel<M, ID> {
     /**
      * 数据版本号
      */
