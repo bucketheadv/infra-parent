@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>io.infra.structure</groupId>
@@ -8,12 +8,19 @@
 		<version>0.3.0-RELEASE</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
-	<artifactId>infra-logging</artifactId>
-
+	<artifactId>infra-script</artifactId>
 	<dependencies>
 		<dependency>
+			<groupId>io.infra.structure</groupId>
+			<artifactId>infra-core</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-logging</artifactId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.jetbrains.kotlin</groupId>
+			<artifactId>kotlin-compiler-embeddable</artifactId>
 		</dependency>
 	</dependencies>
 </project>

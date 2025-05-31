@@ -57,10 +57,3 @@ inline fun <reified T : DbEntity<ID>, reified ID : Serializable> JedisTemplate.f
     }
     return result
 }
-
-inline fun <reified T : DbEntity<ID>, reified ID : Serializable> JedisTemplate.fetchEntityMultiToMap(suffix: String,
-                                                                                                     ids: List<ID>,
-                                                                                                     expireSeconds: Long = 300,
-                                                                                                     lambda: (List<ID>) -> List<T>): Map<ID, T> {
-    return fetchEntityMulti(suffix, ids, expireSeconds, lambda).associateBy { it.id!! }
-}
