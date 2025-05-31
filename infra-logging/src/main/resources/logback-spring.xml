@@ -9,15 +9,15 @@
     <!-- 定义ANSI颜色代码 -->
     <!-- 注册自定义颜色转换器 -->
     <conversionRule conversionWord="levelColor"
-                    converterClass="io.infra.structure.logging.converter.LevelColorConverter"/>
+                    class="io.infra.structure.logging.converter.LevelColorConverter"/>
     <conversionRule conversionWord="threadColor"
-                    converterClass="io.infra.structure.logging.converter.ThreadColorConverter"/>
+                    class="io.infra.structure.logging.converter.ThreadColorConverter"/>
     <conversionRule conversionWord="loggerColor"
-                    converterClass="io.infra.structure.logging.converter.LoggerColorConverter"/>
+                    class="io.infra.structure.logging.converter.LoggerColorConverter"/>
     <conversionRule conversionWord="classColor"
-                    converterClass="io.infra.structure.logging.converter.ClassColorConverter"/>
+                    class="io.infra.structure.logging.converter.ClassColorConverter"/>
     <conversionRule conversionWord="msgColor"
-                    converterClass="io.infra.structure.logging.converter.MsgColorConverter"/>
+                    class="io.infra.structure.logging.converter.MsgColorConverter"/>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
