@@ -6,7 +6,7 @@
     <parent>
         <groupId>io.infra.structure</groupId>
         <artifactId>infra-parent</artifactId>
-        <version>0.3.0-RELEASE</version>
+        <version>0.3.3-RELEASE</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
     <artifactId>infra-core</artifactId>

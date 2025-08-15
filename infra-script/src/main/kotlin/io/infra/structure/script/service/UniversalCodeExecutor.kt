@@ -18,11 +18,19 @@ import java.net.URLClassLoader
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.util.*
-import java.util.concurrent.*
+import java.util.Locale
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import java.util.regex.Matcher
 import java.util.regex.Pattern
-import javax.tools.*
+import javax.tools.Diagnostic
+import javax.tools.DiagnosticCollector
+import javax.tools.JavaFileObject
+import javax.tools.SimpleJavaFileObject
+import javax.tools.ToolProvider
 
 /**
  * @author liuqinglin

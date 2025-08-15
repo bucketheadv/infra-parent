@@ -5,13 +5,13 @@
     <parent>
         <groupId>com.github.bucketheadv</groupId>
         <artifactId>infra-pom</artifactId>
-        <version>0.3.0-RELEASE</version>
+        <version>0.3.3-RELEASE</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>io.infra.structure</groupId>
     <artifactId>infra-parent</artifactId>
     <packaging>pom</packaging>
-    <version>0.3.0-RELEASE</version>
+    <version>0.3.3-RELEASE</version>
     <modules>
         <module>infra-db</module>
         <module>infra-redis</module>
