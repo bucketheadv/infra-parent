@@ -55,8 +55,7 @@ class UniversalCodeExecutor {
     }
 
     private fun executeJava(code: String, tempDir: Path): Any? {
-        val className = extractJavaClassName(code)
-        if (className == null) return "无法提取Java类名"
+        val className = extractJavaClassName(code) ?: return "无法提取Java类名"
         val compiler = ToolProvider.getSystemJavaCompiler()
         val diagnostics = DiagnosticCollector<JavaFileObject?>()
         val fileObject: JavaFileObject = JavaSourceFromString(className, code)

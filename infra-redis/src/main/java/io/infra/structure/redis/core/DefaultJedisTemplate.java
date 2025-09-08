@@ -1051,8 +1051,28 @@ public class DefaultJedisTemplate implements JedisTemplate {
     }
 
     @Override
+    public long hsetex(byte[] key, HSetExParams params, byte[] field, byte[] value) {
+        return tryGetResource(jedis -> jedis.hsetex(key, params, field, value));
+    }
+
+    @Override
+    public long hsetex(byte[] key, HSetExParams params, Map<byte[], byte[]> hash) {
+        return tryGetResource(jedis -> jedis.hsetex(key, params, hash));
+    }
+
+    @Override
     public byte[] hget(byte[] key, byte[] field) {
         return tryGetResource(jedis -> jedis.hget(key, field), true);
+    }
+
+    @Override
+    public List<byte[]> hgetex(byte[] key, HGetExParams params, byte[]... fields) {
+        return tryGetResource(jedis -> jedis.hgetex(key, params, fields));
+    }
+
+    @Override
+    public List<byte[]> hgetdel(byte[] key, byte[]... fields) {
+        return tryGetResource(jedis -> jedis.hgetdel(key, fields));
     }
 
     @Override
@@ -1216,8 +1236,28 @@ public class DefaultJedisTemplate implements JedisTemplate {
     }
 
     @Override
+    public long hsetex(String key, HSetExParams params, String field, String value) {
+        return tryGetResource(jedis -> jedis.hsetex(key, params, field, value));
+    }
+
+    @Override
+    public long hsetex(String key, HSetExParams params, Map<String, String> hash) {
+        return tryGetResource(jedis -> jedis.hsetex(key, params, hash));
+    }
+
+    @Override
     public String hget(String key, String field) {
         return tryGetResource(jedis -> jedis.hget(key, field), true);
+    }
+
+    @Override
+    public List<String> hgetex(String key, HGetExParams params, String... fields) {
+        return tryGetResource(jedis -> jedis.hgetex(key, params, fields));
+    }
+
+    @Override
+    public List<String> hgetdel(String key, String... fields) {
+        return tryGetResource(jedis -> jedis.hgetdel(key, fields));
     }
 
     @Override
