@@ -3,7 +3,6 @@ package io.infra.structure.db.model
 import com.mybatisflex.annotation.Id
 import com.mybatisflex.annotation.KeyType
 import java.io.Serializable
-import java.util.Date
 
 /**
  * @author liuqinglin
@@ -19,10 +18,10 @@ abstract class BaseEntity<ID : Serializable>(
     /**
      * 创建时间
      */
-    var createTime: Date?,
+    var createTime: Long?,
 
     /**
      * 更新时间
      */
-    var updateTime: Date?
+    var updateTime: Long?
 ) : DbEntity<ID>

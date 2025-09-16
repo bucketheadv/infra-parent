@@ -6,7 +6,6 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.io.Serializable;
-import java.util.Date;
 
 /**
  * @author sven
@@ -24,10 +23,10 @@ public abstract class BaseModel<ID extends Serializable> {
     /**
      * 创建时间
      */
-    private Date createTime;
+    private Long createTime;
 
     /**
      * 更新时间
      */
-    private Date updateTime;
+    private Long updateTime;
 }
