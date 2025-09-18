@@ -21,7 +21,7 @@ import org.springframework.core.env.Environment
 @Configuration
 @ConditionalOnProperty(prefix = configPrefix, value = ["enabled"], havingValue = "true")
 class InfraJobAutoConfiguration (
-    @Value("\${spring.application.name:}")
+    @param:Value("\${spring.application.name:}")
     private val applicationName: String?
 ) : EnvironmentAware {
     private var environment: Environment? = null

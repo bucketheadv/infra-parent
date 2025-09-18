@@ -16,7 +16,7 @@ public class BinderTool {
         try {
             return Binder.get(environment).bind(prefix, clazz).get();
         } catch (NoSuchElementException e) {
-            log.warn("未检测到 {} 配置，类 {} 配置项可能未绑定成功", prefix, clazz.getName());
+            log.debug("未检测到 {} 配置，类 {} 配置项可能未绑定成功", prefix, clazz.getName());
         }
         return null;
     }
