@@ -1,4 +1,4 @@
-package io.infra.structure.core.support.excel;
+package io.infra.structure.core.support.document.common;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
