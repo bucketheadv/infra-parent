@@ -21,7 +21,7 @@
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} %levelColor(%-5level) ${PID} ${appName} %threadColor([%thread]) %loggerColor(%logger{50}) %classColor((%file:%line\)) - %msgColor(%msg) %n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} %levelColor(%-5level) %red(${PID}) ${appName} %threadColor([%thread]) %loggerColor(%logger{50}) %classColor((%file:%line\)) - %msgColor(%msg) %n</pattern>
         </encoder>
     </appender>
 

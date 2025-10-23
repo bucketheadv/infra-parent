@@ -36,3 +36,4 @@ build/
 
 .codebuddy/
 infra-api/
+infra-rocketmq/
