@@ -3,7 +3,10 @@ package io.infra.structure.core.support.excel;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 
 import java.io.File;
 import java.util.*;
@@ -13,9 +16,11 @@ import java.util.*;
  *
  * @author sven
  */
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class CsvTest {
 
     @Test
+    @Order(1)
     public void testCreateAndWrite() {
         List<Map<String, Object>> dataList = new ArrayList<>();
 
@@ -57,6 +62,7 @@ public class CsvTest {
     }
 
     @Test
+    @Order(2)
     public void testRead() {
         String filePath = System.getProperty("user.home") + "/Downloads/test_csv.csv";
         if (!new File(filePath).exists()) {
@@ -104,7 +110,7 @@ public class CsvTest {
         String filePath = System.getProperty("user.home") + "/Downloads/test_beans.csv";
         Csv csv = Csv.create(filePath);
         // 写入Bean时不使用自定义表头，保持字段名以便读取时匹配
-        csv.write(employees, Employee.class);
+        csv.write(employees);
 
         csv = Csv.open(filePath);
         List<Employee> readEmployees = csv.read(Employee.class);
@@ -122,7 +128,7 @@ public class CsvTest {
         String filePath = System.getProperty("user.home") + "/Downloads/test_beans_annotation.csv";
         Csv csv = Csv.create(filePath);
         // 写入时自动使用@ExcelColumn注解的值作为表头
-        csv.write(employees, EmployeeWithAnnotation.class);
+        csv.write(employees);
 
         csv = Csv.open(filePath);
         // 读取时自动根据@ExcelColumn注解匹配字段

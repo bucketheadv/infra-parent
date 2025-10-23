@@ -61,18 +61,19 @@ public class Csv {
     }
 
     /**
-     * 写入Map数据
+     * 写入数据（支持Map或Bean对象列表，自动识别@ExcelColumn注解）
      */
-    public Csv write(List<Map<String, Object>> dataList) {
+    public <T> Csv write(List<T> dataList) {
         if (dataList == null || dataList.isEmpty()) {
             return this;
         }
 
-        this.fieldNames = new ArrayList<>(dataList.getFirst().keySet());
+        List<Map<String, Object>> mapList = toMapList(dataList);
+        this.fieldNames = new ArrayList<>(mapList.getFirst().keySet());
 
         try (BufferedWriter writer = createWriter(false)) {
             writeHeaderLine(writer);
-            writeDataLines(writer, dataList);
+            writeDataLines(writer, mapList);
         } catch (Exception e) {
             log.error("写入CSV文件失败: {}", filePath, e);
             throw new RuntimeException("写入CSV文件失败", e);
@@ -82,21 +83,9 @@ public class Csv {
     }
 
     /**
-     * 写入Bean对象列表（自动识别@ExcelColumn注解）
+     * 追加数据（支持Map或Bean对象列表）
      */
-    public <T> Csv write(List<T> dataList, Class<T> clazz) {
-        if (dataList == null || dataList.isEmpty()) {
-            return this;
-        }
-
-        List<Map<String, Object>> mapList = Excel.BeanConverter.beansToMaps(dataList, clazz);
-        return write(mapList);
-    }
-
-    /**
-     * 追加数据
-     */
-    public Csv append(List<Map<String, Object>> dataList) {
+    public <T> Csv append(List<T> dataList) {
         if (dataList == null || dataList.isEmpty()) {
             return this;
         }
@@ -106,10 +95,12 @@ public class Csv {
             return write(dataList);
         }
 
+        List<Map<String, Object>> mapList = toMapList(dataList);
+
         try {
             List<String> headers = readHeadersFromFile();
             try (BufferedWriter writer = createWriter(true)) {
-                writeDataLines(writer, dataList, headers);
+                writeDataLines(writer, mapList, headers);
             }
         } catch (Exception e) {
             log.error("追加CSV文件失败: {}", filePath, e);
@@ -120,13 +111,27 @@ public class Csv {
     }
 
     /**
+     * 将数据列表转换为Map列表（自动识别Map或Bean）
+     */
+    @SuppressWarnings("unchecked")
+    private <T> List<Map<String, Object>> toMapList(List<T> dataList) {
+        Object firstElement = dataList.getFirst();
+        if (firstElement instanceof Map) {
+            return (List<Map<String, Object>>) dataList;
+        } else {
+            Class<T> clazz = (Class<T>) firstElement.getClass();
+            return Excel.BeanConverter.beansToMaps(dataList, clazz);
+        }
+    }
+
+    /**
      * 读取CSV数据为Map列表
      */
     public List<Map<String, Object>> read() {
         List<Map<String, Object>> result = new ArrayList<>();
 
         try (BufferedReader reader = createReader()) {
-            String headerLine = reader.readLine();
+            String headerLine = readCsvLine(reader);
             if (headerLine == null) {
                 return result;
             }
@@ -134,7 +139,7 @@ public class Csv {
             List<String> headers = parseLine(headerLine);
 
             String line;
-            while ((line = reader.readLine()) != null) {
+            while ((line = readCsvLine(reader)) != null) {
                 if (line.trim().isEmpty()) {
                     continue;
                 }
@@ -154,6 +159,56 @@ public class Csv {
         }
 
         return result;
+    }
+
+    /**
+     * 读取CSV行，处理引号内的换行符
+     */
+    private String readCsvLine(BufferedReader reader) throws IOException {
+        StringBuilder line = new StringBuilder();
+        boolean inQuotes = false;
+        int c;
+
+        while ((c = reader.read()) != -1) {
+            char ch = (char) c;
+
+            if (ch == '"') {
+                line.append(ch);
+                // 检查是否是转义的引号
+                reader.mark(1);
+                int next = reader.read();
+                if (next == '"') {
+                    line.append('"');
+                } else {
+                    if (next != -1) {
+                        reader.reset();
+                    }
+                    inQuotes = !inQuotes;
+                }
+            } else if (ch == '\n' && !inQuotes) {
+                // 行结束（不在引号内）
+                break;
+            } else if (ch == '\r') {
+                // 处理\r和\r\n的情况
+                reader.mark(1);
+                int next = reader.read();
+                if (next == '\n' && !inQuotes) {
+                    break;
+                } else {
+                    if (next != -1) {
+                        reader.reset();
+                    }
+                    if (!inQuotes) {
+                        break;
+                    }
+                    line.append(ch);
+                }
+            } else {
+                line.append(ch);
+            }
+        }
+
+        return line.length() > 0 || c != -1 ? line.toString() : null;
     }
 
     /**
@@ -219,7 +274,7 @@ public class Csv {
 
     private List<String> readHeadersFromFile() throws IOException {
         try (BufferedReader reader = createReader()) {
-            String headerLine = reader.readLine();
+            String headerLine = readCsvLine(reader);
             if (headerLine == null) {
                 throw new RuntimeException("CSV文件为空");
             }

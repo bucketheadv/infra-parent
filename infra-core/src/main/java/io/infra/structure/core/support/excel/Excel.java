@@ -253,37 +253,26 @@ public class Excel implements Closeable {
         }
 
         /**
-         * 写入Map数据
+         * 写入数据（支持Map或Bean对象列表，自动识别@ExcelColumn注解）
          */
-        public ExcelSheet write(List<Map<String, Object>> dataList) {
+        public <T> ExcelSheet write(List<T> dataList) {
             if (dataList == null || dataList.isEmpty()) {
                 return this;
             }
 
-            List<String> fieldNames = new ArrayList<>(dataList.getFirst().keySet());
+            List<Map<String, Object>> mapList = toMapList(dataList);
+            List<String> fieldNames = new ArrayList<>(mapList.getFirst().keySet());
             writeHeader(fieldNames);
-            writeRows(dataList, fieldNames, getNextRowNum());
+            writeRows(mapList, fieldNames, getNextRowNum());
             autoSizeColumns(fieldNames.size());
 
             return this;
         }
 
         /**
-         * 写入Bean对象列表（自动识别@ExcelColumn注解）
+         * 追加数据（支持Map或Bean对象列表）
          */
-        public <T> ExcelSheet write(List<T> dataList, Class<T> clazz) {
-            if (dataList == null || dataList.isEmpty()) {
-                return this;
-            }
-
-            List<Map<String, Object>> mapList = BeanConverter.beansToMaps(dataList, clazz);
-            return write(mapList);
-        }
-
-        /**
-         * 追加Map数据
-         */
-        public ExcelSheet append(List<Map<String, Object>> dataList) {
+        public <T> ExcelSheet append(List<T> dataList) {
             if (dataList == null || dataList.isEmpty()) {
                 return this;
             }
@@ -292,10 +281,25 @@ public class Excel implements Closeable {
                 return write(dataList);
             }
 
+            List<Map<String, Object>> mapList = toMapList(dataList);
             List<String> headers = readHeaders();
-            writeRows(dataList, headers, poiSheet.getLastRowNum() + 1);
+            writeRows(mapList, headers, poiSheet.getLastRowNum() + 1);
 
             return this;
+        }
+
+        /**
+         * 将数据列表转换为Map列表（自动识别Map或Bean）
+         */
+        @SuppressWarnings("unchecked")
+        private <T> List<Map<String, Object>> toMapList(List<T> dataList) {
+            Object firstElement = dataList.getFirst();
+            if (firstElement instanceof Map) {
+                return (List<Map<String, Object>>) dataList;
+            } else {
+                Class<T> clazz = (Class<T>) firstElement.getClass();
+                return BeanConverter.beansToMaps(dataList, clazz);
+            }
         }
 
         /**

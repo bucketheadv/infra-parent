@@ -3,7 +3,10 @@ package io.infra.structure.core.support.excel;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 
 import java.io.File;
 import java.util.*;
@@ -13,6 +16,7 @@ import java.util.*;
  *
  * @author sven
  */
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class ExcelTest {
 
     @Test
@@ -67,6 +71,7 @@ public class ExcelTest {
     }
 
     @Test
+    @Order(1)
     public void testMultipleSheets() {
         List<Map<String, Object>> employeeData = new ArrayList<>();
         Map<String, Object> emp1 = new LinkedHashMap<>();
@@ -121,6 +126,7 @@ public class ExcelTest {
     }
 
     @Test
+    @Order(2)
     public void testRead() {
         String filePath = System.getProperty("user.home") + "/Downloads/test_multi_sheet.xlsx";
         if (!new File(filePath).exists()) {
@@ -146,7 +152,7 @@ public class ExcelTest {
 
         String filePath = System.getProperty("user.home") + "/Downloads/test_beans.xlsx";
         try (Excel excel = Excel.create(filePath)) {
-            excel.sheet("员工列表").write(employees, Employee.class);
+            excel.sheet("员工列表").write(employees);
             excel.flush();
         }
 
@@ -168,7 +174,7 @@ public class ExcelTest {
         String filePath = System.getProperty("user.home") + "/Downloads/test_beans_annotation.xlsx";
         try (Excel excel = Excel.create(filePath)) {
             // 写入时自动使用@ExcelColumn注解的值作为表头
-            excel.sheet("员工列表").write(employees, EmployeeWithAnnotation.class);
+            excel.sheet("员工列表").write(employees);
             excel.flush();
         }
 
