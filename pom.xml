@@ -106,6 +106,10 @@
                 <configuration>
                     <annotationProcessorPaths>
                         <path>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-configuration-processor</artifactId>
+                        </path>
+                        <path>
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok</artifactId>
                             <version>${lombok.version}</version>
@@ -122,6 +126,23 @@
                 <artifactId>kotlin-maven-plugin</artifactId>
                 <executions>
                     <execution>
+                        <id>kapt</id>
+                        <goals>
+                            <goal>kapt</goal>
+                        </goals>
+                        <configuration>
+                            <sourceDirs>
+                                <sourceDir>src/main/kotlin</sourceDir>
+                            </sourceDirs>
+                            <annotationProcessorPaths>
+                                <annotationProcessorPath>
+                                    <groupId>org.springframework.boot</groupId>
+                                    <artifactId>spring-boot-configuration-processor</artifactId>
+                                </annotationProcessorPath>
+                            </annotationProcessorPaths>
+                        </configuration>
+                    </execution>
+                    <execution>
                         <id>compile</id>
                         <phase>process-sources</phase>
                         <goals>
@@ -131,6 +152,7 @@
                             <sourceDirs>
                                 <source>src/main/kotlin</source>
                                 <source>target/generated-sources/annotations</source>
+                                <source>target/generated-sources/kapt</source>
                             </sourceDirs>
                         </configuration>
                     </execution>

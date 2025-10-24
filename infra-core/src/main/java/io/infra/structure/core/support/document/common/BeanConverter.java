@@ -74,7 +74,7 @@ public class BeanConverter {
                             field = columnToField.get(mappedFieldName);
                         }
                         
-                        // 2. 直接通过列名查找（支持@Column注解）
+                        // 2. 直接通过列名查找（支持@ExcelColumn注解）
                         if (field == null) {
                             field = columnToField.get(key);
                         }
