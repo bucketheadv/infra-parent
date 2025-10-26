@@ -1,6 +1,6 @@
 package io.infra.structure.script.controller
 
-import io.infra.structure.script.constants.prefix
+import io.infra.structure.script.constants.configPrefix
 import io.infra.structure.script.service.UniversalCodeExecutor
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.web.bind.annotation.RequestMapping
@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController
  */
 @RestController
 @RequestMapping("/code")
-@ConditionalOnProperty(prefix = prefix, value = ["enabled"], havingValue = "true")
+@ConditionalOnProperty(prefix = configPrefix, value = ["enabled"], havingValue = "true")
 class CodeController(
     private val codeExecutionService: UniversalCodeExecutor,
 ) {
