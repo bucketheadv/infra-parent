@@ -1,1 +1,2 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=io.infra.structure.db.autoconfiguration.InfraDBAutoConfiguration
+org.springframework.boot.autoconfigure.AutoConfigurationImportFilter=io.infra.structure.db.filter.MyBatisFlexAutoConfigurationFilter
