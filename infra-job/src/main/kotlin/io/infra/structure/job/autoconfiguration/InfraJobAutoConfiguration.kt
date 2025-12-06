@@ -1,10 +1,10 @@
 package io.infra.structure.job.autoconfiguration
 
 import com.xxl.job.core.executor.impl.XxlJobSpringExecutor
-import com.xxl.job.core.util.NetUtil
 import io.infra.structure.core.tool.BinderTool
 import io.infra.structure.job.constants.configPrefix
 import io.infra.structure.job.properties.JobProperties
+import io.infra.structure.job.util.NetUtil
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
