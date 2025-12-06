@@ -3661,6 +3661,16 @@ public class DefaultJedisTemplate implements JedisTemplate {
     }
 
     @Override
+    public List<StreamEntryDeletionResult> xackdel(byte[] bytes, byte[] bytes1, byte[]... bytes2) {
+        return tryGetResource(jedis -> jedis.xackdel(bytes, bytes1, bytes2));
+    }
+
+    @Override
+    public List<StreamEntryDeletionResult> xackdel(byte[] bytes, byte[] bytes1, StreamDeletionPolicy streamDeletionPolicy, byte[]... bytes2) {
+        return tryGetResource(jedis -> jedis.xackdel(bytes, bytes1, streamDeletionPolicy, bytes2));
+    }
+
+    @Override
     public String xgroupCreate(byte[] key, byte[] consumer, byte[] id, boolean makeStream) {
         return tryGetResource(jedis -> jedis.xgroupCreate(key, consumer, id, makeStream));
     }
@@ -3688,6 +3698,16 @@ public class DefaultJedisTemplate implements JedisTemplate {
     @Override
     public long xdel(byte[] key, byte[]... ids) {
         return tryGetResource(jedis -> jedis.xdel(key, ids));
+    }
+
+    @Override
+    public List<StreamEntryDeletionResult> xdelex(byte[] bytes, byte[]... bytes1) {
+        return tryGetResource(jedis -> jedis.xdelex(bytes, bytes1));
+    }
+
+    @Override
+    public List<StreamEntryDeletionResult> xdelex(byte[] bytes, StreamDeletionPolicy streamDeletionPolicy, byte[]... bytes1) {
+        return tryGetResource(jedis -> jedis.xdelex(bytes, streamDeletionPolicy, bytes1));
     }
 
     @Override
@@ -3768,6 +3788,26 @@ public class DefaultJedisTemplate implements JedisTemplate {
     }
 
     @Override
+    public List<Map.Entry<byte[], List<StreamEntryBinary>>> xreadBinary(XReadParams xReadParams, Map<byte[], StreamEntryID> map) {
+        return tryGetResource(jedis -> jedis.xreadBinary(xReadParams, map), true);
+    }
+
+    @Override
+    public Map<byte[], List<StreamEntryBinary>> xreadBinaryAsMap(XReadParams xReadParams, Map<byte[], StreamEntryID> map) {
+        return tryGetResource(jedis -> jedis.xreadBinaryAsMap(xReadParams, map), true);
+    }
+
+    @Override
+    public List<Map.Entry<byte[], List<StreamEntryBinary>>> xreadGroupBinary(byte[] bytes, byte[] bytes1, XReadGroupParams xReadGroupParams, Map<byte[], StreamEntryID> map) {
+        return tryGetResource(jedis -> jedis.xreadGroupBinary(bytes, bytes1, xReadGroupParams, map), true);
+    }
+
+    @Override
+    public Map<byte[], List<StreamEntryBinary>> xreadGroupBinaryAsMap(byte[] bytes, byte[] bytes1, XReadGroupParams xReadGroupParams, Map<byte[], StreamEntryID> map) {
+        return tryGetResource(jedis -> jedis.xreadGroupBinaryAsMap(bytes, bytes1, xReadGroupParams, map), true);
+    }
+
+    @Override
     public StreamEntryID xadd(String key, StreamEntryID id, Map<String, String> hash) {
         return tryGetResource(jedis -> jedis.xadd(key, id, hash));
     }
@@ -3828,6 +3868,16 @@ public class DefaultJedisTemplate implements JedisTemplate {
     }
 
     @Override
+    public List<StreamEntryDeletionResult> xackdel(String s, String s1, StreamEntryID... streamEntryIDS) {
+        return tryGetResource(jedis -> jedis.xackdel(s, s1, streamEntryIDS));
+    }
+
+    @Override
+    public List<StreamEntryDeletionResult> xackdel(String s, String s1, StreamDeletionPolicy streamDeletionPolicy, StreamEntryID... streamEntryIDS) {
+        return tryGetResource(jedis -> jedis.xackdel(s, s1, streamDeletionPolicy, streamEntryIDS));
+    }
+
+    @Override
     public String xgroupCreate(String key, String groupname, StreamEntryID id, boolean makeStream) {
         return tryGetResource(jedis -> jedis.xgroupCreate(key, groupname, id, makeStream));
     }
@@ -3865,6 +3915,16 @@ public class DefaultJedisTemplate implements JedisTemplate {
     @Override
     public long xdel(String key, StreamEntryID... ids) {
         return tryGetResource(jedis -> jedis.xdel(key, ids));
+    }
+
+    @Override
+    public List<StreamEntryDeletionResult> xdelex(String s, StreamEntryID... streamEntryIDS) {
+        return tryGetResource(jedis -> jedis.xdelex(s, streamEntryIDS));
+    }
+
+    @Override
+    public List<StreamEntryDeletionResult> xdelex(String s, StreamDeletionPolicy streamDeletionPolicy, StreamEntryID... streamEntryIDS) {
+        return tryGetResource(jedis -> jedis.xdelex(s, streamDeletionPolicy, streamEntryIDS));
     }
 
     @Override
@@ -4494,5 +4554,260 @@ public class DefaultJedisTemplate implements JedisTemplate {
     @Override
     public FunctionStats functionStats() {
         return tryGetResource(Jedis::functionStats);
+    }
+
+    @Override
+    public boolean vadd(byte[] bytes, float[] floats, byte[] bytes1) {
+        return tryGetResource(jedis -> jedis.vadd(bytes, floats, bytes1));
+    }
+
+    @Override
+    public boolean vadd(byte[] bytes, float[] floats, byte[] bytes1, VAddParams vAddParams) {
+        return tryGetResource(jedis -> jedis.vadd(bytes, floats, bytes1, vAddParams));
+    }
+
+    @Override
+    public boolean vaddFP32(byte[] bytes, byte[] bytes1, byte[] bytes2) {
+        return tryGetResource(jedis -> jedis.vaddFP32(bytes, bytes1, bytes2));
+    }
+
+    @Override
+    public boolean vaddFP32(byte[] bytes, byte[] bytes1, byte[] bytes2, VAddParams vAddParams) {
+        return tryGetResource(jedis -> jedis.vaddFP32(bytes, bytes1, bytes2, vAddParams));
+    }
+
+    @Override
+    public boolean vadd(byte[] bytes, float[] floats, byte[] bytes1, int i, VAddParams vAddParams) {
+        return tryGetResource(jedis -> jedis.vadd(bytes, floats, bytes1, i, vAddParams));
+    }
+
+    @Override
+    public boolean vaddFP32(byte[] bytes, byte[] bytes1, byte[] bytes2, int i, VAddParams vAddParams) {
+        return tryGetResource(jedis -> jedis.vaddFP32(bytes, bytes1, bytes2, i, vAddParams));
+    }
+
+    @Override
+    public List<byte[]> vsim(byte[] bytes, float[] floats) {
+        return tryGetResource(jedis -> jedis.vsim(bytes, floats), true);
+    }
+
+    @Override
+    public List<byte[]> vsim(byte[] bytes, float[] floats, VSimParams vSimParams) {
+        return tryGetResource(jedis -> jedis.vsim(bytes, floats, vSimParams), true);
+    }
+
+    @Override
+    public Map<byte[], Double> vsimWithScores(byte[] bytes, float[] floats, VSimParams vSimParams) {
+        return tryGetResource(jedis -> jedis.vsimWithScores(bytes, floats, vSimParams), true);
+    }
+
+    @Override
+    public Map<byte[], VSimScoreAttribs> vsimWithScoresAndAttribs(byte[] bytes, float[] floats, VSimParams vSimParams) {
+        return tryGetResource(jedis -> jedis.vsimWithScoresAndAttribs(bytes, floats, vSimParams), true);
+    }
+
+    @Override
+    public List<byte[]> vsimByElement(byte[] bytes, byte[] bytes1) {
+        return tryGetResource(jedis -> jedis.vsimByElement(bytes, bytes1), true);
+    }
+
+    @Override
+    public List<byte[]> vsimByElement(byte[] bytes, byte[] bytes1, VSimParams vSimParams) {
+        return tryGetResource(jedis -> jedis.vsimByElement(bytes, bytes1, vSimParams), true);
+    }
+
+    @Override
+    public Map<byte[], Double> vsimByElementWithScores(byte[] bytes, byte[] bytes1, VSimParams vSimParams) {
+        return tryGetResource(jedis -> jedis.vsimByElementWithScores(bytes, bytes1, vSimParams), true);
+    }
+
+    @Override
+    public Map<byte[], VSimScoreAttribs> vsimByElementWithScoresAndAttribs(byte[] bytes, byte[] bytes1, VSimParams vSimParams) {
+        return tryGetResource(jedis -> jedis.vsimByElementWithScoresAndAttribs(bytes, bytes1, vSimParams), true);
+    }
+
+    @Override
+    public long vdim(byte[] bytes) {
+        return tryGetResource(jedis -> jedis.vdim(bytes), true);
+    }
+
+    @Override
+    public long vcard(byte[] bytes) {
+        return tryGetResource(jedis -> jedis.vcard(bytes), true);
+    }
+
+    @Override
+    public List<Double> vemb(byte[] bytes, byte[] bytes1) {
+        return tryGetResource(jedis -> jedis.vemb(bytes, bytes1), true);
+    }
+
+    @Override
+    public RawVector vembRaw(byte[] bytes, byte[] bytes1) {
+        return tryGetResource(jedis -> jedis.vembRaw(bytes, bytes1), true);
+    }
+
+    @Override
+    public boolean vrem(byte[] bytes, byte[] bytes1) {
+        return tryGetResource(jedis -> jedis.vrem(bytes, bytes1));
+    }
+
+    @Override
+    public List<List<byte[]>> vlinks(byte[] bytes, byte[] bytes1) {
+        return tryGetResource(jedis -> jedis.vlinks(bytes, bytes1), true);
+    }
+
+    @Override
+    public List<Map<byte[], Double>> vlinksWithScores(byte[] bytes, byte[] bytes1) {
+        return tryGetResource(jedis -> jedis.vlinksWithScores(bytes, bytes1), true);
+    }
+
+    @Override
+    public byte[] vrandmember(byte[] bytes) {
+        return tryGetResource(jedis -> jedis.vrandmember(bytes), true);
+    }
+
+    @Override
+    public List<byte[]> vrandmember(byte[] bytes, int i) {
+        return tryGetResource(jedis -> jedis.vrandmember(bytes, i), true);
+    }
+
+    @Override
+    public byte[] vgetattr(byte[] bytes, byte[] bytes1) {
+        return tryGetResource(jedis -> jedis.vgetattr(bytes, bytes1), true);
+    }
+
+    @Override
+    public boolean vsetattr(byte[] bytes, byte[] bytes1, byte[] bytes2) {
+        return tryGetResource(jedis -> jedis.vsetattr(bytes, bytes1, bytes2));
+    }
+
+    @Override
+    public boolean vadd(String s, float[] floats, String s1) {
+        return tryGetResource(jedis -> jedis.vadd(s, floats, s1));
+    }
+
+    @Override
+    public boolean vadd(String s, float[] floats, String s1, VAddParams vAddParams) {
+        return tryGetResource(jedis -> jedis.vadd(s, floats, s1, vAddParams));
+    }
+
+    @Override
+    public boolean vaddFP32(String s, byte[] bytes, String s1) {
+        return tryGetResource(jedis -> jedis.vaddFP32(s, bytes, s1));
+    }
+
+    @Override
+    public boolean vaddFP32(String s, byte[] bytes, String s1, VAddParams vAddParams) {
+        return tryGetResource(jedis -> jedis.vaddFP32(s, bytes, s1, vAddParams));
+    }
+
+    @Override
+    public boolean vadd(String s, float[] floats, String s1, int i, VAddParams vAddParams) {
+        return tryGetResource(jedis -> jedis.vadd(s, floats, s1, i, vAddParams));
+    }
+
+    @Override
+    public boolean vaddFP32(String s, byte[] bytes, String s1, int i, VAddParams vAddParams) {
+        return tryGetResource(jedis -> jedis.vaddFP32(s, bytes, s1, i, vAddParams));
+    }
+
+    @Override
+    public List<String> vsim(String s, float[] floats) {
+        return tryGetResource(jedis -> jedis.vsim(s, floats), true);
+    }
+
+    @Override
+    public List<String> vsim(String s, float[] floats, VSimParams vSimParams) {
+        return tryGetResource(jedis -> jedis.vsim(s, floats, vSimParams), true);
+    }
+
+    @Override
+    public Map<String, Double> vsimWithScores(String s, float[] floats, VSimParams vSimParams) {
+        return tryGetResource(jedis -> jedis.vsimWithScores(s, floats, vSimParams), true);
+    }
+
+    @Override
+    public Map<String, VSimScoreAttribs> vsimWithScoresAndAttribs(String s, float[] floats, VSimParams vSimParams) {
+        return tryGetResource(jedis -> jedis.vsimWithScoresAndAttribs(s, floats, vSimParams), true);
+    }
+
+    @Override
+    public List<String> vsimByElement(String s, String s1) {
+        return tryGetResource(jedis -> jedis.vsimByElement(s, s1), true);
+    }
+
+    @Override
+    public List<String> vsimByElement(String s, String s1, VSimParams vSimParams) {
+        return tryGetResource(jedis -> jedis.vsimByElement(s, s1, vSimParams), true);
+    }
+
+    @Override
+    public Map<String, Double> vsimByElementWithScores(String s, String s1, VSimParams vSimParams) {
+        return tryGetResource(jedis -> jedis.vsimByElementWithScores(s, s1, vSimParams), true);
+    }
+
+    @Override
+    public Map<String, VSimScoreAttribs> vsimByElementWithScoresAndAttribs(String s, String s1, VSimParams vSimParams) {
+        return tryGetResource(jedis -> jedis.vsimByElementWithScoresAndAttribs(s, s1, vSimParams), true);
+    }
+
+    @Override
+    public long vdim(String s) {
+        return tryGetResource(jedis -> jedis.vdim(s), true);
+    }
+
+    @Override
+    public long vcard(String s) {
+        return tryGetResource(jedis -> jedis.vcard(s), true);
+    }
+
+    @Override
+    public List<Double> vemb(String s, String s1) {
+        return tryGetResource(jedis -> jedis.vemb(s, s1), true);
+    }
+
+    @Override
+    public RawVector vembRaw(String s, String s1) {
+        return tryGetResource(jedis -> jedis.vembRaw(s, s1), true);
+    }
+
+    @Override
+    public boolean vrem(String s, String s1) {
+        return tryGetResource(jedis -> jedis.vrem(s, s1));
+    }
+
+    @Override
+    public List<List<String>> vlinks(String s, String s1) {
+        return tryGetResource(jedis -> jedis.vlinks(s, s1), true);
+    }
+
+    @Override
+    public List<Map<String, Double>> vlinksWithScores(String s, String s1) {
+        return tryGetResource(jedis -> jedis.vlinksWithScores(s, s1), true);
+    }
+
+    @Override
+    public String vrandmember(String s) {
+        return tryGetResource(jedis -> jedis.vrandmember(s), true);
+    }
+
+    @Override
+    public List<String> vrandmember(String s, int i) {
+        return tryGetResource(jedis -> jedis.vrandmember(s, i), true);
+    }
+
+    @Override
+    public String vgetattr(String s, String s1) {
+        return tryGetResource(jedis -> jedis.vgetattr(s, s1), true);
+    }
+
+    @Override
+    public boolean vsetattr(String s, String s1, String s2) {
+        return tryGetResource(jedis -> jedis.vsetattr(s, s1, s2));
+    }
+
+    @Override
+    public VectorInfo vinfo(String s) {
+        return tryGetResource(jedis -> jedis.vinfo(s), true);
     }
 }
