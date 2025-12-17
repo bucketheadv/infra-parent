@@ -14,5 +14,5 @@ fun getLogger(clazz: Class<*>): Logger = LoggerFactory.getLogger(clazz)
 
 interface Loggable {
     val log: Logger
-    get() = LoggerFactory.getLogger(javaClass)
+    get() = getLogger(javaClass)
 }

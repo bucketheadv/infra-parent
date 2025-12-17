@@ -2,15 +2,15 @@ package io.infra.structure.core.context;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.env.EnvironmentPostProcessor;
+import org.springframework.boot.EnvironmentPostProcessor;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.ConfigurableEnvironment;
-import org.springframework.lang.NonNull;
 
 /**
  * @author sven
@@ -24,7 +24,7 @@ public class ApplicationContextHolder implements ApplicationContextInitializer<C
     private static ApplicationContext applicationContext;
 
     @Override
-    public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
+    public void postProcessEnvironment(@NonNull ConfigurableEnvironment environment, @NonNull SpringApplication application) {
         // 此处可以处理外部传入的环境变量
     }
 
