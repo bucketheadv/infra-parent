@@ -1,11 +1,11 @@
 package io.infra.structure.core.startup;
 
+import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.lang.NonNull;
 
 /**
  * @author sven
