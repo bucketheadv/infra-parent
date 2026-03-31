@@ -18,6 +18,7 @@ import redis.clients.jedis.util.KeyValue;
 import redis.clients.jedis.util.Pool;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -26,7 +27,6 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @Slf4j
 public class DefaultJedisTemplate implements JedisTemplate {
-    private static final Random random = new Random();
     private final JedisPool masterPool;
 
     private final List<JedisPool> slavePools;
@@ -58,41 +58,48 @@ public class DefaultJedisTemplate implements JedisTemplate {
 
     private <T> T roundRobinGetResource(JedisCallback<T> callback, boolean slave) {
         if (slave && CollectionUtils.isNotEmpty(slavePools)) {
-            Set<Integer> idxSet = new HashSet<>();
-            int n = (int) getCounterValue() % slavePools.size();
-            while (!idxSet.contains(n)) {
-                JedisPool jedisPool = slavePools.get(n);
-                idxSet.add(n);
-                try (Jedis jedis = jedisPool.getResource()) {
-                    if ("PONG".equalsIgnoreCase(jedis.ping())) {
-                        return callback.apply(jedis);
-                    }
-                } catch (JedisConnectionException e) {
-                    log.error("redis执行异常, template: {}, error: {}", name, ExceptionUtils.getStackTrace(e));
-                }
-                n = (n + 1) % slavePools.size();
+            int start = Math.floorMod(getCounterValue(), slavePools.size());
+            T value = trySlavePools(callback, start);
+            if (value != null) {
+                return value;
             }
-            log.warn("no available redis slave nodes, template name: {}, trying to use master node", name);
         }
         try (Jedis jedis = masterPool.getResource()) {
             return callback.apply(jedis);
         }
     }
 
-    private long getCounterValue() {
-        long value = counter.getAndIncrement();
-        return Math.abs(value);
+    private int getCounterValue() {
+        return (int) counter.getAndIncrement();
     }
 
     private <T> T randomGetResource(JedisCallback<T> callback, boolean slave) {
-        JedisPool jedisPool = masterPool;
         if (slave && CollectionUtils.isNotEmpty(slavePools)) {
-            int n = random.nextInt(slavePools.size());
-            jedisPool = slavePools.get(n);
+            int start = ThreadLocalRandom.current().nextInt(slavePools.size());
+            T value = trySlavePools(callback, start);
+            if (value != null) {
+                return value;
+            }
         }
-        try (Jedis jedis = jedisPool.getResource()){
+        try (Jedis jedis = masterPool.getResource()) {
             return callback.apply(jedis);
         }
+    }
+
+    private <T> T trySlavePools(JedisCallback<T> callback, int startIndex) {
+        for (int i = 0; i < slavePools.size(); i++) {
+            int currentIndex = (startIndex + i) % slavePools.size();
+            JedisPool jedisPool = slavePools.get(currentIndex);
+            try (Jedis jedis = jedisPool.getResource()) {
+                if ("PONG".equalsIgnoreCase(jedis.ping())) {
+                    return callback.apply(jedis);
+                }
+            } catch (JedisConnectionException e) {
+                log.error("redis执行异常, template: {}, error: {}", name, ExceptionUtils.getStackTrace(e));
+            }
+        }
+        log.warn("no available redis slave nodes, template name: {}, trying to use master node", name);
+        return null;
     }
 
     @Override
@@ -3799,12 +3806,12 @@ public class DefaultJedisTemplate implements JedisTemplate {
 
     @Override
     public List<Map.Entry<byte[], List<StreamEntryBinary>>> xreadGroupBinary(byte[] bytes, byte[] bytes1, XReadGroupParams xReadGroupParams, Map<byte[], StreamEntryID> map) {
-        return tryGetResource(jedis -> jedis.xreadGroupBinary(bytes, bytes1, xReadGroupParams, map), true);
+        return tryGetResource(jedis -> jedis.xreadGroupBinary(bytes, bytes1, xReadGroupParams, map));
     }
 
     @Override
     public Map<byte[], List<StreamEntryBinary>> xreadGroupBinaryAsMap(byte[] bytes, byte[] bytes1, XReadGroupParams xReadGroupParams, Map<byte[], StreamEntryID> map) {
-        return tryGetResource(jedis -> jedis.xreadGroupBinaryAsMap(bytes, bytes1, xReadGroupParams, map), true);
+        return tryGetResource(jedis -> jedis.xreadGroupBinaryAsMap(bytes, bytes1, xReadGroupParams, map));
     }
 
     @Override
