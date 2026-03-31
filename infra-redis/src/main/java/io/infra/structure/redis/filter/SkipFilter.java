@@ -1,6 +1,7 @@
 package io.infra.structure.redis.filter;
 
 import com.google.common.collect.Sets;
+import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.AutoConfigurationImportFilter;
 import org.springframework.boot.autoconfigure.AutoConfigurationMetadata;
 
@@ -16,7 +17,7 @@ public class SkipFilter implements AutoConfigurationImportFilter {
     );
 
     @Override
-    public boolean[] match(String[] autoConfigurationClasses, AutoConfigurationMetadata autoConfigurationMetadata) {
+    public boolean @NonNull [] match(String[] autoConfigurationClasses, @NonNull AutoConfigurationMetadata autoConfigurationMetadata) {
         boolean[] matches = new boolean[autoConfigurationClasses.length];
         for (int i = 0; i < autoConfigurationClasses.length; i++) {
             matches[i] = !SKIP_SET.contains(autoConfigurationClasses[i]);

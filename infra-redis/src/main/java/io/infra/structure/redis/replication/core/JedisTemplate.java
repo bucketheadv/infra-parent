@@ -1,10 +1,19 @@
-package io.infra.structure.redis.core;
+package io.infra.structure.redis.replication.core;
 
-import io.infra.structure.redis.commands.JedisMultiCallback;
-import io.infra.structure.redis.commands.JedisPipelineCallback;
+import io.infra.structure.redis.replication.commands.JedisMultiCallback;
+import io.infra.structure.redis.replication.commands.JedisPipelineCallback;
 import redis.clients.jedis.BinaryJedisPubSub;
 import redis.clients.jedis.JedisPubSub;
-import redis.clients.jedis.commands.*;
+import redis.clients.jedis.commands.ClusterCommands;
+import redis.clients.jedis.commands.ControlBinaryCommands;
+import redis.clients.jedis.commands.ControlCommands;
+import redis.clients.jedis.commands.DatabaseCommands;
+import redis.clients.jedis.commands.GenericControlCommands;
+import redis.clients.jedis.commands.JedisBinaryCommands;
+import redis.clients.jedis.commands.JedisCommands;
+import redis.clients.jedis.commands.ModuleCommands;
+import redis.clients.jedis.commands.SentinelCommands;
+import redis.clients.jedis.commands.ServerCommands;
 
 import java.io.Closeable;
 import java.util.List;

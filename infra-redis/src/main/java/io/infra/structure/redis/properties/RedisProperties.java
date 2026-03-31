@@ -26,6 +26,26 @@ public class RedisProperties {
     private int db = 0;
 
     /**
+     * 连接超时时间，单位毫秒
+     */
+    private int connectionTimeoutMillis = 2000;
+
+    /**
+     * 读写超时时间，单位毫秒
+     */
+    private int socketTimeoutMillis = 2000;
+
+    /**
+     * 阻塞命令超时时间，单位毫秒
+     */
+    private int blockingSocketTimeoutMillis = 2000;
+
+    /**
+     * 连接建立失败后是否继续重试由上层控制
+     */
+    private String clientName;
+
+    /**
      * 线程池最大线程数
      */
     private int maxTotal = 8;

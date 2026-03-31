@@ -2,7 +2,7 @@ package io.infra.structure.redis.utils
 
 import io.infra.structure.core.tool.JsonTool
 import io.infra.structure.db.model.DbEntity
-import io.infra.structure.redis.core.JedisTemplate
+import io.infra.structure.redis.replication.core.JedisTemplate
 import java.io.Serializable
 import kotlin.text.isNullOrBlank
 import kotlin.time.Duration

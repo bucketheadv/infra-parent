@@ -5,6 +5,7 @@ import io.infra.structure.redis.constants.Const;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -23,10 +24,10 @@ public class RedisConfig {
     /**
      * 主redis实例名称
      */
-    private String primary;
+    private String primary = "";
 
     /**
      * 配置模板映射
      */
-    private Map<String, RedisMasterSlaveConfig> template;
+    private Map<String, RedisTemplateConfig> template = new LinkedHashMap<>();
 }

@@ -1,25 +1,20 @@
-package io.infra.structure.redis.core;
+package io.infra.structure.redis.replication.core;
 
-import io.infra.structure.redis.commands.JedisCallback;
-import io.infra.structure.redis.commands.JedisMultiCallback;
-import io.infra.structure.redis.commands.JedisPipelineCallback;
-import io.infra.structure.redis.constants.LoadBalanceEnum;
+import io.infra.structure.redis.replication.commands.JedisCallback;
+import io.infra.structure.redis.replication.commands.JedisMultiCallback;
+import io.infra.structure.redis.replication.commands.JedisPipelineCallback;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import redis.clients.jedis.Module;
 import redis.clients.jedis.*;
 import redis.clients.jedis.args.*;
-import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.exceptions.JedisException;
 import redis.clients.jedis.params.*;
 import redis.clients.jedis.resps.*;
 import redis.clients.jedis.util.KeyValue;
-import redis.clients.jedis.util.Pool;
 
 import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author sven
@@ -27,87 +22,79 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @Slf4j
 public class DefaultJedisTemplate implements JedisTemplate {
-    private final JedisPool masterPool;
-
-    private final List<JedisPool> slavePools;
-
     private final String name;
+    private final RedisTemplateTopology topology;
+    private final RedisEndpointSelector endpointSelector;
 
-    private final LoadBalanceEnum loadBalance;
-
-    private final AtomicLong counter = new AtomicLong(0);
-
-    public DefaultJedisTemplate(String name, JedisPool masterPool, List<JedisPool> slavePools, LoadBalanceEnum loadBalance) {
+    public DefaultJedisTemplate(String name, RedisTemplateTopology topology) {
         this.name = name;
-        this.masterPool = masterPool;
-        this.slavePools = slavePools;
-        this.loadBalance = loadBalance;
+        this.topology = topology;
+        this.endpointSelector = new RedisEndpointSelector(topology);
     }
 
     private <T> T tryGetResource(JedisCallback<T> callback) {
         return tryGetResource(callback, false);
     }
 
-    private <T> T tryGetResource(JedisCallback<T> callback, boolean slave) {
-        if (loadBalance == LoadBalanceEnum.round_robin) {
-            return roundRobinGetResource(callback, slave);
-        } else {
-            return randomGetResource(callback, slave);
+    private <T> T tryGetResource(JedisCallback<T> callback, boolean readOperation) {
+        List<RedisEndpoint> candidates = endpointSelector.selectCandidates(readOperation);
+        if (candidates.isEmpty()) {
+            throw new IllegalStateException("No redis endpoints configured for template " + name);
         }
-    }
 
-    private <T> T roundRobinGetResource(JedisCallback<T> callback, boolean slave) {
-        if (slave && CollectionUtils.isNotEmpty(slavePools)) {
-            int start = Math.floorMod(getCounterValue(), slavePools.size());
-            T value = trySlavePools(callback, start);
-            if (value != null) {
-                return value;
-            }
-        }
-        try (Jedis jedis = masterPool.getResource()) {
-            return callback.apply(jedis);
-        }
-    }
-
-    private int getCounterValue() {
-        return (int) counter.getAndIncrement();
-    }
-
-    private <T> T randomGetResource(JedisCallback<T> callback, boolean slave) {
-        if (slave && CollectionUtils.isNotEmpty(slavePools)) {
-            int start = ThreadLocalRandom.current().nextInt(slavePools.size());
-            T value = trySlavePools(callback, start);
-            if (value != null) {
-                return value;
-            }
-        }
-        try (Jedis jedis = masterPool.getResource()) {
-            return callback.apply(jedis);
-        }
-    }
-
-    private <T> T trySlavePools(JedisCallback<T> callback, int startIndex) {
-        for (int i = 0; i < slavePools.size(); i++) {
-            int currentIndex = (startIndex + i) % slavePools.size();
-            JedisPool jedisPool = slavePools.get(currentIndex);
-            try (Jedis jedis = jedisPool.getResource()) {
-                if ("PONG".equalsIgnoreCase(jedis.ping())) {
-                    return callback.apply(jedis);
+        JedisException lastException = null;
+        for (int attempt = 1; attempt <= topology.getMaxAttempts(); attempt++) {
+            long now = System.currentTimeMillis();
+            boolean attemptedEndpoint = false;
+            for (RedisEndpoint endpoint : candidates) {
+                if (!endpoint.isAvailable(now)) {
+                    continue;
                 }
-            } catch (JedisConnectionException e) {
-                log.error("redis执行异常, template: {}, error: {}", name, ExceptionUtils.getStackTrace(e));
+                attemptedEndpoint = true;
+                try (Jedis jedis = endpoint.getPool().getResource()) {
+                    if (topology.isProbeOnRecover() && endpoint.getIsolatedUntilMillis() > 0 && "PONG".equalsIgnoreCase(jedis.ping())) {
+                        endpoint.markSuccess();
+                    }
+                    T result = callback.apply(jedis);
+                    endpoint.markSuccess();
+                    return result;
+                } catch (JedisException e) {
+                    endpoint.markFailure(topology.getFailoverCooldownMillis());
+                    lastException = e;
+                    log.warn("redis节点访问失败, template: {}, endpoint: {}, readOperation: {}, attempt: {}, error: {}",
+                            name, endpoint.getAddress(), readOperation, attempt, ExceptionUtils.getRootCauseMessage(e));
+                }
+            }
+            if (!attemptedEndpoint) {
+                for (RedisEndpoint endpoint : candidates) {
+                    endpoint.markSuccess();
+                }
+            }
+            if (attempt < topology.getMaxAttempts() && topology.getRetryIntervalMillis() > 0) {
+                try {
+                    TimeUnit.MILLISECONDS.sleep(topology.getRetryIntervalMillis());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new JedisException("redis retry interrupted", e);
+                }
             }
         }
-        log.warn("no available redis slave nodes, template name: {}, trying to use master node", name);
-        return null;
+        throw lastException == null ? new JedisException("No available redis endpoint for template " + name) : lastException;
     }
 
     @Override
     public void close() {
         log.info("[{}] shutdown, bye.", name);
-        masterPool.close();
-        if (CollectionUtils.isNotEmpty(slavePools)) {
-            slavePools.forEach(Pool::close);
+        Set<JedisPool> closedPools = new HashSet<>();
+        for (RedisNodeGroup nodeGroup : topology.getNodeGroups()) {
+            if (closedPools.add(nodeGroup.getMaster().getPool())) {
+                nodeGroup.getMaster().getPool().close();
+            }
+            for (RedisEndpoint slave : nodeGroup.getSlaves()) {
+                if (closedPools.add(slave.getPool())) {
+                    slave.getPool().close();
+                }
+            }
         }
     }
 
@@ -579,7 +566,7 @@ public class DefaultJedisTemplate implements JedisTemplate {
 
     @Override
     public List<ClusterShardInfo> clusterShards() {
-        return tryGetResource(jedis -> jedis.clusterShards());
+        return tryGetResource(Jedis::clusterShards);
     }
 
     @Override
@@ -2334,7 +2321,7 @@ public class DefaultJedisTemplate implements JedisTemplate {
 
     @Override
     public Object evalReadonly(byte[] script, List<byte[]> keys, List<byte[]> args) {
-        return tryGetResource(jedis -> jedis.evalReadonly(script, keys, args));
+        return tryGetResource(jedis -> jedis.evalReadonly(script, keys, args), true);
     }
 
     @Override
@@ -2354,7 +2341,7 @@ public class DefaultJedisTemplate implements JedisTemplate {
 
     @Override
     public Object evalshaReadonly(byte[] sha1, List<byte[]> keys, List<byte[]> args) {
-        return tryGetResource(jedis -> jedis.evalshaReadonly(sha1, keys, args));
+        return tryGetResource(jedis -> jedis.evalshaReadonly(sha1, keys, args), true);
     }
 
     @Override
@@ -2374,7 +2361,7 @@ public class DefaultJedisTemplate implements JedisTemplate {
 
     @Override
     public Object evalReadonly(String script, List<String> keys, List<String> args) {
-        return tryGetResource(jedis -> jedis.evalReadonly(script, keys, args));
+        return tryGetResource(jedis -> jedis.evalReadonly(script, keys, args), true);
     }
 
     @Override
@@ -2394,7 +2381,7 @@ public class DefaultJedisTemplate implements JedisTemplate {
 
     @Override
     public Object evalshaReadonly(String sha1, List<String> keys, List<String> args) {
-        return tryGetResource(jedis -> jedis.evalshaReadonly(sha1, keys, args));
+        return tryGetResource(jedis -> jedis.evalshaReadonly(sha1, keys, args), true);
     }
 
     @Override

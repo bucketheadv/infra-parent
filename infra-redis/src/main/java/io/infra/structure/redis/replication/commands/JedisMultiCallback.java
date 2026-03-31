@@ -1,4 +1,4 @@
-package io.infra.structure.redis.commands;
+package io.infra.structure.redis.replication.commands;
 
 import redis.clients.jedis.Transaction;
 
