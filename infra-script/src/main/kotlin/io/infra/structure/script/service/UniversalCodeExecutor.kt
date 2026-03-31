@@ -93,7 +93,7 @@ class UniversalCodeExecutor {
 
     private fun compileKotlin(kotlinFile: Path, outputDir: Path): MutableList<String?> {
         val configuration = CompilerConfiguration()
-        val messages: MutableList<String?> = ArrayList<String?>()
+        val messages = ArrayList<String?>()
         val messageCollector: MessageCollector = object : MessageCollector {
             override fun report(
                 severity: CompilerMessageSeverity,
@@ -127,7 +127,7 @@ class UniversalCodeExecutor {
     private fun loadAndExecuteClass(className: String?, tempDir: Path): Any? {
         val classLoader: URLClassLoader
         try {
-            classLoader = URLClassLoader.newInstance(arrayOf<URL>(tempDir.toUri().toURL()), javaClass.getClassLoader())
+            classLoader = URLClassLoader.newInstance(arrayOf<URL>(tempDir.toUri().toURL()), javaClass.classLoader)
         } catch (e: MalformedURLException) {
             return "类加载失败: " + e.message
         }
@@ -182,37 +182,34 @@ class UniversalCodeExecutor {
         return if (matcher.find()) matcher.group(2) else null
     }
 
-    private fun findKotlinMainClass(tempDir: Path, baseName: String): String? {
+    /**
+     * 从临时目录中提取所有类名
+     */
+    private fun findAllClassNames(tempDir: Path): Sequence<String> {
         return try {
-            Files.walk(tempDir)
-                .filter { p: Path? -> p.toString().endsWith(".class") }
-                .map { p: Path? ->
-                    val relativePath = p.toString().substring(tempDir.toString().length + 1)
-                    relativePath.replace(File.separator, ".")
-                        .substring(0, relativePath.length - 6)
-                }
-                .filter { name: String? -> name!!.startsWith(baseName) && !name.contains("$") }
-                .findFirst()
-                .orElse(null)
+            Files.walk(tempDir).use { stream ->
+                stream
+                    .filter { p: Path? -> p.toString().endsWith(".class") }
+                    .map { p: Path? ->
+                        val relativePath = p.toString().substring(tempDir.toString().length + 1)
+                        relativePath.replace(File.separator, ".")
+                            .substring(0, relativePath.length - 6)
+                    }
+                    .toList()
+                    .asSequence()
+            }
         } catch (_: IOException) {
-            null
+            emptySequence()
         }
     }
 
+    private fun findKotlinMainClass(tempDir: Path, baseName: String): String? {
+        return findAllClassNames(tempDir).firstOrNull { name -> name.startsWith(baseName) && !name.contains("$") }
+    }
+
     private fun findActualClass(tempDir: Path): String? {
-        return try {
-            Files.walk(tempDir)
-                .filter { p: Path? -> p.toString().endsWith(".class") }
-                .map { p: Path? ->
-                    val relativePath = p.toString().substring(tempDir.toString().length + 1)
-                    relativePath.replace(File.separator, ".")
-                        .substring(0, relativePath.length - 6)
-                }
-                .findFirst()
-                .orElse(null)
-        } catch (_: IOException) {
-            null
-        }
+        return findAllClassNames(tempDir)
+            .firstOrNull()
     }
 
     private fun createTempDirectory(): Path {
