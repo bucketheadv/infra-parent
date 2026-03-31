@@ -10,17 +10,25 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>infra-job</artifactId>
+    <artifactId>infra-rocketmq</artifactId>
     <packaging>jar</packaging>
 
     <dependencies>
         <dependency>
-            <groupId>com.xuxueli</groupId>
-            <artifactId>xxl-job-core</artifactId>
+            <groupId>org.apache.rocketmq</groupId>
+            <artifactId>rocketmq-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.rocketmq</groupId>
+            <artifactId>rocketmq-spring-boot</artifactId>
         </dependency>
         <dependency>
             <groupId>io.infra.structure</groupId>
             <artifactId>infra-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>joda-time</groupId>
+            <artifactId>joda-time</artifactId>
         </dependency>
     </dependencies>
 

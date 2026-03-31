@@ -1,0 +1,2 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=io.infra.structure.rocketmq.autoconfiguration.InfraRocketMQAutoConfiguration
+org.springframework.boot.autoconfigure.AutoConfigurationImportFilter=io.infra.structure.rocketmq.filter.SkipFilter
