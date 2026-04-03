@@ -3,6 +3,7 @@ package io.infra.structure.core.startup;
 import lombok.extern.slf4j.Slf4j;
 import io.infra.structure.core.context.ApplicationContextHolder;
 import io.infra.structure.core.tool.BinderTool;
+import org.jspecify.annotations.NonNull;
 import org.springframework.boot.context.TypeExcludeFilter;
 import org.springframework.core.env.Environment;
 import org.springframework.core.type.classreading.MetadataReader;
@@ -26,7 +27,7 @@ public class StartupFilter extends TypeExcludeFilter {
     }
 
     @Override
-    public boolean match(MetadataReader metadataReader, MetadataReaderFactory metadataReaderFactory) throws IOException {
+    public boolean match(MetadataReader metadataReader, @NonNull MetadataReaderFactory metadataReaderFactory) throws IOException {
         String className = metadataReader.getClassMetadata().getClassName();
         if (startupProperties == null) {
             return false;
