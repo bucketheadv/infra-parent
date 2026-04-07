@@ -120,6 +120,30 @@ public class MultiRedisService {
 }
 ```
 
+如果你的 `JedisTemplate` 是通过配置动态注册，IDEA 可能提示找不到 Bean（运行时通常正常）。  
+推荐注入 `RedisTemplateProvider` 来规避静态分析误报：
+
+```java
+import io.infra.structure.redis.core.RedisTemplateProvider;
+
+@Service
+public class CacheService {
+    private final JedisTemplate mainTemplate;
+    private final JedisTemplate auditTemplate;
+
+    public CacheService(RedisTemplateProvider provider) {
+        this.mainTemplate = provider.jedisTemplate("main");
+        this.auditTemplate = provider.jedisTemplate("audit");
+    }
+}
+```
+
+同理，cluster template 也可以通过 provider 获取：
+
+```java
+JedisClusterTemplate orderTemplate = provider.jedisClusterTemplate("order");
+```
+
 Cluster template 使用 `JedisClusterTemplate` 注入：
 
 ```java
