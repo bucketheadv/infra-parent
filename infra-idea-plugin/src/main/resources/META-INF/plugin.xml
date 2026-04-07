@@ -19,7 +19,7 @@
     </extensions>
 
     <extensions defaultExtensionNs="com.intellij.spring">
-        <spring.customModuleComponentsDiscoverer implementation="io.infra.idea.plugin.dynamicbean.spring.InfraDynamicBeanSpringImplicitBeansProvider"/>
+        <customModuleComponentsDiscoverer implementation="io.infra.idea.plugin.dynamicbean.spring.InfraDynamicBeanSpringImplicitBeansProvider"/>
     </extensions>
 
     <extensions defaultExtensionNs="com.intellij">
@@ -31,5 +31,6 @@
         <codeInsight.lineMarkerProvider language="Properties" implementationClass="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanPropertyLineMarkerProvider"/>
         <codeInsight.lineMarkerProvider language="YAML" implementationClass="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanYamlLineMarkerProvider"/>
         <gotoDeclarationHandler implementation="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanPropertyGotoDeclarationHandler"/>
+        <daemon.highlightInfoFilter implementation="io.infra.idea.plugin.dynamicbean.highlight.InfraDynamicBeanAutowireHighlightFilter"/>
     </extensions>
 </idea-plugin>
