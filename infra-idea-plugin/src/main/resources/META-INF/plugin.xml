@@ -1,0 +1,33 @@
+<idea-plugin>
+    <id>io.infra.idea.plugin.dynamic-bean</id>
+    <name>Infra Dynamic Bean Support</name>
+    <vendor email="support@infra.io">infra</vendor>
+
+    <description><![CDATA[
+        Support dynamic bean resolution for infra Redis and RocketMQ properties.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.java</depends>
+    <depends>com.intellij.properties</depends>
+    <depends>com.intellij.spring</depends>
+    <depends>org.jetbrains.kotlin</depends>
+
+    <extensions defaultExtensionNs="org.jetbrains.kotlin">
+        <supportsKotlinPluginMode supportsK2="true"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="com.intellij.spring">
+        <spring.customModuleComponentsDiscoverer implementation="io.infra.idea.plugin.dynamicbean.spring.InfraDynamicBeanSpringImplicitBeansProvider"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <psi.referenceContributor implementation="io.infra.idea.plugin.dynamicbean.reference.InfraDynamicBeanReferenceContributor"/>
+        <localInspection language="JAVA" implementationClass="io.infra.idea.plugin.dynamicbean.inspection.InfraDynamicBeanInspection"/>
+        <localInspection language="kotlin" implementationClass="io.infra.idea.plugin.dynamicbean.inspection.InfraDynamicBeanInspection"/>
+        <codeInsight.lineMarkerProvider language="JAVA" implementationClass="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanLineMarkerProvider"/>
+        <codeInsight.lineMarkerProvider language="kotlin" implementationClass="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanLineMarkerProvider"/>
+        <codeInsight.lineMarkerProvider language="Properties" implementationClass="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanPropertyLineMarkerProvider"/>
+        <gotoDeclarationHandler implementation="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanPropertyGotoDeclarationHandler"/>
+    </extensions>
+</idea-plugin>

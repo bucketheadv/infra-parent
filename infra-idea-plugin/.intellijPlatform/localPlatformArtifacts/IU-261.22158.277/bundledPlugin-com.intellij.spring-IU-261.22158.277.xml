@@ -1,0 +1,26 @@
+<ivy-module version="2.0">
+  <info organisation="bundledPlugin" module="com.intellij.spring" revision="IU-261.22158.277" />
+  <configurations>
+    <conf name="default" visibility="public" />
+  </configurations>
+  <publications>
+    <artifact name="spring" ext="jar" conf="default" url="plugins/Spring/lib" />
+    <artifact name="intellij.spring.core" ext="jar" conf="default" url="plugins/Spring/lib/modules" />
+    <artifact name="intellij.spring.core.free" ext="jar" conf="default" url="plugins/Spring/lib/modules" />
+    <artifact name="intellij.spring.persistence.jpa" ext="jar" conf="default" url="plugins/Spring/lib/modules" />
+    <artifact name="intellij.spring.core.shared" ext="jar" conf="default" url="plugins/Spring/lib/modules" />
+    <artifact name="intellij.spring.el" ext="jar" conf="default" url="plugins/Spring/lib/modules" />
+    <artifact name="intellij.spring.persistence" ext="jar" conf="default" url="plugins/Spring/lib/modules" />
+    <artifact name="intellij.spring.aop" ext="jar" conf="default" url="plugins/Spring/lib/modules" />
+    <artifact name="intellij.spring.data.jpa.ql" ext="jar" conf="default" url="plugins/Spring/lib/modules" />
+    <artifact name="intellij.spring.jsf" ext="jar" conf="default" url="plugins/Spring/lib/modules" />
+    <artifact name="intellij.spring.graph" ext="jar" conf="default" url="plugins/Spring/lib/modules" />
+    <artifact name="intellij.spring.kotlin" ext="jar" conf="default" url="plugins/Spring/lib/modules" />
+    <artifact name="intellij.spring.web" ext="jar" conf="default" url="plugins/Spring/lib/modules" />
+    <artifact name="intellij.spring.core.injections" ext="jar" conf="default" url="plugins/Spring/lib/modules" />
+    <artifact name="intellij.spring.persistence.hibernate" ext="jar" conf="default" url="plugins/Spring/lib/modules" />
+    <artifact name="intellij.spring" ext="jar" conf="default" url="plugins/Spring/lib/modules" />
+    <artifact name="intellij.spring.eclipse" ext="jar" conf="default" url="plugins/Spring/lib/modules" />
+  </publications>
+  <dependencies />
+</ivy-module>
