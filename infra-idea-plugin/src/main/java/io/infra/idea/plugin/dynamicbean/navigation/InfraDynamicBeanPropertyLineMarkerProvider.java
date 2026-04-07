@@ -25,6 +25,9 @@ public class InfraDynamicBeanPropertyLineMarkerProvider extends RelatedItemLineM
         if (definition == null) {
             return;
         }
+        if (property.getPsiElement() == null || !property.getPsiElement().equals(definition.getNavigationProperty().getPsiElement())) {
+            return;
+        }
         Collection<PsiElement> targets = InfraDynamicBeanInjectionSearch.findTargets(element.getProject(), definition);
         if (targets.isEmpty()) {
             return;

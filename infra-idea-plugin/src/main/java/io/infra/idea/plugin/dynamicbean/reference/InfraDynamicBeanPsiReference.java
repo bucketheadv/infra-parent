@@ -1,9 +1,9 @@
 package io.infra.idea.plugin.dynamicbean.reference;
 
 import com.intellij.codeInsight.lookup.LookupElementBuilder;
-import com.intellij.lang.properties.IProperty;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiReferenceBase;
+import io.infra.idea.plugin.dynamicbean.model.InfraDynamicBeanConfigProperty;
 import io.infra.idea.plugin.dynamicbean.index.InfraDynamicBeanIndex;
 import io.infra.idea.plugin.dynamicbean.model.InfraDynamicBeanDefinition;
 import io.infra.idea.plugin.dynamicbean.psi.InfraQualifierContext;
@@ -38,7 +38,7 @@ public class InfraDynamicBeanPsiReference extends PsiReferenceBase<PsiElement> {
     public Object @NotNull [] getVariants() {
         List<Object> variants = new ArrayList<>();
         for (InfraDynamicBeanDefinition definition : InfraDynamicBeanIndex.getBeans(myElement.getProject(), qualifierContext.getExpectedTypeName())) {
-            IProperty property = definition.getNavigationProperty();
+            InfraDynamicBeanConfigProperty property = definition.getNavigationProperty();
             variants.add(LookupElementBuilder.create(definition.getBeanName())
                     .withTypeText(property.getKey(), true));
         }

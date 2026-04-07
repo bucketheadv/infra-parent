@@ -35,6 +35,7 @@ dependencies {
 
         bundledPlugin("com.intellij.java")
         bundledPlugin("com.intellij.properties")
+        bundledPlugin("org.jetbrains.plugins.yaml")
         bundledPlugin("org.jetbrains.kotlin")
         bundledPlugin("com.intellij.spring")
     }

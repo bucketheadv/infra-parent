@@ -10,6 +10,7 @@
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.java</depends>
     <depends>com.intellij.properties</depends>
+    <depends>org.jetbrains.plugins.yaml</depends>
     <depends>com.intellij.spring</depends>
     <depends>org.jetbrains.kotlin</depends>
 
@@ -28,6 +29,7 @@
         <codeInsight.lineMarkerProvider language="JAVA" implementationClass="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanLineMarkerProvider"/>
         <codeInsight.lineMarkerProvider language="kotlin" implementationClass="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanLineMarkerProvider"/>
         <codeInsight.lineMarkerProvider language="Properties" implementationClass="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanPropertyLineMarkerProvider"/>
+        <codeInsight.lineMarkerProvider language="YAML" implementationClass="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanYamlLineMarkerProvider"/>
         <gotoDeclarationHandler implementation="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanPropertyGotoDeclarationHandler"/>
     </extensions>
 </idea-plugin>
