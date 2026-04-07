@@ -25,7 +25,7 @@
     <extensions defaultExtensionNs="com.intellij">
         <psi.referenceContributor implementation="io.infra.idea.plugin.dynamicbean.reference.InfraDynamicBeanReferenceContributor"/>
         <localInspection language="JAVA" implementationClass="io.infra.idea.plugin.dynamicbean.inspection.InfraDynamicBeanInspection"/>
-        <localInspection language="kotlin" implementationClass="io.infra.idea.plugin.dynamicbean.inspection.InfraDynamicBeanInspection"/>
+        <localInspection language="kotlin" implementationClass="io.infra.idea.plugin.dynamicbean.inspection.InfraDynamicBeanKotlinInspection"/>
         <codeInsight.lineMarkerProvider language="JAVA" implementationClass="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanLineMarkerProvider"/>
         <codeInsight.lineMarkerProvider language="kotlin" implementationClass="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanLineMarkerProvider"/>
         <codeInsight.lineMarkerProvider language="Properties" implementationClass="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanPropertyLineMarkerProvider"/>

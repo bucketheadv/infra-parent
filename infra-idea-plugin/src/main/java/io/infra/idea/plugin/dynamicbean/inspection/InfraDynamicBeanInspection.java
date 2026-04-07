@@ -15,8 +15,13 @@ import org.jetbrains.kotlin.psi.KtStringTemplateExpression;
  */
 public class InfraDynamicBeanInspection extends LocalInspectionTool {
     @Override
+    public @NotNull String getDisplayName() {
+        return "Infra Dynamic Bean injection check";
+    }
+
+    @Override
     public @NotNull String getShortName() {
-        return "InfraDynamicBeanInspection";
+        return "InfraDynamicBean";
     }
 
     @Override

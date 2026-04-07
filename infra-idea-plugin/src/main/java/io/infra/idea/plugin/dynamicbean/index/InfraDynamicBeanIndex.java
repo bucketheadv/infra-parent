@@ -318,20 +318,26 @@ public final class InfraDynamicBeanIndex {
         }
         String remaining = key.substring(prefix.length());
         int separator = remaining.indexOf('.');
-        if (separator <= 0) {
+        if (separator == 0) {
             return;
         }
-        String configName = remaining.substring(0, separator);
-        holders.computeIfAbsent(configName, unused -> new PrefixAccumulator()).record(property);
+        String configName = separator < 0 ? remaining : remaining.substring(0, separator);
+        String suffix = separator < 0 ? "" : remaining.substring(separator + 1);
+        holders.computeIfAbsent(configName, unused -> new PrefixAccumulator()).record(suffix, property);
     }
 
     private static class PrefixAccumulator {
         private InfraDynamicBeanConfigProperty firstProperty;
+        private InfraDynamicBeanConfigProperty configNameProperty;
         private InfraDynamicBeanConfigProperty preferredProperty;
 
-        void record(InfraDynamicBeanConfigProperty property) {
+        void record(String suffix, InfraDynamicBeanConfigProperty property) {
             if (firstProperty == null) {
                 firstProperty = property;
+            }
+            if (suffix.isEmpty()) {
+                configNameProperty = property;
+                return;
             }
             String key = property.getKey();
             if (preferredProperty == null && key != null && (key.endsWith(".namesrvAddr") || key.endsWith(".producerGroup") || key.endsWith(".consumerGroup"))) {
@@ -340,6 +346,9 @@ public final class InfraDynamicBeanIndex {
         }
 
         InfraDynamicBeanConfigProperty getNavigationProperty() {
+            if (configNameProperty != null) {
+                return configNameProperty;
+            }
             return preferredProperty != null ? preferredProperty : firstProperty;
         }
     }
