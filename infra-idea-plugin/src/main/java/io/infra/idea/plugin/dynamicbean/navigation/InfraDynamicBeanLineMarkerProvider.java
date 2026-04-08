@@ -3,12 +3,12 @@ package io.infra.idea.plugin.dynamicbean.navigation;
 import com.intellij.codeInsight.daemon.RelatedItemLineMarkerInfo;
 import com.intellij.codeInsight.daemon.RelatedItemLineMarkerProvider;
 import com.intellij.codeInsight.navigation.NavigationGutterIconBuilder;
-import com.intellij.icons.AllIcons;
 import com.intellij.psi.PsiElement;
 import io.infra.idea.plugin.dynamicbean.index.InfraDynamicBeanIndex;
 import io.infra.idea.plugin.dynamicbean.model.InfraDynamicBeanDefinition;
 import io.infra.idea.plugin.dynamicbean.psi.InfraDynamicBeanPsi;
 import io.infra.idea.plugin.dynamicbean.psi.InfraInjectionPoint;
+import io.infra.idea.plugin.icons.InfraDynamicBeanIcons;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Collection;
@@ -30,7 +30,7 @@ public class InfraDynamicBeanLineMarkerProvider extends RelatedItemLineMarkerPro
             return;
         }
         NavigationGutterIconBuilder<PsiElement> builder = NavigationGutterIconBuilder
-                .create(AllIcons.FileTypes.Properties)
+                .create(InfraDynamicBeanIcons.TO_CONFIG)
                 .setTarget(definition.getNavigationProperty().getPsiElement())
                 .setTooltipText("跳转到动态 Bean 配置: " + definition.getBeanName());
         result.add(builder.createLineMarkerInfo(injectionPoint.getAnchor()));
