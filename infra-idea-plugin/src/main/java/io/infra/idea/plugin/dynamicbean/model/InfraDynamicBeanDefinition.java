@@ -1,5 +1,7 @@
 package io.infra.idea.plugin.dynamicbean.model;
 
+import org.jetbrains.annotations.Nullable;
+
 /**
  * Dynamic bean discovered from a project properties file.
  */
@@ -47,15 +49,30 @@ public class InfraDynamicBeanDefinition {
     }
 
     public boolean matchesPropertyKey(String propertyKey) {
+        return getConfigNameStartOffset(propertyKey) >= 0;
+    }
+
+    public int getConfigNameStartOffset(@Nullable String propertyKey) {
         if (propertyKey == null || propertyKey.isBlank()) {
-            return false;
+            return -1;
         }
         String configPrefix = switch (kind) {
             case REDIS_TEMPLATE, REDIS_CLUSTER_TEMPLATE -> "infra.redis.template.";
             case ROCKETMQ_PRODUCER -> "infra.rocketmq.producers.";
             case ROCKETMQ_CONSUMER_FACTORY -> "infra.rocketmq.consumers.";
         };
-        String beanKey = configPrefix + configName;
-        return propertyKey.equals(beanKey) || propertyKey.startsWith(beanKey + ".");
+        if (!propertyKey.startsWith(configPrefix)) {
+            return -1;
+        }
+        String remaining = propertyKey.substring(configPrefix.length());
+        if (remaining.isEmpty()) {
+            return -1;
+        }
+        int separator = remaining.indexOf('.');
+        String currentConfigName = separator < 0 ? remaining : remaining.substring(0, separator);
+        if (!configName.equals(currentConfigName)) {
+            return -1;
+        }
+        return configPrefix.length();
     }
 }

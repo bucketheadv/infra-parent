@@ -32,7 +32,15 @@ public class InfraDynamicBeanPropertyGotoDeclarationHandler implements GotoDecla
             if (property == null) {
                 return null;
             }
-            return findTargets(sourceElement.getProject(), property.getPsiElement() == null ? null : property.getPsiElement().getContainingFile(), property.getKey());
+            String propertyKey = property.getKey();
+            PsiFile sourceFile = property.getPsiElement() == null ? null : property.getPsiElement().getContainingFile();
+            InfraDynamicBeanDefinition definition = sourceFile == null || propertyKey == null
+                    ? null
+                    : InfraDynamicBeanIndex.findByNavigationLocation(sourceElement.getProject(), sourceFile, propertyKey);
+            if (definition == null || !isClickOnConfigKey(sourceElement, offset, propertyKey, definition)) {
+                return null;
+            }
+            return findTargets(sourceElement.getProject(), definition);
         }
         PsiFile containingFile = sourceElement.getContainingFile();
         if (!(containingFile instanceof YAMLFile)) {
@@ -54,11 +62,6 @@ public class InfraDynamicBeanPropertyGotoDeclarationHandler implements GotoDecla
             return null;
         }
         return findTargets(sourceElement.getProject(), definition);
-    }
-
-    private PsiElement @Nullable [] findTargets(com.intellij.openapi.project.Project project, @Nullable PsiFile sourceFile, @Nullable String key) {
-        InfraDynamicBeanDefinition definition = InfraDynamicBeanIndex.findByNavigationLocation(project, sourceFile, key);
-        return findTargets(project, definition);
     }
 
     private PsiElement @Nullable [] findTargets(com.intellij.openapi.project.Project project, @Nullable InfraDynamicBeanDefinition definition) {
@@ -84,5 +87,18 @@ public class InfraDynamicBeanPropertyGotoDeclarationHandler implements GotoDecla
             cursor = PsiTreeUtil.getParentOfType(cursor, YAMLKeyValue.class, true);
         }
         return String.join(".", segments);
+    }
+
+    private static boolean isClickOnConfigKey(PsiElement sourceElement, int offset, String propertyKey, InfraDynamicBeanDefinition definition) {
+        int configNameStart = definition.getConfigNameStartOffset(propertyKey);
+        if (configNameStart < 0) {
+            return false;
+        }
+        int relativeOffset = offset - sourceElement.getTextRange().getStartOffset();
+        if (relativeOffset < 0 || relativeOffset >= sourceElement.getTextLength()) {
+            return false;
+        }
+        int configNameEnd = configNameStart + definition.getConfigName().length();
+        return relativeOffset >= configNameStart && relativeOffset < configNameEnd;
     }
 }
