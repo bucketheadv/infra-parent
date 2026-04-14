@@ -211,30 +211,19 @@ public class GoSpringGotoDeclarationHandler implements GotoDeclarationHandler {
         if (keyValue == null) {
             return null;
         }
-        PsiElement anchor = keyValue.getKey() == null ? keyValue : keyValue.getKey();
-        if (!anchor.getTextRange().containsOffset(offset)) {
-            return null;
+        if (!GoSpringConfigKeyNavigationSupport.isYamlKeyElement(sourceElement, keyValue)) {
+            PsiElement anchor = keyValue.getKey() == null ? keyValue : keyValue.getKey();
+            if (!anchor.getTextRange().containsOffset(offset)) {
+                return null;
+            }
         }
-        String propertyKey = buildYamlPropertyKey(keyValue);
+        String propertyKey = GoSpringConfigKeyNavigationSupport.buildYamlPropertyKey(keyValue);
         if (propertyKey == null) {
             return null;
         }
-        int offsetInKey = offset - anchor.getTextRange().getStartOffset();
-        return findConfigKeyTargets(sourceElement, propertyKey, offsetInKey);
-    }
-
-    private static @Nullable String buildYamlPropertyKey(YAMLKeyValue keyValue) {
-        LinkedList<String> segments = new LinkedList<>();
-        YAMLKeyValue cursor = keyValue;
-        while (cursor != null) {
-            String segment = cursor.getKeyText();
-            if (segment == null || segment.isBlank()) {
-                return null;
-            }
-            segments.addFirst(segment);
-            cursor = PsiTreeUtil.getParentOfType(cursor, YAMLKeyValue.class, true);
-        }
-        return String.join(".", segments);
+        int offsetInSegment = Math.max(0, offset - keyValue.getTextRange().getStartOffset());
+        int offsetInKey = GoSpringConfigKeyNavigationSupport.getYamlOffsetInFullKey(keyValue, offsetInSegment);
+        return GoSpringConfigKeyNavigationSupport.findTargets(sourceElement.getProject(), propertyKey, offsetInKey);
     }
 
     private static void collectDefinitionUsages(PsiElement sourceElement,
@@ -249,59 +238,6 @@ public class GoSpringGotoDeclarationHandler implements GotoDeclarationHandler {
     }
 
     private PsiElement @Nullable [] findConfigKeyTargets(PsiElement sourceElement, String propertyKey, int offsetInKey) {
-        Set<PsiElement> targets = new LinkedHashSet<>();
-        if (offsetInKey >= 0) {
-            for (GoSpringGroupDefinition definition : GoSpringIndex.findGroupDefinitions(sourceElement.getProject(), propertyKey)) {
-                if (isGroupPrefixOffset(definition.getGroupPrefix(), offsetInKey) && definition.getPsiElement() != null) {
-                    targets.add(definition.getPsiElement());
-                }
-            }
-            if (!targets.isEmpty()) {
-                return targets.toArray(new PsiElement[0]);
-            }
-            String instanceName = resolveInstanceName(propertyKey);
-            if (isInstanceOffset(propertyKey, offsetInKey) && instanceName != null) {
-                for (GoSpringGroupDefinition definition : GoSpringIndex.findGroupDefinitions(sourceElement.getProject(), propertyKey)) {
-                    targets.addAll(GoSpringIndex.findAutowireUsages(sourceElement.getProject(), definition, instanceName));
-                }
-            }
-            if (!targets.isEmpty()) {
-                return targets.toArray(new PsiElement[0]);
-            }
-        }
-        targets.addAll(GoSpringIndex.findValueUsages(sourceElement.getProject(), propertyKey));
-        for (GoSpringExternalConfigDefinition definition : GoSpringIndex.findExternalConfigDefinitions(sourceElement.getProject(), propertyKey)) {
-            if (definition.getPsiElement() != null) {
-                targets.add(definition.getPsiElement());
-            }
-        }
-        return targets.isEmpty() ? null : targets.toArray(new PsiElement[0]);
-    }
-
-    private boolean isGroupPrefixOffset(String groupPrefix, int offsetInKey) {
-        return groupPrefix != null && !groupPrefix.isBlank() && offsetInKey >= 0 && offsetInKey < groupPrefix.length();
-    }
-
-    private boolean isInstanceOffset(String propertyKey, int offsetInKey) {
-        int first = propertyKey == null ? -1 : propertyKey.indexOf('.');
-        int second = propertyKey == null ? -1 : propertyKey.indexOf('.', first + 1);
-        int third = propertyKey == null ? -1 : propertyKey.indexOf('.', second + 1);
-        if (first < 0 || second < 0 || third < 0) {
-            return false;
-        }
-        return offsetInKey > second && offsetInKey < third;
-    }
-
-    private @Nullable String resolveInstanceName(String propertyKey) {
-        if (propertyKey == null || propertyKey.isBlank()) {
-            return null;
-        }
-        int first = propertyKey.indexOf('.');
-        int second = propertyKey.indexOf('.', first + 1);
-        int third = propertyKey.indexOf('.', second + 1);
-        if (first < 0 || second < 0 || third < 0 || third <= second + 1) {
-            return null;
-        }
-        return propertyKey.substring(second + 1, third);
+        return GoSpringConfigKeyNavigationSupport.findTargets(sourceElement.getProject(), propertyKey, offsetInKey);
     }
 }

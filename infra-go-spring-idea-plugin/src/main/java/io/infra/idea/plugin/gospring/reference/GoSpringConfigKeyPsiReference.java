@@ -7,7 +7,8 @@ import com.intellij.psi.PsiElementResolveResult;
 import com.intellij.psi.PsiPolyVariantReferenceBase;
 import com.intellij.psi.ResolveResult;
 import io.infra.idea.plugin.gospring.index.GoSpringIndex;
-import io.infra.idea.plugin.gospring.model.GoSpringConfigProperty;
+import io.infra.idea.plugin.gospring.model.GoSpringConfigMetadata;
+import io.infra.idea.plugin.gospring.navigation.GoSpringConfigKeyNavigationSupport;
 import io.infra.idea.plugin.gospring.model.GoSpringExternalConfigDefinition;
 import io.infra.idea.plugin.gospring.model.GoSpringGroupDefinition;
 import org.jetbrains.annotations.NotNull;
@@ -28,40 +29,32 @@ public class GoSpringConfigKeyPsiReference extends PsiPolyVariantReferenceBase<P
     private final String propertyKey;
     private final String instanceName;
     private final Kind kind;
+    private final int navigationOffsetInKey;
 
     public GoSpringConfigKeyPsiReference(PsiElement element,
                                          TextRange range,
                                          String propertyKey,
                                          String instanceName,
-                                         Kind kind) {
+                                         Kind kind,
+                                         int navigationOffsetInKey) {
         super(element, range, false);
         this.propertyKey = propertyKey;
         this.instanceName = instanceName;
         this.kind = kind;
+        this.navigationOffsetInKey = navigationOffsetInKey;
     }
 
     @Override
     public ResolveResult @NotNull [] multiResolve(boolean incompleteCode) {
         List<ResolveResult> results = new ArrayList<>();
-        if (kind == Kind.GROUP) {
-            for (GoSpringGroupDefinition definition : GoSpringIndex.findGroupDefinitions(myElement.getProject(), propertyKey)) {
-                results.add(new PsiElementResolveResult(definition.getPsiElement()));
-            }
-            return results.toArray(new ResolveResult[0]);
-        }
-        if (kind == Kind.INSTANCE) {
-            for (GoSpringGroupDefinition definition : GoSpringIndex.findGroupDefinitions(myElement.getProject(), propertyKey)) {
-                for (PsiElement usage : GoSpringIndex.findAutowireUsages(myElement.getProject(), definition, instanceName)) {
-                    results.add(new PsiElementResolveResult(usage));
-                }
-            }
-            return results.toArray(new ResolveResult[0]);
-        }
+        PsiElement[] resolved = GoSpringConfigKeyNavigationSupport.findTargets(
+                myElement.getProject(),
+                propertyKey,
+                navigationOffsetInKey
+        );
         Set<PsiElement> targets = new LinkedHashSet<>();
-        for (GoSpringExternalConfigDefinition definition : GoSpringIndex.findExternalConfigDefinitions(myElement.getProject(), propertyKey)) {
-            if (definition.getPsiElement() != null) {
-                targets.add(definition.getPsiElement());
-            }
+        if (resolved != null) {
+            java.util.Collections.addAll(targets, resolved);
         }
         for (PsiElement target : targets) {
             results.add(new PsiElementResolveResult(target));
@@ -76,15 +69,36 @@ public class GoSpringConfigKeyPsiReference extends PsiPolyVariantReferenceBase<P
             for (GoSpringGroupDefinition definition : GoSpringIndex.findGroupDefinitions(myElement.getProject(), propertyKey)) {
                 variants.add(LookupElementBuilder.create(definition.getGroupPrefix()));
             }
+            if (variants.isEmpty()) {
+                for (GoSpringConfigMetadata metadata : GoSpringIndex.getConfigMetadata(myElement.getProject())) {
+                    String key = metadata.getKey();
+                    int separator = key.indexOf('.');
+                    variants.add(LookupElementBuilder.create(separator > 0 ? key.substring(0, separator) : key));
+                }
+            }
             return variants.toArray();
         }
         if (kind == Kind.INSTANCE) {
-            variants.add(LookupElementBuilder.create(instanceName));
+            if (instanceName != null && !instanceName.isBlank()) {
+                variants.add(LookupElementBuilder.create(instanceName));
+            }
             return variants.toArray();
         }
         Collection<GoSpringExternalConfigDefinition> definitions = GoSpringIndex.findExternalConfigDefinitions(myElement.getProject(), propertyKey);
         for (GoSpringExternalConfigDefinition definition : definitions) {
             variants.add(LookupElementBuilder.create(definition.getRelativeKey()));
+        }
+        if (variants.isEmpty()) {
+            for (GoSpringConfigMetadata metadata : GoSpringIndex.getConfigMetadata(myElement.getProject())) {
+                if (!metadata.getKey().startsWith(propertyKey)) {
+                    continue;
+                }
+                variants.add(LookupElementBuilder.create(metadata.getKey())
+                        .withTypeText(metadata.getTypeName(), true)
+                        .withTailText(metadata.getDefaultValue() == null || metadata.getDefaultValue().isBlank()
+                                ? "  Go-Spring"
+                                : "  default: " + metadata.getDefaultValue(), true));
+            }
         }
         return variants.toArray();
     }

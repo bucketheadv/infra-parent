@@ -1,65 +1,54 @@
 package io.infra.idea.plugin.gospring.navigation;
 
-import com.intellij.codeInsight.daemon.RelatedItemLineMarkerInfo;
-import com.intellij.codeInsight.daemon.RelatedItemLineMarkerProvider;
+import com.intellij.codeInsight.daemon.LineMarkerInfo;
+import com.intellij.codeInsight.daemon.LineMarkerProvider;
 import com.intellij.codeInsight.navigation.NavigationGutterIconBuilder;
+import com.intellij.openapi.editor.markup.GutterIconRenderer;
 import com.intellij.icons.AllIcons;
 import com.intellij.psi.PsiElement;
-import io.infra.idea.plugin.gospring.index.GoSpringIndex;
-import io.infra.idea.plugin.gospring.model.GoSpringExternalConfigDefinition;
 import io.infra.idea.plugin.gospring.psi.GoSpringPsi;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.yaml.psi.YAMLFile;
 import org.jetbrains.yaml.psi.YAMLKeyValue;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedList;
 import java.util.List;
 
-public class GoSpringYamlLineMarkerProvider extends RelatedItemLineMarkerProvider {
+public class GoSpringYamlLineMarkerProvider implements LineMarkerProvider {
     @Override
-    protected void collectNavigationMarkers(@NotNull PsiElement element,
-                                            @NotNull Collection<? super RelatedItemLineMarkerInfo<?>> result) {
+    public @Nullable LineMarkerInfo<?> getLineMarkerInfo(@NotNull PsiElement element) {
         if (!GoSpringPsi.isSupportedConfigFile(element.getContainingFile()) || !(element.getContainingFile() instanceof YAMLFile)) {
-            return;
+            return null;
         }
-        YAMLKeyValue keyValue = com.intellij.psi.util.PsiTreeUtil.getParentOfType(element, YAMLKeyValue.class, false);
-        if (keyValue == null || keyValue.getKey() != element) {
-            return;
+        YAMLKeyValue keyValue = findYamlKeyValueAtAnchor(element);
+        if (keyValue == null) {
+            return null;
         }
-        String propertyKey = buildYamlPropertyKey(keyValue);
+        String propertyKey = GoSpringConfigKeyNavigationSupport.buildYamlPropertyKey(keyValue);
         if (propertyKey == null || propertyKey.isBlank()) {
-            return;
+            return null;
         }
-        Collection<PsiElement> usages = new java.util.LinkedHashSet<>(GoSpringIndex.findValueUsages(element.getProject(), propertyKey));
-        for (GoSpringExternalConfigDefinition definition : GoSpringIndex.findExternalConfigDefinitions(element.getProject(), propertyKey)) {
-            if (definition.getPsiElement() != null) {
-                usages.add(definition.getPsiElement());
-            }
+        PsiElement[] targets = GoSpringConfigKeyNavigationSupport.findPreferredTargetsForGutter(element.getProject(), propertyKey);
+        if (targets == null || targets.length == 0) {
+            return null;
         }
-        if (usages.isEmpty()) {
-            return;
-        }
-        List<PsiElement> targets = new ArrayList<>(usages);
-        NavigationGutterIconBuilder<PsiElement> builder = NavigationGutterIconBuilder
+        return NavigationGutterIconBuilder
                 .create(AllIcons.General.Locate)
-                .setTargets(targets)
-                .setTooltipText("跳转到 Go 配置使用点或模块定义");
-        result.add(builder.createLineMarkerInfo(element));
+                .setTargets(List.of(targets))
+                .setTooltipText("跳转到 Go 配置使用点或模块定义")
+                .setAlignment(GutterIconRenderer.Alignment.LEFT)
+                .createLineMarkerInfo(element);
     }
 
-    private static String buildYamlPropertyKey(YAMLKeyValue keyValue) {
-        LinkedList<String> segments = new LinkedList<>();
-        YAMLKeyValue cursor = keyValue;
-        while (cursor != null) {
-            String segment = cursor.getKeyText();
-            if (segment == null || segment.isBlank()) {
-                return null;
+    private static @Nullable YAMLKeyValue findYamlKeyValueAtAnchor(PsiElement element) {
+        PsiElement cursor = element;
+        while (cursor != null && !(cursor instanceof YAMLFile)) {
+            if (cursor instanceof YAMLKeyValue keyValue) {
+                PsiElement anchor = keyValue.getContainingFile().findElementAt(keyValue.getTextRange().getStartOffset());
+                return anchor == element ? keyValue : null;
             }
-            segments.addFirst(segment);
-            cursor = com.intellij.psi.util.PsiTreeUtil.getParentOfType(cursor, YAMLKeyValue.class, true);
+            cursor = cursor.getParent();
         }
-        return String.join(".", segments);
+        return null;
     }
 }

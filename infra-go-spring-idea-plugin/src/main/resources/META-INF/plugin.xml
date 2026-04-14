@@ -16,7 +16,12 @@
         <psi.referenceContributor implementation="io.infra.idea.plugin.gospring.reference.GoSpringReferenceContributor"/>
         <gotoDeclarationHandler implementation="io.infra.idea.plugin.gospring.navigation.GoSpringGotoDeclarationHandler"/>
         <codeInsight.lineMarkerProvider language="go" implementationClass="io.infra.idea.plugin.gospring.navigation.GoSpringLineMarkerProvider"/>
-        <codeInsight.lineMarkerProvider language="Properties" implementationClass="io.infra.idea.plugin.gospring.navigation.GoSpringPropertyLineMarkerProvider"/>
-        <codeInsight.lineMarkerProvider language="YAML" implementationClass="io.infra.idea.plugin.gospring.navigation.GoSpringYamlLineMarkerProvider"/>
+        <codeInsight.lineMarkerProvider implementationClass="io.infra.idea.plugin.gospring.navigation.GoSpringPropertyLineMarkerProvider"/>
+        <codeInsight.lineMarkerProvider implementationClass="io.infra.idea.plugin.gospring.navigation.GoSpringYamlLineMarkerProvider"/>
+        <completion.contributor language="any" implementationClass="io.infra.idea.plugin.gospring.metadata.GoSpringConfigMetadataCompletionContributor"/>
+        <typedHandler implementation="io.infra.idea.plugin.gospring.metadata.GoSpringConfigMetadataTypedHandler"/>
+        <documentationProvider implementation="io.infra.idea.plugin.gospring.metadata.GoSpringConfigMetadataDocumentationProvider"/>
+        <lang.documentationProvider language="Properties" implementationClass="io.infra.idea.plugin.gospring.metadata.GoSpringConfigMetadataDocumentationProvider"/>
+        <lang.documentationProvider language="YAML" implementationClass="io.infra.idea.plugin.gospring.metadata.GoSpringConfigMetadataDocumentationProvider"/>
     </extensions>
 </idea-plugin>

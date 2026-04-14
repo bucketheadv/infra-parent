@@ -21,6 +21,7 @@ import io.infra.idea.plugin.gospring.model.GoSpringBeanInjectionUsage;
 import io.infra.idea.plugin.gospring.model.GoSpringConfigProperty;
 import io.infra.idea.plugin.gospring.model.GoSpringConfigUsage;
 import io.infra.idea.plugin.gospring.model.GoSpringExternalConfigDefinition;
+import io.infra.idea.plugin.gospring.model.GoSpringConfigMetadata;
 import io.infra.idea.plugin.gospring.model.GoSpringGroupDefinition;
 import io.infra.idea.plugin.gospring.psi.GoSpringPsi;
 import org.jetbrains.annotations.NotNull;
@@ -65,7 +66,7 @@ public final class GoSpringIndex {
     private static final Pattern FIELD_PREFIX_PATTERN = Pattern.compile("([A-Za-z_][A-Za-z0-9_]*)\\s+(.+?)\\s*$");
     private static final Pattern PARAM_PATTERN = Pattern.compile("([A-Za-z_][A-Za-z0-9_]*(?:\\s*,\\s*[A-Za-z_][A-Za-z0-9_]*)*)\\s+([^,\\n]+)");
     private static final Pattern STRUCT_PATTERN = Pattern.compile("(?ms)^\\s*type\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+struct\\s*\\{(.*?)^\\s*}");
-    private static final Pattern VALUE_KEY_PATTERN = Pattern.compile("value:\"\\$\\{([^}:]+)(?::=[^}]*)?}\"");
+    private static final Pattern VALUE_KEY_PATTERN = Pattern.compile("value:\"\\$\\{([^}:]+)(?::=([^}]*))?}\"");
     private static final Pattern GROUP_CALL_PATTERN = Pattern.compile("(?s)(?:gs|app)\\.Group\\s*\\(\\s*([\"`])([^\"`]+)\\1\\s*,.*?func\\s*\\((.*?)\\)\\s*([^\\{]*)\\{");
 
     private static final Set<String> BASIC_TYPES = Set.of(
@@ -371,7 +372,7 @@ public final class GoSpringIndex {
             if (prefix == null || prefix.isBlank()) {
                 continue;
             }
-            if (propertyKey.startsWith(prefix + ".")) {
+            if (propertyKey.equals(prefix) || propertyKey.startsWith(prefix + ".")) {
                 result.put(groupDefinitionIdentity(definition), definition);
             }
         }
@@ -451,6 +452,17 @@ public final class GoSpringIndex {
             }
         }
         return result.values();
+    }
+
+    public static Collection<GoSpringConfigMetadata> getConfigMetadata(Project project) {
+        return getModel(project).configMetadataByKey.values();
+    }
+
+    public static @Nullable GoSpringConfigMetadata findConfigMetadata(Project project, String key) {
+        if (key == null || key.isBlank()) {
+            return null;
+        }
+        return getModel(project).configMetadataByKey.get(key);
     }
 
     public static Collection<PsiElement> findAutowireUsages(Project project,
@@ -572,6 +584,13 @@ public final class GoSpringIndex {
             List<String> returnTypes = parseReturnTypes(matcher.group(4));
             PsiElement anchor = findAnchor(psiFile, matcher.start(2));
             model.addGroupDefinition(new GoSpringGroupDefinition(groupPrefix, returnTypes, anchor));
+            model.addConfigMetadata(new GoSpringConfigMetadata(
+                    groupPrefix,
+                    returnTypes.isEmpty() ? null : returnTypes.get(0),
+                    null,
+                    "group",
+                    anchor
+            ));
         }
     }
 
@@ -599,11 +618,12 @@ public final class GoSpringIndex {
                         Matcher valueMatcher = VALUE_KEY_PATTERN.matcher(line.substring(backtickStart + 1, backtickEnd));
                         if (fieldType != null && valueMatcher.find()) {
                             String key = valueMatcher.group(1);
+                            String defaultValue = valueMatcher.group(2);
                             if (key != null && !key.isBlank()) {
                                 int keyOffsetInLine = backtickStart + 1 + valueMatcher.start(1);
                                 PsiElement anchor = findAnchor(psiFile, structBodyStartOffset + cursor + keyOffsetInLine);
                                 definition.structuredConfigAnchorKeys.add(psiIdentity(anchor));
-                                definition.fields.add(new StructFieldBinding(fieldName, fieldType, key, anchor));
+                                definition.fields.add(new StructFieldBinding(fieldName, fieldType, key, defaultValue, anchor));
                             }
                         }
                     }
@@ -703,6 +723,20 @@ public final class GoSpringIndex {
                                                         String currentRelativePrefix,
                                                         Set<String> visitedTypes) {
         String relativeKey = joinPropertyKey(currentRelativePrefix, field.key);
+        model.addConfigMetadata(new GoSpringConfigMetadata(
+                groupPrefix + ".main." + relativeKey,
+                field.typeName,
+                field.defaultValue,
+                groupPrefix,
+                field.anchor
+        ));
+        model.addConfigMetadata(new GoSpringConfigMetadata(
+                groupPrefix + ".*." + relativeKey,
+                field.typeName,
+                field.defaultValue,
+                groupPrefix,
+                field.anchor
+        ));
         boolean prefixMatch = false;
         StructDefinition nestedDefinition = fileStructDefinitions.get(baseTypeName(field.typeName));
         if (nestedDefinition != null && visitedTypes.add(groupPrefix + "#" + nestedDefinition.name)) {
@@ -720,6 +754,13 @@ public final class GoSpringIndex {
                                                     String prefix,
                                                     Set<String> visitedTypes) {
         String effectiveKey = joinPropertyKey(prefix, field.key);
+        model.addConfigMetadata(new GoSpringConfigMetadata(
+                effectiveKey,
+                field.typeName,
+                field.defaultValue,
+                "project",
+                field.anchor
+        ));
         boolean prefixMatch = false;
         StructDefinition nestedDefinition = model.structDefinitions.get(baseTypeName(field.typeName));
         if (nestedDefinition != null && visitedTypes.add(nestedDefinition.name)) {
@@ -1467,6 +1508,7 @@ public final class GoSpringIndex {
         private final List<GoSpringBeanDefinition> beanDefinitions = new ArrayList<>();
         private final Map<String, StructDefinition> structDefinitions = new LinkedHashMap<>();
         private final Map<String, List<GoSpringConfigProperty>> configPropertiesByKey = new LinkedHashMap<>();
+        private final Map<String, GoSpringConfigMetadata> configMetadataByKey = new LinkedHashMap<>();
         private final List<GoSpringExternalConfigDefinition> externalConfigDefinitions = new ArrayList<>();
         private final List<GoSpringGroupDefinition> groupDefinitions = new ArrayList<>();
         private final Map<String, List<PsiElement>> autowireUsagesByBeanName = new LinkedHashMap<>();
@@ -1521,6 +1563,10 @@ public final class GoSpringIndex {
 
         private void addExternalConfigDefinition(GoSpringExternalConfigDefinition definition) {
             externalConfigDefinitions.add(definition);
+        }
+
+        private void addConfigMetadata(GoSpringConfigMetadata metadata) {
+            configMetadataByKey.putIfAbsent(metadata.getKey(), metadata);
         }
 
         private void addGroupDefinition(GoSpringGroupDefinition definition) {
@@ -1585,12 +1631,14 @@ public final class GoSpringIndex {
         private final String fieldName;
         private final String typeName;
         private final String key;
+        private final String defaultValue;
         private final PsiElement anchor;
 
-        private StructFieldBinding(String fieldName, String typeName, String key, PsiElement anchor) {
+        private StructFieldBinding(String fieldName, String typeName, String key, @Nullable String defaultValue, PsiElement anchor) {
             this.fieldName = fieldName;
             this.typeName = typeName;
             this.key = key;
+            this.defaultValue = defaultValue;
             this.anchor = anchor;
         }
     }
