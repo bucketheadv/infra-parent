@@ -1,0 +1,31 @@
+# Gradle
+.gradle/
+build/
+
+# IntelliJ IDEA
+out/
+*.iml
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/usage.statistics.xml
+.idea/shelf/
+.idea/caches/
+
+# Logs
+*.log
+logs/
+log/
+*.log.*
+trace.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# IntelliJ Plugin Development Sandbox (contains lots of logs and temp files)
+.intellijPlatform/sandbox/

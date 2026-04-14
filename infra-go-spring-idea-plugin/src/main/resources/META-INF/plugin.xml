@@ -1,0 +1,22 @@
+<idea-plugin>
+    <id>io.infra.idea.plugin.go-spring</id>
+    <name>Infra Go-Spring Support</name>
+    <vendor email="support@infra.io">infra</vendor>
+
+    <description><![CDATA[
+        Support go-spring autowire and value navigation for Go projects.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.properties</depends>
+    <depends>org.jetbrains.plugins.yaml</depends>
+    <depends>org.jetbrains.plugins.go</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <psi.referenceContributor implementation="io.infra.idea.plugin.gospring.reference.GoSpringReferenceContributor"/>
+        <gotoDeclarationHandler implementation="io.infra.idea.plugin.gospring.navigation.GoSpringGotoDeclarationHandler"/>
+        <codeInsight.lineMarkerProvider language="go" implementationClass="io.infra.idea.plugin.gospring.navigation.GoSpringLineMarkerProvider"/>
+        <codeInsight.lineMarkerProvider language="Properties" implementationClass="io.infra.idea.plugin.gospring.navigation.GoSpringPropertyLineMarkerProvider"/>
+        <codeInsight.lineMarkerProvider language="YAML" implementationClass="io.infra.idea.plugin.gospring.navigation.GoSpringYamlLineMarkerProvider"/>
+    </extensions>
+</idea-plugin>
