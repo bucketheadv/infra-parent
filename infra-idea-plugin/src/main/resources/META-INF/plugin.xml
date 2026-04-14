@@ -29,7 +29,7 @@
         <codeInsight.lineMarkerProvider language="JAVA" implementationClass="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanLineMarkerProvider"/>
         <codeInsight.lineMarkerProvider language="kotlin" implementationClass="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanLineMarkerProvider"/>
         <codeInsight.lineMarkerProvider language="Properties" implementationClass="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanPropertyLineMarkerProvider"/>
-        <codeInsight.lineMarkerProvider language="YAML" implementationClass="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanYamlLineMarkerProvider"/>
+        <codeInsight.lineMarkerProvider implementationClass="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanYamlLineMarkerProvider"/>
         <gotoDeclarationHandler implementation="io.infra.idea.plugin.dynamicbean.navigation.InfraDynamicBeanPropertyGotoDeclarationHandler"/>
         <daemon.highlightInfoFilter implementation="io.infra.idea.plugin.dynamicbean.highlight.InfraDynamicBeanAutowireHighlightFilter"/>
     </extensions>
