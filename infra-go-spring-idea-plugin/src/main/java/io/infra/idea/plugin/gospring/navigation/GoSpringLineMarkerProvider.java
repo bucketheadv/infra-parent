@@ -6,6 +6,7 @@ import com.intellij.codeInsight.navigation.NavigationGutterIconBuilder;
 import com.intellij.icons.AllIcons;
 import com.intellij.psi.PsiElement;
 import io.infra.idea.plugin.gospring.index.GoSpringIndex;
+import io.infra.idea.plugin.gospring.index.GoSpringGormQueryIndex;
 import io.infra.idea.plugin.gospring.model.GoSpringBeanDefinition;
 import io.infra.idea.plugin.gospring.model.GoSpringBeanInjectionUsage;
 import io.infra.idea.plugin.gospring.model.GoSpringConfigProperty;
@@ -15,6 +16,7 @@ import io.infra.idea.plugin.gospring.model.GoSpringGroupDefinition;
 import io.infra.idea.plugin.gospring.psi.GoSpringPsi;
 import org.jetbrains.annotations.NotNull;
 
+import javax.swing.Icon;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -99,6 +101,17 @@ public class GoSpringLineMarkerProvider extends RelatedItemLineMarkerProvider {
             collectDefinitionUsages(element, definition, targets);
             addMarker(element, result, targets, "跳转到 Bean 使用点");
         }
+
+        Collection<PsiElement> gormTargets = GoSpringGormQueryIndex.findUsageTargetsForExactAnchor(element);
+        if (!gormTargets.isEmpty()) {
+            addMarker(
+                    element,
+                    result,
+                    gormTargets,
+                    "跳转到 GORM 查询",
+                    AllIcons.Actions.Find
+            );
+        }
     }
 
     private static void collectDefinitionUsages(PsiElement sourceElement,
@@ -116,12 +129,20 @@ public class GoSpringLineMarkerProvider extends RelatedItemLineMarkerProvider {
                                   Collection<? super RelatedItemLineMarkerInfo<?>> result,
                                   Collection<PsiElement> targets,
                                   String tooltip) {
+        addMarker(anchor, result, targets, tooltip, AllIcons.General.Locate);
+    }
+
+    private static void addMarker(PsiElement anchor,
+                                  Collection<? super RelatedItemLineMarkerInfo<?>> result,
+                                  Collection<PsiElement> targets,
+                                  String tooltip,
+                                  Icon icon) {
         if (anchor == null || targets == null || targets.isEmpty()) {
             return;
         }
         List<PsiElement> targetList = new ArrayList<>(targets);
         NavigationGutterIconBuilder<PsiElement> builder = NavigationGutterIconBuilder
-                .create(AllIcons.General.Locate)
+                .create(icon)
                 .setTargets(targetList)
                 .setTooltipText(tooltip);
         result.add(builder.createLineMarkerInfo(anchor));

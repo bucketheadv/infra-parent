@@ -9,9 +9,11 @@ import com.intellij.psi.PsiReferenceProvider;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.util.ProcessingContext;
+import io.infra.idea.plugin.gospring.index.GoSpringGormQueryIndex;
 import io.infra.idea.plugin.gospring.index.GoSpringIndex;
 import io.infra.idea.plugin.gospring.navigation.GoSpringConfigKeyNavigationSupport;
 import io.infra.idea.plugin.gospring.model.GoSpringGroupDefinition;
+import io.infra.idea.plugin.gospring.model.GoSpringGormQueryUsage;
 import io.infra.idea.plugin.gospring.psi.GoSpringPsi;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.yaml.psi.YAMLKeyValue;
@@ -45,12 +47,15 @@ public class GoSpringReferenceProvider extends PsiReferenceProvider {
             return PsiReferenceBase.EMPTY_ARRAY;
         }
         List<GoSpringPsi.TagMatch> matches = GoSpringPsi.findTagMatches(stringLiteral);
-        if (matches.isEmpty()) {
-            return PsiReferenceBase.EMPTY_ARRAY;
-        }
         List<PsiReference> references = new ArrayList<>();
         for (GoSpringPsi.TagMatch match : matches) {
             references.add(new GoSpringPsiReference(stringLiteral, match));
+        }
+        for (GoSpringGormQueryUsage usage : GoSpringGormQueryIndex.findUsagesInLiteral(stringLiteral)) {
+            references.add(new GoSpringGormSqlPsiReference(stringLiteral, usage));
+        }
+        if (references.isEmpty()) {
+            return PsiReferenceBase.EMPTY_ARRAY;
         }
         return references.toArray(new PsiReference[0]);
     }
