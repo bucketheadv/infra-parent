@@ -51,6 +51,9 @@ public class GoSpringReferenceProvider extends PsiReferenceProvider {
         for (GoSpringPsi.TagMatch match : matches) {
             references.add(new GoSpringPsiReference(stringLiteral, match));
         }
+        for (GoSpringPsi.GormColumnTagMatch match : GoSpringPsi.findGormColumnTagMatches(stringLiteral)) {
+            references.add(new GoSpringGormColumnTagPsiReference(stringLiteral, match.getRange(), match.getColumnValue()));
+        }
         for (GoSpringGormQueryUsage usage : GoSpringGormQueryIndex.findUsagesInLiteral(stringLiteral)) {
             references.add(new GoSpringGormSqlPsiReference(stringLiteral, usage));
         }

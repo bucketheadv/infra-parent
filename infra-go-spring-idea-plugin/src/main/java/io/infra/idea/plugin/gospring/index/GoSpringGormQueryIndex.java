@@ -38,10 +38,16 @@ public final class GoSpringGormQueryIndex {
     private static final Key<CachedValue<Model>> CACHE_KEY = Key.create("infra.goSpring.gormQueryModel");
     private static final Pattern STRUCT_PATTERN = Pattern.compile("type\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+struct\\s*\\{([\\s\\S]*?)\\n\\}");
     private static final Pattern FIELD_PREFIX_PATTERN = Pattern.compile("([A-Za-z_][A-Za-z0-9_]*)\\s+(.+?)\\s*$");
-    private static final Pattern GORM_COLUMN_TAG_PATTERN = Pattern.compile("(^|;)\\s*column:([^;]+)");
+    private static final Pattern GORM_TAG_VALUE_PATTERN = Pattern.compile("(^|\\s)gorm:\"((?:\\\\.|[^\"\\\\])*)\"");
+    private static final Pattern GORM_COLUMN_DIRECTIVE_PATTERN = Pattern.compile("(^|;)\\s*column\\s*:\\s*([^;]+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern STRING_LITERAL_PATTERN = Pattern.compile("\"((?:\\\\.|[^\"\\\\])*)\"|`([^`]*)`");
     private static final Pattern QUERY_METHOD_PATTERN = Pattern.compile("\\.(Where|Order|OrderBy|Select|Joins|Group|Having)\\s*\\(", Pattern.CASE_INSENSITIVE);
     private static final Pattern MODEL_PATTERN = Pattern.compile("\\.Model\\s*\\(\\s*&?([A-Za-z_][A-Za-z0-9_\\.]*)\\s*(?:\\{\\s*\\})?\\s*\\)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern TERMINAL_QUERY_PATTERN = Pattern.compile(
+            "\\.(First|Find|Take|Last|Delete|Update|Updates|Count)\\s*\\(\\s*([^\\)]*)\\)",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern RESULT_VAR_PATTERN = Pattern.compile("&?([A-Za-z_][A-Za-z0-9_\\.]*)");
     private static final Pattern SQL_KEYWORD_PATTERN = Pattern.compile("\\b(AND|OR|NOT|IN|IS|NULL|LIKE|BETWEEN|ASC|DESC|ORDER|BY|GROUP|HAVING|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|ON|SELECT|DISTINCT|AS)\\b", Pattern.CASE_INSENSITIVE);
 
     private GoSpringGormQueryIndex() {
@@ -124,12 +130,32 @@ public final class GoSpringGormQueryIndex {
         return targets;
     }
 
+    public static @NotNull Collection<PsiElement> findUsageTargetsByColumnName(@NotNull Project project, @Nullable String columnName) {
+        if (columnName == null || columnName.isBlank()) {
+            return List.of();
+        }
+        String normalizedColumn = columnName.trim();
+        LinkedHashSet<PsiElement> targets = new LinkedHashSet<>();
+        for (List<GoSpringGormQueryUsage> usages : getModel(project).usagesByFieldKey.values()) {
+            for (GoSpringGormQueryUsage usage : usages) {
+                if (!normalizedColumn.equalsIgnoreCase(usage.getColumnName())) {
+                    continue;
+                }
+                PsiElement target = findElementAtRangeStart(usage.getStringLiteral(), usage.getRangeInElement());
+                if (target != null) {
+                    targets.add(target);
+                }
+            }
+        }
+        return targets;
+    }
+
     public static @NotNull Collection<TextRange> findKeywordRanges(@Nullable PsiElement stringLiteral) {
         if (stringLiteral == null) {
             return List.of();
         }
         String text = stringLiteral.getText();
-        if (text == null || text.length() < 2) {
+        if (text == null || text.length() < 2 || !isQuotedLiteral(text)) {
             return List.of();
         }
         String content = text.substring(1, text.length() - 1);
@@ -139,6 +165,15 @@ public final class GoSpringGormQueryIndex {
             ranges.add(TextRange.from(matcher.start() + 1, matcher.end() - matcher.start()));
         }
         return ranges;
+    }
+
+    private static boolean isQuotedLiteral(@NotNull String text) {
+        if (text.length() < 2) {
+            return false;
+        }
+        char first = text.charAt(0);
+        char last = text.charAt(text.length() - 1);
+        return (first == '"' && last == '"') || (first == '`' && last == '`');
     }
 
     private static Model getModel(Project project) {
@@ -196,7 +231,7 @@ public final class GoSpringGormQueryIndex {
                     if (split > 0) {
                         String fieldName = fieldPrefix.substring(0, split).trim();
                         if (!fieldName.isBlank()) {
-                            String columnName = toSnakeCase(fieldName);
+                            String columnName = fieldName;
                             if (backtickStart > 0) {
                                 int backtickEnd = line.indexOf('`', backtickStart + 1);
                                 if (backtickEnd > backtickStart) {
@@ -334,9 +369,82 @@ public final class GoSpringGormQueryIndex {
             rawModelType = modelMatcher.group(1);
         }
         if (rawModelType == null || rawModelType.isBlank()) {
+            rawModelType = resolveModelTypeFromTerminalCall(text, literalStartOffset, windowStart + methodStart);
+        }
+        if (rawModelType == null || rawModelType.isBlank()) {
             return null;
         }
         return new QueryContext(baseTypeName(rawModelType), methodName);
+    }
+
+    private static @Nullable String resolveModelTypeFromTerminalCall(String text, int literalStartOffset, int queryMethodOffset) {
+        int searchEnd = Math.min(text.length(), literalStartOffset + 800);
+        String tail = text.substring(literalStartOffset, searchEnd);
+        Matcher terminalMatcher = TERMINAL_QUERY_PATTERN.matcher(tail);
+        if (!terminalMatcher.find()) {
+            return null;
+        }
+        String args = terminalMatcher.group(2);
+        if (args == null || args.isBlank()) {
+            return null;
+        }
+        Matcher varMatcher = RESULT_VAR_PATTERN.matcher(args);
+        if (!varMatcher.find()) {
+            return null;
+        }
+        String token = varMatcher.group(1);
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+        if (looksLikeTypeToken(token)) {
+            return token;
+        }
+        String inferred = resolveVariableTypeBefore(text, token, queryMethodOffset);
+        return inferred == null || inferred.isBlank() ? null : inferred;
+    }
+
+    private static boolean looksLikeTypeToken(String token) {
+        if (token.contains(".")) {
+            String suffix = token.substring(token.lastIndexOf('.') + 1);
+            return !suffix.isBlank() && Character.isUpperCase(suffix.charAt(0));
+        }
+        return Character.isUpperCase(token.charAt(0));
+    }
+
+    private static @Nullable String resolveVariableTypeBefore(String text, String variableName, int offset) {
+        int searchStart = Math.max(0, offset - 1500);
+        String scope = text.substring(searchStart, Math.max(searchStart, offset));
+        String typeFromVar = findLastGroup(scope, "\\bvar\\s+" + Pattern.quote(variableName) + "\\s+([^\\n=]+)");
+        if (typeFromVar != null && !typeFromVar.isBlank()) {
+            return cleanTypeToken(typeFromVar);
+        }
+        String typeFromShortDecl = findLastGroup(scope, "\\b" + Pattern.quote(variableName) + "\\s*:=\\s*&?([A-Za-z_][A-Za-z0-9_\\.]*)\\s*\\{");
+        if (typeFromShortDecl != null && !typeFromShortDecl.isBlank()) {
+            return cleanTypeToken(typeFromShortDecl);
+        }
+        return null;
+    }
+
+    private static @Nullable String findLastGroup(String text, String regex) {
+        Matcher matcher = Pattern.compile(regex).matcher(text);
+        String result = null;
+        while (matcher.find()) {
+            result = matcher.group(1);
+        }
+        return result == null ? null : result.trim();
+    }
+
+    private static @NotNull String cleanTypeToken(String typeToken) {
+        String token = typeToken.trim();
+        int space = token.indexOf(' ');
+        if (space > 0) {
+            token = token.substring(0, space);
+        }
+        int comma = token.indexOf(',');
+        if (comma > 0) {
+            token = token.substring(0, comma);
+        }
+        return token.trim();
     }
 
     private static List<TextRange> findColumnRanges(String sql, String columnName) {
@@ -353,8 +461,16 @@ public final class GoSpringGormQueryIndex {
     }
 
     private static @Nullable String extractGormColumn(String tagContent) {
-        Matcher matcher = GORM_COLUMN_TAG_PATTERN.matcher(tagContent);
-        return matcher.find() ? matcher.group(2) : null;
+        Matcher gormMatcher = GORM_TAG_VALUE_PATTERN.matcher(tagContent);
+        if (!gormMatcher.find()) {
+            return null;
+        }
+        String gormValue = gormMatcher.group(2);
+        if (gormValue == null || gormValue.isBlank()) {
+            return null;
+        }
+        Matcher columnMatcher = GORM_COLUMN_DIRECTIVE_PATTERN.matcher(gormValue);
+        return columnMatcher.find() ? columnMatcher.group(2) : null;
     }
 
     private static int findLastWhitespace(String text) {
@@ -366,27 +482,11 @@ public final class GoSpringGormQueryIndex {
         return -1;
     }
 
-    private static @NotNull String toSnakeCase(String fieldName) {
-        if (fieldName == null || fieldName.isBlank()) {
-            return "";
-        }
-        StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < fieldName.length(); i++) {
-            char ch = fieldName.charAt(i);
-            if (Character.isUpperCase(ch)) {
-                if (i > 0) {
-                    builder.append('_');
-                }
-                builder.append(Character.toLowerCase(ch));
-            } else {
-                builder.append(ch);
-            }
-        }
-        return builder.toString();
-    }
-
     private static @NotNull String baseTypeName(String typeName) {
         String current = typeName.trim();
+        while (current.startsWith("[]")) {
+            current = current.substring(2);
+        }
         while (current.startsWith("*")) {
             current = current.substring(1);
         }

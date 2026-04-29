@@ -15,6 +15,7 @@ import java.util.regex.Pattern;
 public final class GoSpringPsi {
     private static final Pattern AUTOWIRE_TAG = Pattern.compile("(^|\\s)autowire:\"([^\"]*)\"");
     private static final Pattern VALUE_TAG = Pattern.compile("(^|\\s)value:\"\\$\\{([^}:]+)(?::=[^}]*)?}\"");
+    private static final Pattern GORM_TAG = Pattern.compile("(^|\\s)gorm:\"((?:\\\\.|[^\"\\\\])*)\"");
     private static final Pattern FIELD_PREFIX_PATTERN = Pattern.compile("([A-Za-z_][A-Za-z0-9_]*)\\s+(.+?)\\s*$");
 
     private GoSpringPsi() {
@@ -75,6 +76,28 @@ public final class GoSpringPsi {
             }
         }
         return result;
+    }
+
+    public static List<GormColumnTagMatch> findGormColumnTagMatches(@Nullable PsiElement stringLiteral) {
+        if (stringLiteral == null) {
+            return List.of();
+        }
+        String literalText = stringLiteral.getText();
+        if (literalText == null || literalText.length() < 2 || literalText.charAt(0) != '`' || literalText.charAt(literalText.length() - 1) != '`') {
+            return List.of();
+        }
+        String content = literalText.substring(1, literalText.length() - 1);
+        List<GormColumnTagMatch> matches = new ArrayList<>();
+        Matcher gormMatcher = GORM_TAG.matcher(content);
+        while (gormMatcher.find()) {
+            String gormValue = gormMatcher.group(2);
+            if (gormValue == null || gormValue.isBlank()) {
+                continue;
+            }
+            int valueStartInLiteral = gormMatcher.start(2) + 1;
+            collectGormColumnTagMatches(gormValue, valueStartInLiteral, matches);
+        }
+        return matches;
     }
 
     public static @Nullable TagMatch findTagMatchAtOffset(@Nullable PsiElement sourceElement, int offset) {
@@ -202,6 +225,44 @@ public final class GoSpringPsi {
             count++;
         }
         return count;
+    }
+
+    private static void collectGormColumnTagMatches(String gormValue,
+                                                    int valueStartInLiteral,
+                                                    List<GormColumnTagMatch> matches) {
+        int segmentStart = 0;
+        for (int i = 0; i <= gormValue.length(); i++) {
+            if (i < gormValue.length() && gormValue.charAt(i) != ';') {
+                continue;
+            }
+            String segment = gormValue.substring(segmentStart, i);
+            int leftTrim = countLeadingWhitespace(segment);
+            int rightTrim = countTrailingWhitespace(segment);
+            int meaningfulEnd = segment.length() - rightTrim;
+            if (leftTrim < meaningfulEnd) {
+                String trimmed = segment.substring(leftTrim, meaningfulEnd);
+                int colonIndex = trimmed.indexOf(':');
+                if (colonIndex > 0) {
+                    String key = trimmed.substring(0, colonIndex).trim();
+                    if ("column".equalsIgnoreCase(key)) {
+                        int valueStart = colonIndex + 1;
+                        while (valueStart < trimmed.length() && Character.isWhitespace(trimmed.charAt(valueStart))) {
+                            valueStart++;
+                        }
+                        int valueEnd = trimmed.length();
+                        while (valueEnd > valueStart && Character.isWhitespace(trimmed.charAt(valueEnd - 1))) {
+                            valueEnd--;
+                        }
+                        if (valueEnd > valueStart) {
+                            String columnValue = trimmed.substring(valueStart, valueEnd);
+                            int rangeStart = valueStartInLiteral + segmentStart + leftTrim + valueStart;
+                            matches.add(new GormColumnTagMatch(columnValue, TextRange.from(rangeStart, valueEnd - valueStart)));
+                        }
+                    }
+                }
+            }
+            segmentStart = i + 1;
+        }
     }
 
     private static boolean isStringLiteral(@Nullable String text) {
@@ -402,6 +463,24 @@ public final class GoSpringPsi {
 
         public boolean isWildcard() {
             return wildcard;
+        }
+    }
+
+    public static final class GormColumnTagMatch {
+        private final String columnValue;
+        private final TextRange range;
+
+        public GormColumnTagMatch(String columnValue, TextRange range) {
+            this.columnValue = columnValue;
+            this.range = range;
+        }
+
+        public String getColumnValue() {
+            return columnValue;
+        }
+
+        public TextRange getRange() {
+            return range;
         }
     }
 }

@@ -16,7 +16,6 @@ import io.infra.idea.plugin.gospring.model.GoSpringConfigProperty;
 import io.infra.idea.plugin.gospring.model.GoSpringConfigUsage;
 import io.infra.idea.plugin.gospring.model.GoSpringExternalConfigDefinition;
 import io.infra.idea.plugin.gospring.model.GoSpringGroupDefinition;
-import io.infra.idea.plugin.gospring.index.GoSpringGormQueryIndex;
 import io.infra.idea.plugin.gospring.psi.GoSpringPsi;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.yaml.psi.YAMLFile;
@@ -178,11 +177,7 @@ public class GoSpringGotoDeclarationHandler implements GotoDeclarationHandler {
             return usages.isEmpty() ? null : usages.toArray(new PsiElement[0]);
         }
 
-        Collection<PsiElement> usageTargets = GoSpringGormQueryIndex.findUsageTargetsAt(sourceElement);
-        if (usageTargets.isEmpty()) {
-            return null;
-        }
-        return usageTargets.toArray(new PsiElement[0]);
+        return null;
     }
 
     private PsiElement @Nullable [] findPropertiesTargets(PsiElement sourceElement, int offset) {
