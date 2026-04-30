@@ -150,6 +150,23 @@ public final class GoSpringGormQueryIndex {
         return targets;
     }
 
+    public static @NotNull Collection<PsiElement> findFieldTargetsByColumnName(@NotNull Project project, @Nullable String columnName) {
+        if (columnName == null || columnName.isBlank()) {
+            return List.of();
+        }
+        String normalizedColumn = columnName.trim();
+        LinkedHashSet<PsiElement> targets = new LinkedHashSet<>();
+        for (GoSpringGormFieldDefinition definition : getModel(project).allFields) {
+            if (!normalizedColumn.equalsIgnoreCase(definition.getColumnName())) {
+                continue;
+            }
+            if (definition.getPsiElement() != null) {
+                targets.add(definition.getPsiElement());
+            }
+        }
+        return targets;
+    }
+
     public static @NotNull Collection<TextRange> findKeywordRanges(@Nullable PsiElement stringLiteral) {
         if (stringLiteral == null) {
             return List.of();

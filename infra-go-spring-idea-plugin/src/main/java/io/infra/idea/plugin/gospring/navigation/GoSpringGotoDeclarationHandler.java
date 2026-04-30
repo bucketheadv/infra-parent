@@ -1,10 +1,15 @@
 package io.infra.idea.plugin.gospring.navigation;
 
+import com.intellij.ide.util.DefaultPsiElementCellRenderer;
 import com.intellij.codeInsight.navigation.actions.GotoDeclarationHandler;
 import com.intellij.lang.properties.IProperty;
 import com.intellij.lang.properties.parsing.PropertiesTokenTypes;
 import com.intellij.lang.properties.psi.Property;
+import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.util.TextRange;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.tree.IElementType;
@@ -17,10 +22,12 @@ import io.infra.idea.plugin.gospring.model.GoSpringConfigUsage;
 import io.infra.idea.plugin.gospring.model.GoSpringExternalConfigDefinition;
 import io.infra.idea.plugin.gospring.model.GoSpringGroupDefinition;
 import io.infra.idea.plugin.gospring.psi.GoSpringPsi;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.yaml.psi.YAMLFile;
 import org.jetbrains.yaml.psi.YAMLKeyValue;
 
+import javax.swing.Icon;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -29,13 +36,48 @@ import java.util.List;
 import java.util.Set;
 
 public class GoSpringGotoDeclarationHandler implements GotoDeclarationHandler {
+    private static final DefaultPsiElementCellRenderer GORM_TARGET_CELL_RENDERER = new DefaultPsiElementCellRenderer() {
+        @Override
+        public String getElementText(PsiElement element) {
+            String snippet = resolveLineSnippet(element, element.getContainingFile());
+            if (!snippet.isBlank()) {
+                return snippet;
+            }
+            PsiFile file = element.getContainingFile();
+            return file == null ? "<unknown>" : file.getName();
+        }
+
+        @Override
+        public String getContainerText(PsiElement element, String name) {
+            PsiFile file = element.getContainingFile();
+            if (file == null) {
+                return null;
+            }
+            String relativePath = buildRelativePath(element, file);
+            int line = resolveLine(element, file);
+            return line > 0 ? relativePath + ":" + line : relativePath;
+        }
+
+        @Override
+        protected Icon getIcon(PsiElement element) {
+            PsiFile file = element.getContainingFile();
+            if (file != null && file.getVirtualFile() != null) {
+                Icon fileIcon = file.getVirtualFile().getFileType().getIcon();
+                if (fileIcon != null) {
+                    return fileIcon;
+                }
+            }
+            return super.getIcon(element);
+        }
+    };
+
     @Override
     public PsiElement @Nullable [] getGotoDeclarationTargets(@Nullable PsiElement sourceElement, int offset, Editor editor) {
         if (sourceElement == null) {
             return null;
         }
 
-        PsiElement[] goTargets = findGoTargets(sourceElement, offset);
+        PsiElement[] goTargets = findGoTargets(sourceElement, offset, editor);
         if (goTargets != null) {
             return goTargets;
         }
@@ -48,7 +90,7 @@ public class GoSpringGotoDeclarationHandler implements GotoDeclarationHandler {
         return findYamlTargets(sourceElement, offset);
     }
 
-    private PsiElement @Nullable [] findGoTargets(PsiElement sourceElement, int offset) {
+    private PsiElement @Nullable [] findGoTargets(PsiElement sourceElement, int offset, @Nullable Editor editor) {
         if (!GoSpringPsi.isGoFile(sourceElement)) {
             return null;
         }
@@ -240,5 +282,55 @@ public class GoSpringGotoDeclarationHandler implements GotoDeclarationHandler {
 
     private PsiElement @Nullable [] findConfigKeyTargets(PsiElement sourceElement, String propertyKey, int offsetInKey) {
         return GoSpringConfigKeyNavigationSupport.findTargets(sourceElement.getProject(), propertyKey, offsetInKey);
+    }
+
+    private static String buildRelativePath(PsiElement element, PsiFile file) {
+        VirtualFile virtualFile = file.getVirtualFile();
+        String basePath = element.getProject().getBasePath();
+        if (virtualFile == null || basePath == null) {
+            return file.getName();
+        }
+        String path = virtualFile.getPath();
+        if (!path.startsWith(basePath)) {
+            return file.getName();
+        }
+        String relative = path.substring(basePath.length());
+        while (relative.startsWith("/")) {
+            relative = relative.substring(1);
+        }
+        return relative.isBlank() ? file.getName() : relative;
+    }
+
+    private static int resolveLine(PsiElement element, PsiFile file) {
+        if (element.getTextRange() == null) {
+            return -1;
+        }
+        Document document = PsiDocumentManager.getInstance(element.getProject()).getDocument(file);
+        if (document == null) {
+            return -1;
+        }
+        return document.getLineNumber(element.getTextRange().getStartOffset()) + 1;
+    }
+
+    private static String resolveLineSnippet(PsiElement element, PsiFile file) {
+        if (file == null || element.getTextRange() == null) {
+            return "";
+        }
+        Document document = PsiDocumentManager.getInstance(element.getProject()).getDocument(file);
+        if (document == null) {
+            return "";
+        }
+        TextRange range = element.getTextRange();
+        int lineIndex = document.getLineNumber(range.getStartOffset());
+        if (lineIndex < 0 || lineIndex >= document.getLineCount()) {
+            return "";
+        }
+        int lineStart = document.getLineStartOffset(lineIndex);
+        int lineEnd = document.getLineEndOffset(lineIndex);
+        String lineText = document.getText(new TextRange(lineStart, lineEnd)).trim();
+        if (lineText.length() > 120) {
+            return lineText.substring(0, 120) + "...";
+        }
+        return lineText;
     }
 }

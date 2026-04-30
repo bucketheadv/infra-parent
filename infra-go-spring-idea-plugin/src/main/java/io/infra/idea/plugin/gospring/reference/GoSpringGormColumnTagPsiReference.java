@@ -7,6 +7,7 @@ import com.intellij.psi.PsiElementResolveResult;
 import com.intellij.psi.PsiPolyVariantReferenceBase;
 import com.intellij.psi.ResolveResult;
 import io.infra.idea.plugin.gospring.index.GoSpringGormQueryIndex;
+import io.infra.idea.plugin.gospring.navigation.GoSpringNavigationTargetElement;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -27,7 +28,7 @@ public class GoSpringGormColumnTagPsiReference extends PsiPolyVariantReferenceBa
     public ResolveResult @NotNull [] multiResolve(boolean incompleteCode) {
         List<ResolveResult> results = new ArrayList<>();
         for (PsiElement target : GoSpringGormQueryIndex.findUsageTargetsByColumnName(myElement.getProject(), columnValue)) {
-            results.add(new PsiElementResolveResult(target));
+            results.add(new PsiElementResolveResult(GoSpringNavigationTargetElement.wrap(target)));
         }
         return results.toArray(ResolveResult.EMPTY_ARRAY);
     }
