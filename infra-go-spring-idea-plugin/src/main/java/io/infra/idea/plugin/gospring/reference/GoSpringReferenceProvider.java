@@ -49,6 +49,13 @@ public class GoSpringReferenceProvider extends PsiReferenceProvider {
         List<GoSpringPsi.TagMatch> matches = GoSpringPsi.findTagMatches(stringLiteral);
         List<PsiReference> references = new ArrayList<>();
         for (GoSpringPsi.TagMatch match : matches) {
+            if (match.getKind() == GoSpringPsi.ReferenceKind.VALUE) {
+                references.add(new GoSpringHighlightedPsiReference(
+                        stringLiteral,
+                        match
+                ));
+                continue;
+            }
             references.add(new GoSpringPsiReference(stringLiteral, match));
         }
         for (GoSpringPsi.GormColumnTagMatch match : GoSpringPsi.findGormColumnTagMatches(stringLiteral)) {

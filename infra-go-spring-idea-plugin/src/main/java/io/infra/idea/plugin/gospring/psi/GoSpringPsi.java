@@ -70,9 +70,20 @@ public final class GoSpringPsi {
 
         Matcher valueMatcher = VALUE_TAG.matcher(content);
         while (valueMatcher.find()) {
-            String key = valueMatcher.group(2);
-            if (key != null && !key.isBlank()) {
-                result.add(new TagMatch(ReferenceKind.VALUE, key, TextRange.from(valueMatcher.start(2) + 1, key.length())));
+            String rawKey = valueMatcher.group(2);
+            if (rawKey != null && !rawKey.isBlank()) {
+                int leadingWhitespace = countLeadingWhitespace(rawKey);
+                int trailingWhitespace = countTrailingWhitespace(rawKey);
+                int meaningfulLength = rawKey.length() - leadingWhitespace - trailingWhitespace;
+                if (meaningfulLength <= 0) {
+                    continue;
+                }
+                String key = rawKey.substring(leadingWhitespace, rawKey.length() - trailingWhitespace);
+                result.add(new TagMatch(
+                        ReferenceKind.VALUE,
+                        key,
+                        TextRange.from(valueMatcher.start(2) + 1 + leadingWhitespace, meaningfulLength)
+                ));
             }
         }
         return result;

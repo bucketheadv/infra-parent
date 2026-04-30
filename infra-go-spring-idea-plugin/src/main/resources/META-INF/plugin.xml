@@ -18,6 +18,7 @@
         <codeInsight.lineMarkerProvider language="go" implementationClass="io.infra.idea.plugin.gospring.navigation.GoSpringLineMarkerProvider"/>
         <codeInsight.lineMarkerProvider implementationClass="io.infra.idea.plugin.gospring.navigation.GoSpringPropertyLineMarkerProvider"/>
         <codeInsight.lineMarkerProvider implementationClass="io.infra.idea.plugin.gospring.navigation.GoSpringYamlLineMarkerProvider"/>
+        <annotator language="go" implementationClass="io.infra.idea.plugin.gospring.inspection.GoSpringValueTagAnnotator"/>
         <annotator language="go" implementationClass="io.infra.idea.plugin.gospring.inspection.GoSpringGormTagAnnotator"/>
         <annotator language="go" implementationClass="io.infra.idea.plugin.gospring.inspection.GoSpringGormSqlAnnotator"/>
         <localInspection language="go" implementationClass="io.infra.idea.plugin.gospring.inspection.GoSpringGormTagInspection"/>

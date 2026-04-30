@@ -141,40 +141,17 @@ public class GoSpringGotoDeclarationHandler implements GotoDeclarationHandler {
 
         GoSpringPsi.TagMatch tagMatch = GoSpringPsi.findTagMatchAtOffset(sourceElement, offset);
         if (tagMatch != null) {
-            List<PsiElement> targets = new ArrayList<>();
             if (tagMatch.getKind() == GoSpringPsi.ReferenceKind.VALUE) {
-                Collection<GoSpringConfigUsage> usages = GoSpringIndex.findConfigUsagesAt(sourceElement);
-                if (!usages.isEmpty()) {
-                    for (GoSpringConfigUsage usage : usages) {
-                        for (GoSpringConfigProperty property : GoSpringIndex.findConfigProperties(sourceElement.getProject(), usage)) {
-                            if (property.getPsiElement() != null) {
-                                targets.add(property.getPsiElement());
-                            }
-                        }
-                    }
-                } else {
-                    Collection<GoSpringExternalConfigDefinition> definitions = GoSpringIndex.findExternalConfigDefinitionsAt(sourceElement);
-                    if (!definitions.isEmpty()) {
-                        for (GoSpringExternalConfigDefinition definition : definitions) {
-                            for (GoSpringConfigProperty property : GoSpringIndex.findConfigProperties(sourceElement.getProject(), definition)) {
-                                if (property.getPsiElement() != null) {
-                                    targets.add(property.getPsiElement());
-                                }
-                            }
-                        }
-                    } else {
-                        GoSpringConfigUsage fallback = new GoSpringConfigUsage(tagMatch.getValue(), List.of(tagMatch.getValue()), false, sourceElement);
-                        for (GoSpringConfigProperty property : GoSpringIndex.findConfigProperties(sourceElement.getProject(), fallback)) {
-                            if (property.getPsiElement() != null) {
-                                targets.add(property.getPsiElement());
-                            }
-                        }
-                    }
-                }
+                // Keep value-tag navigation on PsiReference range only, same behavior as gorm column links.
+                return null;
             }
+            List<PsiElement> targets = new ArrayList<>();
             if (!targets.isEmpty()) {
                 return targets.toArray(new PsiElement[0]);
             }
+        }
+        if (isInsideGoSpringTagLiteral(sourceElement)) {
+            return PsiElement.EMPTY_ARRAY;
         }
 
         Collection<GoSpringBeanInjectionUsage> injectionUsages = GoSpringIndex.findBeanInjectionUsagesAt(sourceElement);
@@ -220,6 +197,15 @@ public class GoSpringGotoDeclarationHandler implements GotoDeclarationHandler {
         }
 
         return null;
+    }
+
+    private static boolean isInsideGoSpringTagLiteral(PsiElement sourceElement) {
+        PsiElement stringLiteral = GoSpringPsi.findStringLiteral(sourceElement);
+        if (stringLiteral == null) {
+            return false;
+        }
+        String text = stringLiteral.getText();
+        return text != null && text.contains("autowire:\"");
     }
 
     private PsiElement @Nullable [] findPropertiesTargets(PsiElement sourceElement, int offset) {

@@ -1,6 +1,7 @@
 package io.infra.idea.plugin.gospring.navigation;
 
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.TextRange;
 import com.intellij.psi.PsiElement;
 import io.infra.idea.plugin.gospring.index.GoSpringIndex;
 import io.infra.idea.plugin.gospring.model.GoSpringExternalConfigDefinition;
@@ -89,6 +90,26 @@ public final class GoSpringConfigKeyNavigationSupport {
             }
         }
         return targets.isEmpty() ? null : targets.toArray(new PsiElement[0]);
+    }
+
+    public static TextRange resolveFieldRange(Project project, String propertyKey, int keyStartOffset) {
+        if (propertyKey == null || propertyKey.isBlank()) {
+            return TextRange.from(keyStartOffset, 0);
+        }
+        for (GoSpringGroupDefinition definition : GoSpringIndex.findGroupDefinitions(project, propertyKey)) {
+            String prefix = definition.getGroupPrefix();
+            if (prefix == null || prefix.isBlank() || !propertyKey.startsWith(prefix + ".")) {
+                continue;
+            }
+            String remaining = propertyKey.substring(prefix.length() + 1);
+            int separator = remaining.indexOf('.');
+            if (separator < 0 || separator == remaining.length() - 1) {
+                break;
+            }
+            int fieldStart = prefix.length() + 1 + separator + 1;
+            return TextRange.from(keyStartOffset + fieldStart, propertyKey.length() - fieldStart);
+        }
+        return TextRange.from(keyStartOffset, propertyKey.length());
     }
 
     public static PsiElement @Nullable [] findPreferredTargetsForGutter(Project project, String propertyKey) {
