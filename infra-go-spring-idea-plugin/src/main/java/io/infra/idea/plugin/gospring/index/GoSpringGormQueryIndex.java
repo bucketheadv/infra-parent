@@ -119,7 +119,11 @@ public final class GoSpringGormQueryIndex {
     }
 
     public static @NotNull Collection<PsiElement> findUsageTargets(@NotNull Project project, @NotNull GoSpringGormFieldDefinition definition) {
-        List<GoSpringGormQueryUsage> usages = getModel(project).usagesByFieldKey.getOrDefault(key(definition.getStructName(), definition.getColumnName()), List.of());
+        Model model = getModel(project);
+        LinkedHashSet<GoSpringGormQueryUsage> usages = new LinkedHashSet<>();
+        for (String structName : collectStructAndDescendants(model, definition.getStructName())) {
+            usages.addAll(model.usagesByFieldKey.getOrDefault(key(structName, definition.getColumnName()), List.of()));
+        }
         LinkedHashSet<PsiElement> targets = new LinkedHashSet<>();
         for (GoSpringGormQueryUsage usage : usages) {
             PsiElement target = findElementAtRangeStart(usage.getStringLiteral(), usage.getRangeInElement());
@@ -146,6 +150,25 @@ public final class GoSpringGormQueryIndex {
                     targets.add(target);
                 }
             }
+        }
+        return targets;
+    }
+
+    public static @NotNull Collection<PsiElement> findUsageTargetsForColumnInLiteral(@NotNull Project project,
+                                                                                      @Nullable PsiElement tagLiteral,
+                                                                                      @Nullable String columnName) {
+        if (tagLiteral == null || columnName == null || columnName.isBlank()) {
+            return List.of();
+        }
+        List<GoSpringGormFieldDefinition> definitions = getModel(project)
+                .fieldsByTagLiteralAndColumnKey
+                .getOrDefault(tagLiteralColumnKey(tagLiteral, columnName), List.of());
+        if (definitions.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<PsiElement> targets = new LinkedHashSet<>();
+        for (GoSpringGormFieldDefinition definition : definitions) {
+            targets.addAll(findUsageTargets(project, definition));
         }
         return targets;
     }
@@ -249,6 +272,7 @@ public final class GoSpringGormQueryIndex {
                         String fieldName = fieldPrefix.substring(0, split).trim();
                         if (!fieldName.isBlank()) {
                             String columnName = fieldName;
+                            PsiElement tagLiteralAnchor = null;
                             if (backtickStart > 0) {
                                 int backtickEnd = line.indexOf('`', backtickStart + 1);
                                 if (backtickEnd > backtickStart) {
@@ -257,12 +281,18 @@ public final class GoSpringGormQueryIndex {
                                     if (explicitColumn != null && !explicitColumn.isBlank()) {
                                         columnName = explicitColumn.trim();
                                     }
+                                    tagLiteralAnchor = findAnchor(psiFile, bodyStart + cursor + backtickStart);
                                 }
                             }
                             int fieldNameOffset = line.indexOf(fieldName);
                             PsiElement anchor = findAnchor(psiFile, bodyStart + cursor + Math.max(fieldNameOffset, 0));
                             GoSpringGormFieldDefinition definition = new GoSpringGormFieldDefinition(structName, fieldName, columnName, anchor);
                             model.ownFieldsByStruct.computeIfAbsent(structName, unused -> new ArrayList<>()).add(definition);
+                            if (tagLiteralAnchor != null) {
+                                model.fieldsByTagLiteralAndColumnKey
+                                        .computeIfAbsent(tagLiteralColumnKey(tagLiteralAnchor, columnName), unused -> new ArrayList<>())
+                                        .add(definition);
+                            }
                         }
                     } else {
                         String embeddedStruct = baseTypeName(fieldPrefix);
@@ -380,13 +410,9 @@ public final class GoSpringGormQueryIndex {
         if (methodStart < 0 || methodName == null) {
             return null;
         }
-        Matcher modelMatcher = MODEL_PATTERN.matcher(snippet.substring(0, methodStart));
-        String rawModelType = null;
-        while (modelMatcher.find()) {
-            rawModelType = modelMatcher.group(1);
-        }
+        String rawModelType = resolveModelTypeFromTerminalCall(text, literalStartOffset, windowStart + methodStart);
         if (rawModelType == null || rawModelType.isBlank()) {
-            rawModelType = resolveModelTypeFromTerminalCall(text, literalStartOffset, windowStart + methodStart);
+            rawModelType = resolveNearestModelTypeInOpenChain(snippet, methodStart);
         }
         if (rawModelType == null || rawModelType.isBlank()) {
             return null;
@@ -418,6 +444,30 @@ public final class GoSpringGormQueryIndex {
         }
         String inferred = resolveVariableTypeBefore(text, token, queryMethodOffset);
         return inferred == null || inferred.isBlank() ? null : inferred;
+    }
+
+    private static @Nullable String resolveNearestModelTypeInOpenChain(String snippet, int methodStartInSnippet) {
+        if (snippet == null || snippet.isBlank() || methodStartInSnippet <= 0 || methodStartInSnippet > snippet.length()) {
+            return null;
+        }
+        String beforeMethod = snippet.substring(0, methodStartInSnippet);
+        Matcher modelMatcher = MODEL_PATTERN.matcher(beforeMethod);
+        String candidateType = null;
+        int candidateEnd = -1;
+        while (modelMatcher.find()) {
+            candidateType = modelMatcher.group(1);
+            candidateEnd = modelMatcher.end();
+        }
+        if (candidateType == null || candidateType.isBlank() || candidateEnd < 0 || candidateEnd > beforeMethod.length()) {
+            return null;
+        }
+        // If a terminal call already appears after this Model(...) and before current query method,
+        // that Model(...) belongs to an earlier completed chain and must not leak into this query.
+        String tailAfterModel = beforeMethod.substring(candidateEnd);
+        if (TERMINAL_QUERY_PATTERN.matcher(tailAfterModel).find()) {
+            return null;
+        }
+        return candidateType;
     }
 
     private static boolean looksLikeTypeToken(String token) {
@@ -567,6 +617,34 @@ public final class GoSpringGormQueryIndex {
         return structName + "#" + columnName.toLowerCase(Locale.ROOT);
     }
 
+    private static String tagLiteralColumnKey(PsiElement tagLiteral, String columnName) {
+        return identity(tagLiteral) + "#" + columnName.toLowerCase(Locale.ROOT);
+    }
+
+    private static Set<String> collectStructAndDescendants(Model model, String rootStruct) {
+        LinkedHashSet<String> result = new LinkedHashSet<>();
+        if (rootStruct == null || rootStruct.isBlank()) {
+            return result;
+        }
+        result.add(rootStruct);
+        boolean changed;
+        do {
+            changed = false;
+            for (Map.Entry<String, List<String>> entry : model.embeddedStructsByStruct.entrySet()) {
+                if (result.contains(entry.getKey())) {
+                    continue;
+                }
+                for (String embedded : entry.getValue()) {
+                    if (result.contains(embedded)) {
+                        changed = result.add(entry.getKey()) || changed;
+                        break;
+                    }
+                }
+            }
+        } while (changed);
+        return result;
+    }
+
     private static final class QueryContext {
         private final String structName;
         private final String methodName;
@@ -583,6 +661,7 @@ public final class GoSpringGormQueryIndex {
         private final Map<String, List<String>> embeddedStructsByStruct = new LinkedHashMap<>();
         private final Map<String, List<GoSpringGormFieldDefinition>> fieldsByStruct = new LinkedHashMap<>();
         private final Map<String, GoSpringGormFieldDefinition> fieldByStructAndColumn = new LinkedHashMap<>();
+        private final Map<String, List<GoSpringGormFieldDefinition>> fieldsByTagLiteralAndColumnKey = new LinkedHashMap<>();
         private final Map<String, List<GoSpringGormQueryUsage>> queryUsagesByLiteral = new LinkedHashMap<>();
         private final Map<String, List<GoSpringGormQueryUsage>> usagesByFieldKey = new LinkedHashMap<>();
     }

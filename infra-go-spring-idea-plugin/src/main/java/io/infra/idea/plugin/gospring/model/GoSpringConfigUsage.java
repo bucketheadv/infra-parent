@@ -9,12 +9,22 @@ public class GoSpringConfigUsage {
     private final List<String> effectiveKeys;
     private final boolean prefixMatch;
     private final PsiElement psiElement;
+    private final String ownerTypeName;
 
     public GoSpringConfigUsage(String declaredKey, List<String> effectiveKeys, boolean prefixMatch, PsiElement psiElement) {
+        this(declaredKey, effectiveKeys, prefixMatch, psiElement, null);
+    }
+
+    public GoSpringConfigUsage(String declaredKey,
+                               List<String> effectiveKeys,
+                               boolean prefixMatch,
+                               PsiElement psiElement,
+                               String ownerTypeName) {
         this.declaredKey = declaredKey;
         this.effectiveKeys = List.copyOf(effectiveKeys);
         this.prefixMatch = prefixMatch;
         this.psiElement = psiElement;
+        this.ownerTypeName = ownerTypeName;
     }
 
     public String getDeclaredKey() {
@@ -31,5 +41,9 @@ public class GoSpringConfigUsage {
 
     public PsiElement getPsiElement() {
         return psiElement;
+    }
+
+    public String getOwnerTypeName() {
+        return ownerTypeName;
     }
 }

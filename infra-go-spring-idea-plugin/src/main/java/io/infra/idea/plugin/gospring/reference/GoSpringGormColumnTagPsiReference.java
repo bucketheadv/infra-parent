@@ -27,7 +27,7 @@ public class GoSpringGormColumnTagPsiReference extends PsiPolyVariantReferenceBa
     @Override
     public ResolveResult @NotNull [] multiResolve(boolean incompleteCode) {
         List<ResolveResult> results = new ArrayList<>();
-        for (PsiElement target : GoSpringGormQueryIndex.findUsageTargetsByColumnName(myElement.getProject(), columnValue)) {
+        for (PsiElement target : GoSpringGormQueryIndex.findUsageTargetsForColumnInLiteral(myElement.getProject(), myElement, columnValue)) {
             results.add(new PsiElementResolveResult(GoSpringNavigationTargetElement.wrap(target)));
         }
         return results.toArray(ResolveResult.EMPTY_ARRAY);

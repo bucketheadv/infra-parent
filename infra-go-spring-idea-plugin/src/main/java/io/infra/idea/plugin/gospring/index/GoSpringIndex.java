@@ -242,6 +242,27 @@ public final class GoSpringIndex {
         return getModel(project).valueUsagesByKey.getOrDefault(key, List.of());
     }
 
+    public static Collection<PsiElement> findValueUsages(Project project, String key, @Nullable String ownerTypeName) {
+        if (key == null || key.isBlank()) {
+            return List.of();
+        }
+        if (ownerTypeName == null || ownerTypeName.isBlank()) {
+            return findValueUsages(project, key);
+        }
+        Map<String, PsiElement> unique = new LinkedHashMap<>();
+        Model model = getModel(project);
+        for (String typeKey : buildTypeKeys(ownerTypeName)) {
+            Map<String, List<PsiElement>> usagesByType = model.valueUsagesByKeyAndTypeKey.get(typeKey);
+            if (usagesByType == null) {
+                continue;
+            }
+            for (PsiElement usage : usagesByType.getOrDefault(key, List.of())) {
+                unique.put(psiIdentity(usage), usage);
+            }
+        }
+        return unique.values();
+    }
+
     public static Collection<GoSpringConfigProperty> findConfigPropertiesByPrefix(Project project, String prefix) {
         if (prefix == null || prefix.isBlank()) {
             return List.of();
@@ -636,7 +657,7 @@ public final class GoSpringIndex {
     private static void collectStructuredValueUsages(Model model) {
         for (StructDefinition definition : model.structDefinitions.values()) {
             for (StructFieldBinding field : definition.fields) {
-                collectValueUsagesFromField(model, field, "", new LinkedHashSet<>());
+                collectValueUsagesFromField(model, field, "", new LinkedHashSet<>(), definition.name);
             }
         }
     }
@@ -752,7 +773,8 @@ public final class GoSpringIndex {
     private static void collectValueUsagesFromField(Model model,
                                                     StructFieldBinding field,
                                                     String prefix,
-                                                    Set<String> visitedTypes) {
+                                                    Set<String> visitedTypes,
+                                                    @Nullable String ownerTypeName) {
         String effectiveKey = joinPropertyKey(prefix, field.key);
         model.addConfigMetadata(new GoSpringConfigMetadata(
                 effectiveKey,
@@ -766,11 +788,11 @@ public final class GoSpringIndex {
         if (nestedDefinition != null && visitedTypes.add(nestedDefinition.name)) {
             prefixMatch = true;
             for (StructFieldBinding nestedField : nestedDefinition.fields) {
-                collectValueUsagesFromField(model, nestedField, effectiveKey, visitedTypes);
+                collectValueUsagesFromField(model, nestedField, effectiveKey, visitedTypes, ownerTypeName);
             }
             visitedTypes.remove(nestedDefinition.name);
         }
-        model.addConfigUsage(new GoSpringConfigUsage(field.key, List.of(effectiveKey), prefixMatch, field.anchor));
+        model.addConfigUsage(new GoSpringConfigUsage(field.key, List.of(effectiveKey), prefixMatch, field.anchor, ownerTypeName));
     }
 
     private static void collectFunctionDefinitions(PsiFile psiFile,
@@ -1324,7 +1346,10 @@ public final class GoSpringIndex {
     }
 
     private static String configUsageIdentity(GoSpringConfigUsage usage) {
-        return psiIdentity(usage.getPsiElement()) + "|" + usage.getEffectiveKeys() + "|" + usage.isPrefixMatch();
+        return psiIdentity(usage.getPsiElement())
+                + "|" + usage.getEffectiveKeys()
+                + "|" + usage.isPrefixMatch()
+                + "|" + String.valueOf(usage.getOwnerTypeName());
     }
 
     private static String configPropertyIdentity(GoSpringConfigProperty property) {
@@ -1516,6 +1541,7 @@ public final class GoSpringIndex {
         private final List<GoSpringBeanInjectionUsage> beanInjectionUsages = new ArrayList<>();
         private final List<GoSpringConfigUsage> configUsages = new ArrayList<>();
         private final Map<String, List<PsiElement>> valueUsagesByKey = new LinkedHashMap<>();
+        private final Map<String, Map<String, List<PsiElement>>> valueUsagesByKeyAndTypeKey = new LinkedHashMap<>();
         private final Set<String> definitionKeys = new LinkedHashSet<>();
         private final Set<String> usageKeys = new LinkedHashSet<>();
         private final Set<String> configUsageKeys = new LinkedHashSet<>();
@@ -1558,6 +1584,14 @@ public final class GoSpringIndex {
             configUsages.add(usage);
             for (String key : usage.getEffectiveKeys()) {
                 valueUsagesByKey.computeIfAbsent(key, unused -> new ArrayList<>()).add(usage.getPsiElement());
+                if (usage.getOwnerTypeName() != null && !usage.getOwnerTypeName().isBlank()) {
+                    for (String typeKey : buildTypeKeys(usage.getOwnerTypeName())) {
+                        valueUsagesByKeyAndTypeKey
+                                .computeIfAbsent(typeKey, unused -> new LinkedHashMap<>())
+                                .computeIfAbsent(key, unused -> new ArrayList<>())
+                                .add(usage.getPsiElement());
+                    }
+                }
             }
         }
 

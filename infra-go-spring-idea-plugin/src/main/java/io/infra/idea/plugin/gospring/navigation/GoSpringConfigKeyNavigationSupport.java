@@ -83,7 +83,10 @@ public final class GoSpringConfigKeyNavigationSupport {
             }
             return targets.isEmpty() ? null : targets.toArray(new PsiElement[0]);
         }
-        targets.addAll(GoSpringIndex.findValueUsages(project, propertyKey));
+        targets.addAll(findScopedFieldUsageTargets(project, propertyKey));
+        if (targets.isEmpty()) {
+            targets.addAll(GoSpringIndex.findValueUsages(project, propertyKey));
+        }
         for (GoSpringExternalConfigDefinition definition : GoSpringIndex.findExternalConfigDefinitions(project, propertyKey)) {
             if (definition.getPsiElement() != null) {
                 targets.add(definition.getPsiElement());
@@ -129,13 +132,26 @@ public final class GoSpringConfigKeyNavigationSupport {
 
     private static PsiElement @Nullable [] findFieldTargets(Project project, String propertyKey) {
         Set<PsiElement> targets = new LinkedHashSet<>();
-        targets.addAll(GoSpringIndex.findValueUsages(project, propertyKey));
+        targets.addAll(findScopedFieldUsageTargets(project, propertyKey));
+        if (targets.isEmpty()) {
+            targets.addAll(GoSpringIndex.findValueUsages(project, propertyKey));
+        }
         for (GoSpringExternalConfigDefinition definition : GoSpringIndex.findExternalConfigDefinitions(project, propertyKey)) {
             if (definition.getPsiElement() != null) {
                 targets.add(definition.getPsiElement());
             }
         }
         return targets.isEmpty() ? null : targets.toArray(new PsiElement[0]);
+    }
+
+    private static Set<PsiElement> findScopedFieldUsageTargets(Project project, String propertyKey) {
+        Set<PsiElement> targets = new LinkedHashSet<>();
+        for (GoSpringGroupDefinition definition : GoSpringIndex.findGroupDefinitions(project, propertyKey)) {
+            for (String providedType : definition.getProvidedTypes()) {
+                targets.addAll(GoSpringIndex.findValueUsages(project, propertyKey, providedType));
+            }
+        }
+        return targets;
     }
 
     private static PsiElement @Nullable [] findInstanceTargets(Project project, String propertyKey) {
