@@ -41,10 +41,10 @@ public final class GoSpringGormQueryIndex {
     private static final Pattern GORM_TAG_VALUE_PATTERN = Pattern.compile("(^|\\s)gorm:\"((?:\\\\.|[^\"\\\\])*)\"");
     private static final Pattern GORM_COLUMN_DIRECTIVE_PATTERN = Pattern.compile("(^|;)\\s*column\\s*:\\s*([^;]+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern STRING_LITERAL_PATTERN = Pattern.compile("\"((?:\\\\.|[^\"\\\\])*)\"|`([^`]*)`");
-    private static final Pattern QUERY_METHOD_PATTERN = Pattern.compile("\\.(Where|Order|OrderBy|Select|Joins|Group|Having)\\s*\\(", Pattern.CASE_INSENSITIVE);
-    private static final Pattern MODEL_PATTERN = Pattern.compile("\\.Model\\s*\\(\\s*&?([A-Za-z_][A-Za-z0-9_\\.]*)\\s*(?:\\{\\s*\\})?\\s*\\)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern QUERY_METHOD_PATTERN = Pattern.compile("\\.\\s*(Where|Order|OrderBy|Select|Joins|Group|Having)\\s*\\(", Pattern.CASE_INSENSITIVE);
+    private static final Pattern MODEL_PATTERN = Pattern.compile("\\.\\s*Model\\s*\\(\\s*&?([A-Za-z_][A-Za-z0-9_\\.]*)\\s*(?:\\{\\s*\\})?\\s*\\)", Pattern.CASE_INSENSITIVE);
     private static final Pattern TERMINAL_QUERY_PATTERN = Pattern.compile(
-            "\\.(First|Find|Take|Last|Delete|Update|Updates|Count)\\s*\\(\\s*([^\\)]*)\\)",
+            "\\.\\s*(First|Find|Take|Last|Delete|Update|Updates|Count)\\s*\\(\\s*([^\\)]*)\\)",
             Pattern.CASE_INSENSITIVE
     );
     private static final Pattern RESULT_VAR_PATTERN = Pattern.compile("&?([A-Za-z_][A-Za-z0-9_\\.]*)");
