@@ -342,7 +342,7 @@ public final class GoSpringConfigMetadataSupport {
         }
     }
 
-    private static Set<String> collectExistingYamlChildren(@Nullable PsiFile file, @Nullable String parentKey) {
+    public static Set<String> collectExistingYamlChildren(@Nullable PsiFile file, @Nullable String parentKey) {
         LinkedHashSet<String> result = new LinkedHashSet<>();
         if (!(file instanceof YAMLFile)) {
             return result;

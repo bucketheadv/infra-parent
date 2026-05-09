@@ -14,7 +14,7 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <psi.referenceContributor implementation="io.infra.idea.plugin.gospring.reference.GoSpringReferenceContributor"/>
-        <gotoDeclarationHandler implementation="io.infra.idea.plugin.gospring.navigation.GoSpringGotoDeclarationHandler"/>
+        <gotoDeclarationHandler implementation="io.infra.idea.plugin.gospring.navigation.GoSpringGotoDeclarationHandler" order="first"/>
         <codeInsight.lineMarkerProvider language="go" implementationClass="io.infra.idea.plugin.gospring.navigation.GoSpringLineMarkerProvider"/>
         <codeInsight.lineMarkerProvider implementationClass="io.infra.idea.plugin.gospring.navigation.GoSpringPropertyLineMarkerProvider"/>
         <codeInsight.lineMarkerProvider implementationClass="io.infra.idea.plugin.gospring.navigation.GoSpringYamlLineMarkerProvider"/>
@@ -23,6 +23,7 @@
         <annotator language="go" implementationClass="io.infra.idea.plugin.gospring.inspection.GoSpringGormSqlAnnotator"/>
         <localInspection language="go" implementationClass="io.infra.idea.plugin.gospring.inspection.GoSpringGormTagInspection"/>
         <completion.contributor language="go" implementationClass="io.infra.idea.plugin.gospring.completion.GoSpringGormTagCompletionContributor"/>
+        <completion.contributor language="YAML" implementationClass="io.infra.idea.plugin.gospring.completion.ApplogYamlCompletionContributor" order="first"/>
         <completion.contributor language="any" implementationClass="io.infra.idea.plugin.gospring.metadata.GoSpringConfigMetadataCompletionContributor"/>
         <typedHandler implementation="io.infra.idea.plugin.gospring.metadata.GoSpringConfigMetadataTypedHandler"/>
         <documentationProvider implementation="io.infra.idea.plugin.gospring.metadata.GoSpringConfigMetadataDocumentationProvider"/>

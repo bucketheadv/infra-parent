@@ -9,6 +9,7 @@ import com.intellij.psi.ResolveResult;
 import io.infra.idea.plugin.gospring.index.GoSpringIndex;
 import io.infra.idea.plugin.gospring.model.GoSpringConfigMetadata;
 import io.infra.idea.plugin.gospring.navigation.GoSpringConfigKeyNavigationSupport;
+import io.infra.idea.plugin.gospring.navigation.InfraGoApplogYamlNavigation;
 import io.infra.idea.plugin.gospring.model.GoSpringExternalConfigDefinition;
 import io.infra.idea.plugin.gospring.model.GoSpringGroupDefinition;
 import org.jetbrains.annotations.NotNull;
@@ -47,10 +48,15 @@ public class GoSpringConfigKeyPsiReference extends PsiPolyVariantReferenceBase<P
     @Override
     public ResolveResult @NotNull [] multiResolve(boolean incompleteCode) {
         List<ResolveResult> results = new ArrayList<>();
+        TextRange er = myElement.getTextRange();
+        int yamlFileOffset = er != null ? er.getStartOffset() : -1;
         PsiElement[] resolved = GoSpringConfigKeyNavigationSupport.findTargets(
                 myElement.getProject(),
                 propertyKey,
-                navigationOffsetInKey
+                navigationOffsetInKey,
+                myElement.getContainingFile(),
+                myElement,
+                yamlFileOffset
         );
         Set<PsiElement> targets = new LinkedHashSet<>();
         if (resolved != null) {
@@ -64,6 +70,10 @@ public class GoSpringConfigKeyPsiReference extends PsiPolyVariantReferenceBase<P
 
     @Override
     public Object @NotNull [] getVariants() {
+        Object[] applogVariants = InfraGoApplogYamlNavigation.buildCompletionVariantsIfApplog(myElement.getContainingFile(), propertyKey);
+        if (applogVariants.length > 0) {
+            return applogVariants;
+        }
         List<Object> variants = new ArrayList<>();
         if (kind == Kind.GROUP) {
             for (GoSpringGroupDefinition definition : GoSpringIndex.findGroupDefinitions(myElement.getProject(), propertyKey)) {

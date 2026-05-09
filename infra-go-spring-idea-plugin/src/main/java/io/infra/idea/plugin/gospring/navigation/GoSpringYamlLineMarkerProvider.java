@@ -28,14 +28,21 @@ public class GoSpringYamlLineMarkerProvider implements LineMarkerProvider {
         if (propertyKey == null || propertyKey.isBlank()) {
             return null;
         }
-        PsiElement[] targets = GoSpringConfigKeyNavigationSupport.findPreferredTargetsForGutter(element.getProject(), propertyKey);
+        PsiElement[] targets = GoSpringConfigKeyNavigationSupport.findPreferredTargetsForGutter(
+                element.getProject(),
+                propertyKey,
+                element.getContainingFile()
+        );
         if (targets == null || targets.length == 0) {
             return null;
         }
+        String tooltip = GoSpringPsi.isApplogConfigFile(element.getContainingFile())
+                ? "跳转到 infra-go/applog（命名常量或 config.go 结构）"
+                : "跳转到 Go 配置使用点或模块定义";
         return NavigationGutterIconBuilder
                 .create(AllIcons.General.Locate)
                 .setTargets(List.of(targets))
-                .setTooltipText("跳转到 Go 配置使用点或模块定义")
+                .setTooltipText(tooltip)
                 .setAlignment(GutterIconRenderer.Alignment.LEFT)
                 .createLineMarkerInfo(element);
     }

@@ -42,6 +42,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.nio.file.Files;
@@ -532,6 +533,22 @@ public final class GoSpringIndex {
         return cached.getValue();
     }
 
+    private static void collectApplogYamlVirtualFiles(@NotNull Project project,
+                                                      @NotNull GlobalSearchScope scope,
+                                                      @NotNull Set<VirtualFile> configFiles) {
+        for (String name : List.of("applog.yaml", "applog.yml")) {
+            configFiles.addAll(FilenameIndex.getVirtualFilesByName(project, name, scope));
+        }
+        for (String ext : List.of("yaml", "yml")) {
+            for (VirtualFile vf : FilenameIndex.getAllFilesByExt(project, ext, scope)) {
+                String n = vf.getName().toLowerCase(Locale.ROOT);
+                if (n.contains("applog")) {
+                    configFiles.add(vf);
+                }
+            }
+        }
+    }
+
     private static Model buildModel(Project project) {
         Model model = new Model();
         PsiManager psiManager = PsiManager.getInstance(project);
@@ -541,6 +558,7 @@ public final class GoSpringIndex {
         configFiles.addAll(FilenameIndex.getVirtualFilesByName(project, "app.properties", scope));
         configFiles.addAll(FilenameIndex.getVirtualFilesByName(project, "app.yml", scope));
         configFiles.addAll(FilenameIndex.getVirtualFilesByName(project, "app.yaml", scope));
+        collectApplogYamlVirtualFiles(project, scope, configFiles);
         for (VirtualFile file : configFiles) {
             PsiFile psiFile = psiManager.findFile(file);
             for (GoSpringConfigProperty property : readConfigProperties(psiFile)) {

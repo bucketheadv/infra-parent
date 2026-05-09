@@ -3,6 +3,7 @@ package io.infra.idea.plugin.gospring.navigation;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiFile;
 import io.infra.idea.plugin.gospring.index.GoSpringIndex;
 import io.infra.idea.plugin.gospring.model.GoSpringExternalConfigDefinition;
 import io.infra.idea.plugin.gospring.model.GoSpringGroupDefinition;
@@ -64,6 +65,22 @@ public final class GoSpringConfigKeyNavigationSupport {
     }
 
     public static PsiElement @Nullable [] findTargets(Project project, String propertyKey, int offsetInKey) {
+        return findTargets(project, propertyKey, offsetInKey, null, null, -1);
+    }
+
+    public static PsiElement @Nullable [] findTargets(Project project, String propertyKey, int offsetInKey, @Nullable PsiFile yamlSourceFile) {
+        return findTargets(project, propertyKey, offsetInKey, yamlSourceFile, null, -1);
+    }
+
+    public static PsiElement @Nullable [] findTargets(Project project,
+                                                       String propertyKey,
+                                                       int offsetInKey,
+                                                       @Nullable PsiFile yamlSourceFile,
+                                                       @Nullable PsiElement yamlSourceElement,
+                                                       int yamlFileOffset) {
+        if (yamlSourceFile != null && InfraGoApplogYamlNavigation.isApplogYamlFile(yamlSourceFile)) {
+            return InfraGoApplogYamlNavigation.findTargets(project, propertyKey, yamlSourceFile, yamlSourceElement, yamlFileOffset);
+        }
         ResolvedSegment segment = resolveSegment(project, propertyKey, offsetInKey);
         if (segment == null) {
             return null;
@@ -116,7 +133,18 @@ public final class GoSpringConfigKeyNavigationSupport {
     }
 
     public static PsiElement @Nullable [] findPreferredTargetsForGutter(Project project, String propertyKey) {
+        return findPreferredTargetsForGutter(project, propertyKey, null);
+    }
+
+    public static PsiElement @Nullable [] findPreferredTargetsForGutter(Project project, String propertyKey, @Nullable PsiFile yamlSourceFile) {
         if (propertyKey == null || propertyKey.isBlank()) {
+            return null;
+        }
+        if (yamlSourceFile != null && InfraGoApplogYamlNavigation.isApplogYamlFile(yamlSourceFile)) {
+            PsiElement[] applog = InfraGoApplogYamlNavigation.findTargets(project, propertyKey, yamlSourceFile, null, -1);
+            if (applog != null && applog.length > 0) {
+                return applog;
+            }
             return null;
         }
         PsiElement[] fieldTargets = findFieldTargets(project, propertyKey);

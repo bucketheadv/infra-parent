@@ -14,6 +14,7 @@ import com.intellij.patterns.PlatformPatterns;
 import com.intellij.psi.PsiFile;
 import com.intellij.util.ProcessingContext;
 import io.infra.idea.plugin.gospring.model.GoSpringConfigMetadata;
+import io.infra.idea.plugin.gospring.navigation.InfraGoApplogYamlNavigation;
 import io.infra.idea.plugin.gospring.psi.GoSpringPsi;
 import org.jetbrains.annotations.NotNull;
 
@@ -77,6 +78,14 @@ public class GoSpringConfigMetadataCompletionContributor extends CompletionContr
     }
 
     private static boolean addYamlCompletions(PsiFile file, String text, int offset, CompletionResultSet result) {
+        if (GoSpringPsi.isApplogConfigFile(file)) {
+            GoSpringConfigMetadataSupport.YamlCompletionContext applogContext =
+                    GoSpringConfigMetadataSupport.extractYamlCompletionContext(file, text, offset);
+            if (applogContext != null
+                    && InfraGoApplogYamlNavigation.addApplogYamlCompletionsFromContext(file, applogContext, result)) {
+                return true;
+            }
+        }
         GoSpringConfigMetadataSupport.YamlCompletionContext context =
                 GoSpringConfigMetadataSupport.extractYamlCompletionContext(file, text, offset);
         if (context == null) {

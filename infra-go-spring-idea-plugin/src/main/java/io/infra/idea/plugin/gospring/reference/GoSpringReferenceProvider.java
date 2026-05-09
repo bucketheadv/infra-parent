@@ -3,6 +3,7 @@ package io.infra.idea.plugin.gospring.reference;
 import com.intellij.lang.properties.parsing.PropertiesTokenTypes;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiReference;
 import com.intellij.psi.PsiReferenceBase;
 import com.intellij.psi.PsiReferenceProvider;
@@ -11,6 +12,7 @@ import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.util.ProcessingContext;
 import io.infra.idea.plugin.gospring.index.GoSpringGormQueryIndex;
 import io.infra.idea.plugin.gospring.index.GoSpringIndex;
+import io.infra.idea.plugin.gospring.navigation.InfraGoApplogYamlNavigation;
 import io.infra.idea.plugin.gospring.navigation.GoSpringConfigKeyNavigationSupport;
 import io.infra.idea.plugin.gospring.model.GoSpringGroupDefinition;
 import io.infra.idea.plugin.gospring.model.GoSpringGormQueryUsage;
@@ -42,12 +44,34 @@ public class GoSpringReferenceProvider extends PsiReferenceProvider {
     }
 
     private PsiReference @NotNull [] buildGoReferences(@NotNull PsiElement element) {
+        PsiFile goFile = element.getContainingFile();
+        if (goFile != null && InfraGoApplogYamlNavigation.isApplogGoPackageFile(goFile)) {
+            String yamlKey = InfraGoApplogYamlNavigation.loggerYamlKeyForLoggerConst(element.getText());
+            if (yamlKey != null) {
+                return new PsiReference[]{new ApplogLoggerConstYamlReference(element, yamlKey)};
+            }
+        }
+
         PsiElement stringLiteral = GoSpringPsi.findStringLiteral(element);
-        if (stringLiteral == null || !stringLiteral.equals(element)) {
+        if (stringLiteral == null) {
             return PsiReferenceBase.EMPTY_ARRAY;
         }
-        List<GoSpringPsi.TagMatch> matches = GoSpringPsi.findTagMatches(stringLiteral);
+
         List<PsiReference> references = new ArrayList<>();
+        if (goFile != null
+                && "config.go".equals(goFile.getName())
+                && InfraGoApplogYamlNavigation.isApplogGoPackageFile(goFile)) {
+            String litText = stringLiteral.getText();
+            if (litText != null && litText.length() >= 2 && litText.charAt(0) == '`' && litText.contains("yaml:\"")) {
+                references.addAll(ApplogYamlTagPsiReference.collectFromStructTagLiteral(stringLiteral));
+            }
+        }
+
+        if (!stringLiteral.equals(element)) {
+            return references.toArray(new PsiReference[0]);
+        }
+
+        List<GoSpringPsi.TagMatch> matches = GoSpringPsi.findTagMatches(stringLiteral);
         for (GoSpringPsi.TagMatch match : matches) {
             if (match.getKind() == GoSpringPsi.ReferenceKind.VALUE) {
                 references.add(new GoSpringHighlightedPsiReference(

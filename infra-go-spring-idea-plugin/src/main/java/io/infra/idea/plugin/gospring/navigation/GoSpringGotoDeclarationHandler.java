@@ -139,6 +139,11 @@ public class GoSpringGotoDeclarationHandler implements GotoDeclarationHandler {
             }
         }
 
+        PsiElement[] applogYamlTargets = InfraGoApplogYamlNavigation.findYamlTargetsFromGo(sourceElement.getProject(), sourceElement, offset);
+        if (applogYamlTargets != null && applogYamlTargets.length > 0) {
+            return applogYamlTargets;
+        }
+
         GoSpringPsi.TagMatch tagMatch = GoSpringPsi.findTagMatchAtOffset(sourceElement, offset);
         if (tagMatch != null) {
             if (tagMatch.getKind() == GoSpringPsi.ReferenceKind.VALUE) {
@@ -243,7 +248,9 @@ public class GoSpringGotoDeclarationHandler implements GotoDeclarationHandler {
         if (!GoSpringConfigKeyNavigationSupport.isYamlKeyElement(sourceElement, keyValue)) {
             PsiElement anchor = keyValue.getKey() == null ? keyValue : keyValue.getKey();
             if (!anchor.getTextRange().containsOffset(offset)) {
-                return null;
+                if (!InfraGoApplogYamlNavigation.isApplogYamlFile(containingFile)) {
+                    return null;
+                }
             }
         }
         String propertyKey = GoSpringConfigKeyNavigationSupport.buildYamlPropertyKey(keyValue);
@@ -252,7 +259,14 @@ public class GoSpringGotoDeclarationHandler implements GotoDeclarationHandler {
         }
         int offsetInSegment = Math.max(0, offset - keyValue.getTextRange().getStartOffset());
         int offsetInKey = GoSpringConfigKeyNavigationSupport.getYamlOffsetInFullKey(keyValue, offsetInSegment);
-        return GoSpringConfigKeyNavigationSupport.findTargets(sourceElement.getProject(), propertyKey, offsetInKey);
+        return GoSpringConfigKeyNavigationSupport.findTargets(
+                sourceElement.getProject(),
+                propertyKey,
+                offsetInKey,
+                containingFile,
+                sourceElement,
+                offset
+        );
     }
 
     private static void collectDefinitionUsages(PsiElement sourceElement,

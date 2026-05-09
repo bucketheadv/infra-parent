@@ -5,6 +5,8 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import io.infra.idea.plugin.gospring.model.GoSpringConfigMetadata;
+import io.infra.idea.plugin.gospring.navigation.InfraGoApplogYamlDocs;
+import io.infra.idea.plugin.gospring.psi.GoSpringPsi;
 import org.jetbrains.annotations.Nullable;
 
 public class GoSpringConfigMetadataDocumentationProvider extends AbstractDocumentationProvider {
@@ -18,13 +20,35 @@ public class GoSpringConfigMetadataDocumentationProvider extends AbstractDocumen
 
     @Override
     public @Nullable String generateDoc(PsiElement element, @Nullable PsiElement originalElement) {
-        GoSpringConfigMetadata metadata = GoSpringConfigMetadataSupport.resolveMetadata(originalElement != null ? originalElement : element);
+        PsiElement ref = originalElement != null ? originalElement : element;
+        PsiFile file = ref.getContainingFile();
+        if (GoSpringPsi.isApplogConfigFile(file)) {
+            String key = GoSpringConfigMetadataSupport.resolveConfigKey(ref);
+            if (key != null) {
+                String applogDoc = InfraGoApplogYamlDocs.generateHtml(key);
+                if (applogDoc != null) {
+                    return applogDoc;
+                }
+            }
+        }
+        GoSpringConfigMetadata metadata = GoSpringConfigMetadataSupport.resolveMetadata(ref);
         return metadata == null ? null : GoSpringConfigMetadataSupport.buildDocumentation(metadata);
     }
 
     @Override
     public @Nullable String getQuickNavigateInfo(PsiElement element, PsiElement originalElement) {
-        GoSpringConfigMetadata metadata = GoSpringConfigMetadataSupport.resolveMetadata(originalElement != null ? originalElement : element);
+        PsiElement ref = originalElement != null ? originalElement : element;
+        PsiFile file = ref.getContainingFile();
+        if (GoSpringPsi.isApplogConfigFile(file)) {
+            String key = GoSpringConfigMetadataSupport.resolveConfigKey(ref);
+            if (key != null) {
+                String info = InfraGoApplogYamlDocs.generateQuickInfo(key);
+                if (info != null) {
+                    return info;
+                }
+            }
+        }
+        GoSpringConfigMetadata metadata = GoSpringConfigMetadataSupport.resolveMetadata(ref);
         if (metadata == null) {
             return null;
         }
