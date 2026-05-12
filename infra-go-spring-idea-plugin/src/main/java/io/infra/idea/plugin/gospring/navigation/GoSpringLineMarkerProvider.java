@@ -164,6 +164,9 @@ public class GoSpringLineMarkerProvider extends RelatedItemLineMarkerProvider {
         for (String typeName : definition.getProvidedTypes()) {
             targets.addAll(GoSpringIndex.findAutowireUsagesByType(sourceElement.getProject(), typeName));
         }
+        if (definition.getFactoryName() != null && !definition.getFactoryName().isBlank()) {
+            targets.addAll(GoSpringIndex.findProviderRefUsages(sourceElement.getProject(), definition.getFactoryName()));
+        }
     }
 
     private static void addMarker(PsiElement anchor,

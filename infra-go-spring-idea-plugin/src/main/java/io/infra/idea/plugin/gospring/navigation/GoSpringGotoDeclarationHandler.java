@@ -135,7 +135,7 @@ public class GoSpringGotoDeclarationHandler implements GotoDeclarationHandler {
                 }
             }
             if (!targets.isEmpty()) {
-                return targets.toArray(new PsiElement[0]);
+                return wrapNavigationTargets(targets);
             }
         }
 
@@ -169,7 +169,7 @@ public class GoSpringGotoDeclarationHandler implements GotoDeclarationHandler {
                     }
                 }
             }
-            return targets.isEmpty() ? null : targets.toArray(new PsiElement[0]);
+            return targets.isEmpty() ? null : wrapNavigationTargets(targets);
         }
 
         Collection<GoSpringGroupDefinition> groupDefinitions = GoSpringIndex.findGroupDefinitionsAt(sourceElement);
@@ -182,7 +182,7 @@ public class GoSpringGotoDeclarationHandler implements GotoDeclarationHandler {
                     }
                 }
             }
-            return targets.isEmpty() ? null : targets.toArray(new PsiElement[0]);
+            return targets.isEmpty() ? null : wrapNavigationTargets(targets);
         }
 
         GoSpringPsi.BeanDefinitionMatch beanDefinitionMatch = GoSpringPsi.findBeanDefinitionAtOffset(sourceElement, offset);
@@ -191,17 +191,30 @@ public class GoSpringGotoDeclarationHandler implements GotoDeclarationHandler {
             for (GoSpringBeanDefinition definition : GoSpringIndex.findBeanDefinitions(sourceElement.getProject(), beanDefinitionMatch.getBeanName())) {
                 collectDefinitionUsages(sourceElement, definition, usages);
             }
-            return usages.isEmpty() ? null : usages.toArray(new PsiElement[0]);
+            return usages.isEmpty() ? null : wrapNavigationTargets(usages);
         }
 
         GoSpringBeanDefinition definition = GoSpringIndex.findBeanDefinitionAt(sourceElement);
         if (definition != null) {
             Set<PsiElement> usages = new LinkedHashSet<>();
             collectDefinitionUsages(sourceElement, definition, usages);
-            return usages.isEmpty() ? null : usages.toArray(new PsiElement[0]);
+            return usages.isEmpty() ? null : wrapNavigationTargets(usages);
         }
 
         return null;
+    }
+
+    /**
+     * Richer chooser rows: line snippet, relative path and line (see {@link GoSpringNavigationTargetElement}).
+     */
+    private static PsiElement @NotNull [] wrapNavigationTargets(@NotNull Collection<PsiElement> targets) {
+        List<PsiElement> out = new ArrayList<>(targets.size());
+        for (PsiElement t : targets) {
+            if (t != null) {
+                out.add(GoSpringNavigationTargetElement.wrap(t));
+            }
+        }
+        return out.toArray(PsiElement.EMPTY_ARRAY);
     }
 
     private static boolean isInsideGoSpringTagLiteral(PsiElement sourceElement) {
@@ -277,6 +290,9 @@ public class GoSpringGotoDeclarationHandler implements GotoDeclarationHandler {
         }
         for (String typeName : definition.getProvidedTypes()) {
             targets.addAll(GoSpringIndex.findAutowireUsagesByType(sourceElement.getProject(), typeName));
+        }
+        if (definition.getFactoryName() != null && !definition.getFactoryName().isBlank()) {
+            targets.addAll(GoSpringIndex.findProviderRefUsages(sourceElement.getProject(), definition.getFactoryName()));
         }
     }
 

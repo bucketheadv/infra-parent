@@ -59,6 +59,8 @@ public final class GoSpringIndex {
     private static final Pattern PACKAGE_PATTERN = Pattern.compile("(?m)^\\s*package\\s+([A-Za-z_][A-Za-z0-9_]*)");
     private static final Pattern FUNCTION_PATTERN = Pattern.compile("(?s)func\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*\\((.*?)\\)\\s*([^\\{]*)\\{");
     private static final Pattern PROVIDE_CALL_PATTERN = Pattern.compile("(?:gs|app)\\.Provide\\s*\\(\\s*([A-Za-z_][A-Za-z0-9_\\.]*)");
+    /** Any qualified or package-local reference to a constructor-style name (e.g. slice of providers, dig.MustProvide). */
+    private static final Pattern FACTORY_REF_PATTERN = Pattern.compile("\\b(?:([A-Za-z_][A-Za-z0-9_.]*)\\.)?(New[A-Z][A-Za-z0-9_]*)\\b");
     private static final Pattern NAME_CALL_PATTERN = Pattern.compile("\\.Name\\s*\\(\\s*([\"`])([^\"`]+)\\1\\s*\\)", Pattern.DOTALL);
     private static final Pattern EXPORT_AS_PATTERN = Pattern.compile("As\\s*\\[\\s*([^\\]]+)\\s*]");
     private static final Pattern OBJECT_NEW_PATTERN = Pattern.compile("(?:gs|app)\\.(?:Object|Root)\\s*\\(\\s*new\\s*\\(\\s*([A-Za-z_][A-Za-z0-9_\\.]*)\\s*\\)\\s*\\)");
@@ -233,6 +235,22 @@ public final class GoSpringIndex {
         Map<String, PsiElement> unique = new LinkedHashMap<>();
         for (String key : buildTypeKeys(typeName)) {
             for (PsiElement usage : getModel(project).autowireUsagesByTypeKey.getOrDefault(key, List.of())) {
+                unique.put(psiIdentity(usage), usage);
+            }
+        }
+        return unique.values();
+    }
+
+    /**
+     * Call sites where a provider function is passed to {@code gs.Provide} / {@code app.Provide} (first argument).
+     */
+    public static Collection<PsiElement> findProviderRefUsages(Project project, @Nullable String factoryName) {
+        if (factoryName == null || factoryName.isBlank()) {
+            return List.of();
+        }
+        Map<String, PsiElement> unique = new LinkedHashMap<>();
+        for (String key : providerKeys(factoryName)) {
+            for (PsiElement usage : getModel(project).providerRefUsagesByKey.getOrDefault(key, List.of())) {
                 unique.put(psiIdentity(usage), usage);
             }
         }
@@ -572,6 +590,16 @@ public final class GoSpringIndex {
                 collectGoFileModel(psiFile, model);
             }
         }
+        // Second pass: register provider function references outside gs/app.Provide(...) first arg
+        // (e.g. []any{ service.NewFoo, ... } + mustProvide(services...)).
+        if (!model.knownFactoryNames.isEmpty()) {
+            for (VirtualFile file : FilenameIndex.getAllFilesByExt(project, "go", scope)) {
+                PsiFile psiFile = psiManager.findFile(file);
+                if (psiFile != null) {
+                    collectFactoryReferenceUsages(psiFile, psiFile.getText(), model);
+                }
+            }
+        }
         collectExternalModuleConfigDefinitions(project, model);
         return model;
     }
@@ -585,6 +613,7 @@ public final class GoSpringIndex {
 
         collectFunctionDefinitions(psiFile, text, packageName, registrations, model);
         collectDirectObjectDefinitions(psiFile, text, model);
+        collectProviderReferenceUsages(psiFile, text, model);
 
         Matcher rawLiteralMatcher = RAW_LITERAL.matcher(text);
         while (rawLiteralMatcher.find()) {
@@ -838,12 +867,12 @@ public final class GoSpringIndex {
 
             PsiElement anchor = findAnchor(psiFile, matcher.start(1));
             if (registrationInfos.isEmpty()) {
-                model.addBeanDefinition(new GoSpringBeanDefinition(null, returnTypes, anchor));
+                model.addBeanDefinition(new GoSpringBeanDefinition(null, functionName, new ArrayList<>(returnTypes), anchor));
             } else {
                 for (ProviderRegistration registration : registrationInfos) {
                     LinkedHashSet<String> providedTypes = new LinkedHashSet<>(returnTypes);
                     providedTypes.addAll(registration.exportTypes);
-                    model.addBeanDefinition(new GoSpringBeanDefinition(registration.beanName, new ArrayList<>(providedTypes), anchor));
+                    model.addBeanDefinition(new GoSpringBeanDefinition(registration.beanName, functionName, new ArrayList<>(providedTypes), anchor));
                 }
             }
 
@@ -899,8 +928,52 @@ public final class GoSpringIndex {
             providedTypes.add(typeName);
             providedTypes.addAll(metadata.exportTypes);
             PsiElement anchor = findAnchor(psiFile, matcher.start(1));
-            model.addBeanDefinition(new GoSpringBeanDefinition(metadata.beanName, providedTypes, anchor));
+            model.addBeanDefinition(new GoSpringBeanDefinition(metadata.beanName, null, providedTypes, anchor));
         }
+    }
+
+    private static void collectProviderReferenceUsages(PsiFile psiFile, String text, Model model) {
+        Matcher matcher = PROVIDE_CALL_PATTERN.matcher(text);
+        while (matcher.find()) {
+            String providerRef = matcher.group(1);
+            if (providerRef == null || providerRef.isBlank()) {
+                continue;
+            }
+            PsiElement anchor = findAnchor(psiFile, matcher.start(1));
+            model.addProviderRefUsage(providerRef, anchor);
+        }
+    }
+
+    private static void collectFactoryReferenceUsages(PsiFile psiFile, String text, Model model) {
+        if (model.knownFactoryNames.isEmpty()) {
+            return;
+        }
+        Matcher matcher = FACTORY_REF_PATTERN.matcher(text);
+        while (matcher.find()) {
+            String pkg = matcher.group(1);
+            String shortName = matcher.group(2);
+            if (shortName == null || !model.isKnownFactoryName(shortName)) {
+                continue;
+            }
+            int nameStart = matcher.start(2);
+            if (isFactoryFunctionDefinitionLine(text, nameStart, shortName)) {
+                continue;
+            }
+            String fullRef = (pkg != null && !pkg.isBlank()) ? pkg + "." + shortName : shortName;
+            PsiElement anchor = findAnchor(psiFile, nameStart);
+            model.addProviderRefUsage(fullRef, anchor);
+        }
+    }
+
+    private static boolean isFactoryFunctionDefinitionLine(String text, int funcNameStart, String funcName) {
+        int lineStart = text.lastIndexOf('\n', funcNameStart - 1) + 1;
+        int lineEnd = text.indexOf('\n', funcNameStart);
+        if (lineEnd < 0) {
+            lineEnd = text.length();
+        }
+        String line = text.substring(lineStart, lineEnd);
+        Matcher funcMatcher = Pattern.compile("^\\s*func\\s+" + Pattern.quote(funcName) + "\\s*\\(").matcher(line);
+        return funcMatcher.find();
     }
 
     private static Map<String, List<ProviderRegistration>> collectProviderRegistrations(String text) {
@@ -1356,7 +1429,10 @@ public final class GoSpringIndex {
     }
 
     private static String definitionIdentity(GoSpringBeanDefinition definition) {
-        return psiIdentity(definition.getPsiElement()) + "|" + String.valueOf(definition.getBeanName()) + "|" + definition.getProvidedTypes();
+        return psiIdentity(definition.getPsiElement())
+                + "|" + String.valueOf(definition.getBeanName())
+                + "|" + String.valueOf(definition.getFactoryName())
+                + "|" + definition.getProvidedTypes();
     }
 
     private static String usageIdentity(GoSpringBeanInjectionUsage usage) {
@@ -1556,6 +1632,7 @@ public final class GoSpringIndex {
         private final List<GoSpringGroupDefinition> groupDefinitions = new ArrayList<>();
         private final Map<String, List<PsiElement>> autowireUsagesByBeanName = new LinkedHashMap<>();
         private final Map<String, List<PsiElement>> autowireUsagesByTypeKey = new LinkedHashMap<>();
+        private final Map<String, List<PsiElement>> providerRefUsagesByKey = new LinkedHashMap<>();
         private final List<GoSpringBeanInjectionUsage> beanInjectionUsages = new ArrayList<>();
         private final List<GoSpringConfigUsage> configUsages = new ArrayList<>();
         private final Map<String, List<PsiElement>> valueUsagesByKey = new LinkedHashMap<>();
@@ -1564,12 +1641,21 @@ public final class GoSpringIndex {
         private final Set<String> usageKeys = new LinkedHashSet<>();
         private final Set<String> configUsageKeys = new LinkedHashSet<>();
         private final Set<String> groupDefinitionKeys = new LinkedHashSet<>();
+        /** Short names of indexed provider factories (e.g. NewDashboardService), for cross-file reference scan. */
+        private final Set<String> knownFactoryNames = new LinkedHashSet<>();
+
+        private boolean isKnownFactoryName(String shortName) {
+            return shortName != null && knownFactoryNames.contains(shortName);
+        }
 
         private void addBeanDefinition(GoSpringBeanDefinition definition) {
             if (!definitionKeys.add(definitionIdentity(definition))) {
                 return;
             }
             beanDefinitions.add(definition);
+            if (definition.getFactoryName() != null && !definition.getFactoryName().isBlank()) {
+                knownFactoryNames.add(definition.getFactoryName());
+            }
             if (definition.getBeanName() != null && !definition.getBeanName().isBlank()) {
                 beanDefinitionsByName.computeIfAbsent(definition.getBeanName(), unused -> new ArrayList<>()).add(definition);
             }
@@ -1591,6 +1677,23 @@ public final class GoSpringIndex {
             if (usage.getTypeName() != null && !usage.getTypeName().isBlank()) {
                 for (String key : buildTypeKeys(usage.getTypeName())) {
                     autowireUsagesByTypeKey.computeIfAbsent(key, unused -> new ArrayList<>()).add(usage.getPsiElement());
+                }
+            }
+        }
+
+        private void addProviderRefUsage(String providerRef, PsiElement anchor) {
+            String anchorKey = psiIdentity(anchor);
+            for (String key : providerKeys(providerRef)) {
+                List<PsiElement> list = providerRefUsagesByKey.computeIfAbsent(key, unused -> new ArrayList<>());
+                boolean duplicate = false;
+                for (PsiElement existing : list) {
+                    if (anchorKey.equals(psiIdentity(existing))) {
+                        duplicate = true;
+                        break;
+                    }
+                }
+                if (!duplicate) {
+                    list.add(anchor);
                 }
             }
         }
