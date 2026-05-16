@@ -76,6 +76,35 @@ public final class GoSpringGormQueryIndex {
         return usages == null ? List.of() : usages;
     }
 
+    /**
+     * Whether the literal is the SQL argument of a GORM chain call ({@code Where}, {@code Order}, ...).
+     */
+    public static boolean isGormQueryLiteral(@Nullable PsiElement stringLiteral) {
+        if (stringLiteral == null || stringLiteral.getContainingFile() == null) {
+            return false;
+        }
+        String text = stringLiteral.getText();
+        if (text == null || text.length() < 2 || !isQuotedLiteral(text)) {
+            return false;
+        }
+        TextRange range = stringLiteral.getTextRange();
+        if (range == null) {
+            return false;
+        }
+        Model model = getModel(stringLiteral.getProject());
+        String literalIdentity = identity(stringLiteral);
+        if (model.gormQueryLiteralIdentities.contains(literalIdentity)) {
+            return true;
+        }
+        String fileKey = fileIdentity(stringLiteral);
+        for (String known : model.gormQueryLiteralIdentities) {
+            if (known.startsWith(fileKey) && rangesOverlap(known, range)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static @Nullable GoSpringGormFieldDefinition findFieldDefinition(@NotNull Project project, @NotNull GoSpringGormQueryUsage usage) {
         return getModel(project).fieldByStructAndColumn.get(key(usage.getStructName(), usage.getColumnName()));
     }
@@ -191,11 +220,11 @@ public final class GoSpringGormQueryIndex {
     }
 
     public static @NotNull Collection<TextRange> findKeywordRanges(@Nullable PsiElement stringLiteral) {
-        if (stringLiteral == null) {
+        if (stringLiteral == null || !isGormQueryLiteral(stringLiteral)) {
             return List.of();
         }
         String text = stringLiteral.getText();
-        if (text == null || text.length() < 2 || !isQuotedLiteral(text)) {
+        if (text == null || text.length() < 2) {
             return List.of();
         }
         String content = text.substring(1, text.length() - 1);
@@ -375,11 +404,12 @@ public final class GoSpringGormQueryIndex {
             if (context == null) {
                 continue;
             }
+            PsiElement stringLiteral = findAnchor(psiFile, literalStart);
+            model.gormQueryLiteralIdentities.add(identity(stringLiteral));
             List<GoSpringGormFieldDefinition> fields = model.fieldsByStruct.getOrDefault(context.structName, List.of());
             if (fields.isEmpty()) {
                 continue;
             }
-            PsiElement stringLiteral = findAnchor(psiFile, literalStart);
             for (GoSpringGormFieldDefinition field : fields) {
                 for (TextRange range : findColumnRanges(content, field.getColumnName())) {
                     GoSpringGormQueryUsage usage = new GoSpringGormQueryUsage(
@@ -613,6 +643,29 @@ public final class GoSpringGormQueryIndex {
         return fileName + ":" + offsets;
     }
 
+    private static String fileIdentity(PsiElement element) {
+        PsiFile file = element.getContainingFile();
+        if (file == null || file.getVirtualFile() == null) {
+            return "<unknown>:";
+        }
+        return file.getVirtualFile().getPath() + ":";
+    }
+
+    private static boolean rangesOverlap(String literalIdentity, TextRange range) {
+        int lastColon = literalIdentity.lastIndexOf(':');
+        int prevColon = literalIdentity.lastIndexOf(':', lastColon - 1);
+        if (lastColon < 0 || prevColon < 0) {
+            return false;
+        }
+        try {
+            int start = Integer.parseInt(literalIdentity.substring(prevColon + 1, lastColon));
+            int end = Integer.parseInt(literalIdentity.substring(lastColon + 1));
+            return range.getStartOffset() < end && range.getEndOffset() > start;
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
+    }
+
     private static String key(String structName, String columnName) {
         return structName + "#" + columnName.toLowerCase(Locale.ROOT);
     }
@@ -664,5 +717,6 @@ public final class GoSpringGormQueryIndex {
         private final Map<String, List<GoSpringGormFieldDefinition>> fieldsByTagLiteralAndColumnKey = new LinkedHashMap<>();
         private final Map<String, List<GoSpringGormQueryUsage>> queryUsagesByLiteral = new LinkedHashMap<>();
         private final Map<String, List<GoSpringGormQueryUsage>> usagesByFieldKey = new LinkedHashMap<>();
+        private final Set<String> gormQueryLiteralIdentities = new LinkedHashSet<>();
     }
 }

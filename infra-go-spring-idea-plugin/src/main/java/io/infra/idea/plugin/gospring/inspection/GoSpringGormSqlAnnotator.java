@@ -19,6 +19,9 @@ import java.util.List;
 public class GoSpringGormSqlAnnotator implements Annotator {
     @Override
     public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
+        if (!GoSpringGormQueryIndex.isGormQueryLiteral(element)) {
+            return;
+        }
         List<TextRange> keywordRanges = new ArrayList<>(GoSpringGormQueryIndex.findKeywordRanges(element));
         for (TextRange keywordRange : keywordRanges) {
             TextRange absolute = keywordRange.shiftRight(element.getTextRange().getStartOffset());

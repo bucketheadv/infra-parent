@@ -15,6 +15,9 @@ public class GoSpringGormTagAnnotator implements Annotator {
     @Override
     public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
         for (GoSpringGormTagSupport.HighlightTarget highlightTarget : GoSpringGormTagSupport.collectHighlights(element)) {
+            if (highlightTarget.getKind() == GoSpringGormTagSupport.HighlightKind.VALUE) {
+                continue;
+            }
             TextRange absoluteRange = highlightTarget.getRangeInElement().shiftRight(element.getTextRange().getStartOffset());
             holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
                     .range(absoluteRange)
