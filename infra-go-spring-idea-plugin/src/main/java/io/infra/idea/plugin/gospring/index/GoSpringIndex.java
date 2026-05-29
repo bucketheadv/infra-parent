@@ -554,13 +554,13 @@ public final class GoSpringIndex {
     private static void collectApplogYamlVirtualFiles(@NotNull Project project,
                                                       @NotNull GlobalSearchScope scope,
                                                       @NotNull Set<VirtualFile> configFiles) {
-        for (String name : List.of("applog.yaml", "applog.yml")) {
+        for (String name : List.of("logx.yaml", "logx.yml")) {
             configFiles.addAll(FilenameIndex.getVirtualFilesByName(project, name, scope));
         }
         for (String ext : List.of("yaml", "yml")) {
             for (VirtualFile vf : FilenameIndex.getAllFilesByExt(project, ext, scope)) {
                 String n = vf.getName().toLowerCase(Locale.ROOT);
-                if (n.contains("applog")) {
+                if (n.contains("logx")) {
                     configFiles.add(vf);
                 }
             }

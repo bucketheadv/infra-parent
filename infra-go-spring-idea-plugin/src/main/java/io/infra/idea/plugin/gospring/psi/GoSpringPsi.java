@@ -43,16 +43,16 @@ public final class GoSpringPsi {
                 || isApplogConfigFile(file);
     }
 
-    /** infra-go {@code applog.MustLoad} 使用的 YAML（如 {@code config/applog.yaml}）。 */
+    /** infra-go {@code logx.MustLoad} 使用的 YAML（如 {@code config/logx.yaml}）。 */
     public static boolean isApplogConfigFile(@Nullable PsiFile file) {
         if (file == null || file.getName() == null) {
             return false;
         }
         String name = file.getName().toLowerCase(Locale.ROOT);
-        if ("applog.yaml".equals(name) || "applog.yml".equals(name)) {
+        if ("logx.yaml".equals(name) || "logx.yml".equals(name)) {
             return true;
         }
-        return (name.endsWith(".yaml") || name.endsWith(".yml")) && name.contains("applog");
+        return (name.endsWith(".yaml") || name.endsWith(".yml")) && name.contains("logx");
     }
 
     public static @Nullable PsiElement findStringLiteral(@Nullable PsiElement sourceElement) {

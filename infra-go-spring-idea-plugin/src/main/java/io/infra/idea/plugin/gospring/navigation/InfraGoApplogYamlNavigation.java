@@ -37,7 +37,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * infra-go {@code applog}：{@code applog.yaml} 中键与 {@code applog} 包内源码位置的对应（跳转、补全）。
+ * infra-go {@code logx}：{@code logx.yaml} 中键与 {@code logx} 包内源码位置的对应（跳转、补全）。
  */
 public final class InfraGoApplogYamlNavigation {
     private static final Map<String, String> LOGGER_KEY_TO_CONST;
@@ -141,7 +141,7 @@ public final class InfraGoApplogYamlNavigation {
         return null;
     }
 
-    /** {@code package applog} 的 Go 源文件（不依赖目录名或本地 {@code logger.go} 探测）。 */
+    /** {@code package logx} 的 Go 源文件（不依赖目录名或本地 {@code logger.go} 探测）。 */
     public static boolean isApplogGoPackageFile(@Nullable PsiFile file) {
         return file != null && GoSpringPsi.isGoFile(file) && declaresPackageApplog(file);
     }
@@ -325,7 +325,7 @@ public final class InfraGoApplogYamlNavigation {
         PsiManager pm = PsiManager.getInstance(project);
         GlobalSearchScope scope = GlobalSearchScope.projectScope(project);
         Set<VirtualFile> seen = new LinkedHashSet<>();
-        for (String fname : List.of("applog.yaml", "applog.yml")) {
+        for (String fname : List.of("logx.yaml", "logx.yml")) {
             for (VirtualFile vf : FilenameIndex.getVirtualFilesByName(project, fname, scope)) {
                 if (!seen.add(vf)) {
                     continue;
@@ -353,7 +353,7 @@ public final class InfraGoApplogYamlNavigation {
             return;
         }
         String n = vf.getName().toLowerCase(Locale.ROOT);
-        if (!n.contains("applog")) {
+        if (!n.contains("logx")) {
             return;
         }
         PsiFile pf = pm.findFile(vf);
@@ -668,12 +668,8 @@ public final class InfraGoApplogYamlNavigation {
         if (constName == null) {
             return null;
         }
-        VirtualFile applogDir = findApplogPackageDir(project);
-        if (applogDir == null) {
-            return null;
-        }
         String goFileName = CONST_TO_FILE.getOrDefault(constName, "logger.go");
-        VirtualFile goVf = applogDir.findChild(goFileName);
+        VirtualFile goVf = findLogxPackageFileByName(project, goFileName);
         if (goVf == null) {
             return null;
         }
@@ -830,11 +826,7 @@ public final class InfraGoApplogYamlNavigation {
     }
 
     private static @Nullable PsiFile findApplogConfigGo(@NotNull Project project) {
-        VirtualFile dir = findApplogPackageDir(project);
-        if (dir == null) {
-            return null;
-        }
-        VirtualFile vf = dir.findChild("config.go");
+        VirtualFile vf = findLogxPackageFileByName(project, "config.go");
         if (vf == null) {
             return null;
         }
@@ -842,7 +834,7 @@ public final class InfraGoApplogYamlNavigation {
     }
 
     /**
-     * 在 {@code applog.yaml} 中由代码补全（Ctrl+Space）调用：优先于 Spring configuration-metadata。
+     * 在 {@code logx.yaml} 中由代码补全（Ctrl+Space）调用：优先于 Spring configuration-metadata。
      */
     public static boolean addApplogYamlCompletionsFromContext(@NotNull PsiFile file,
                                                               @NotNull GoSpringConfigMetadataSupport.YamlCompletionContext context,
@@ -957,7 +949,7 @@ public final class InfraGoApplogYamlNavigation {
         for (String name : collectTopLevelAppenderDefinitionNames(yamlFile)) {
             if (!chosen.contains(name)) {
                 prefixed.addElement(LookupElementBuilder.create(name)
-                        .withTypeText("applog", true)
+                        .withTypeText("logx", true)
                         .withTailText("  顶层 appenders 名称", true));
                 any = true;
             }
@@ -965,7 +957,7 @@ public final class InfraGoApplogYamlNavigation {
         for (String sample : List.of("stdConsole", "appFile")) {
             if (!chosen.contains(sample)) {
                 prefixed.addElement(LookupElementBuilder.create(sample)
-                        .withTypeText("applog", true)
+                        .withTypeText("logx", true)
                         .withTailText("  示例名", true));
                 any = true;
             }
@@ -1166,10 +1158,10 @@ public final class InfraGoApplogYamlNavigation {
                                                                                            @NotNull Set<String> existing) {
         List<LookupElementBuilder> out = new ArrayList<>();
         if (parentKey.isEmpty()) {
-            addLookupIfNew(out, existing, "callerFileMaxLen", "yamlRoot", "applog.yaml");
-            addLookupIfNew(out, existing, "appenders", "具名 appender 表", "applog.yaml");
-            addLookupIfNew(out, existing, "root", "根 logger", "applog.yaml");
-            addLookupIfNew(out, existing, "loggers", "命名 logger 表", "applog.yaml");
+            addLookupIfNew(out, existing, "callerFileMaxLen", "yamlRoot", "logx.yaml");
+            addLookupIfNew(out, existing, "appenders", "具名 appender 表", "logx.yaml");
+            addLookupIfNew(out, existing, "root", "根 logger", "logx.yaml");
+            addLookupIfNew(out, existing, "loggers", "命名 logger 表", "logx.yaml");
             return out;
         }
         if ("appenders".equals(parentKey)) {
@@ -1179,7 +1171,7 @@ public final class InfraGoApplogYamlNavigation {
             for (String name : names) {
                 if (!existing.contains(name)) {
                     out.add(LookupElementBuilder.create(name)
-                            .withTypeText("applog", true)
+                            .withTypeText("logx", true)
                             .withTailText("  appender 名称", true));
                 }
             }
@@ -1190,7 +1182,7 @@ public final class InfraGoApplogYamlNavigation {
                 if (!existing.contains(f)) {
                     out.add(LookupElementBuilder.create(f)
                             .withTypeText("yamlAppender", true)
-                            .withTailText("  applog/config.go", true));
+                            .withTailText("  logx/config.go", true));
                 }
             }
             return out;
@@ -1199,7 +1191,7 @@ public final class InfraGoApplogYamlNavigation {
             for (String k : LOGGER_KEY_TO_CONST.keySet()) {
                 if (!existing.contains(k)) {
                     out.add(LookupElementBuilder.create(k)
-                            .withTypeText("infra-go/applog", true)
+                            .withTypeText("infra-go/logx", true)
                             .withTailText("  → " + LOGGER_KEY_TO_CONST.get(k), true));
                 }
             }
@@ -1210,7 +1202,7 @@ public final class InfraGoApplogYamlNavigation {
                 if (!existing.contains(f)) {
                     out.add(LookupElementBuilder.create(f)
                             .withTypeText("yamlLoggerDef", true)
-                            .withTailText("  applog/config.go", true));
+                            .withTailText("  logx/config.go", true));
                 }
             }
             return out;
@@ -1221,7 +1213,7 @@ public final class InfraGoApplogYamlNavigation {
             for (String name : collectTopLevelAppenderDefinitionNames(yamlFile)) {
                 if (!already.contains(name)) {
                     out.add(LookupElementBuilder.create(name)
-                            .withTypeText("applog", true)
+                            .withTypeText("logx", true)
                             .withTailText("  引用顶层 appenders", true));
                 }
             }
@@ -1321,12 +1313,31 @@ public final class InfraGoApplogYamlNavigation {
         GlobalSearchScope scope = GlobalSearchScope.allScope(project);
         for (VirtualFile vf : FilenameIndex.getVirtualFilesByName(project, "logger.go", scope)) {
             VirtualFile parent = vf.getParent();
-            if (parent == null || !"applog".equals(parent.getName())) {
+            if (parent == null) {
                 continue;
             }
             PsiFile pf = PsiManager.getInstance(project).findFile(vf);
             if (pf != null && declaresPackageApplog(pf)) {
                 return parent;
+            }
+        }
+        return null;
+    }
+
+    private static @Nullable VirtualFile findLogxPackageFileByName(@NotNull Project project, @NotNull String fileName) {
+        VirtualFile dir = findApplogPackageDir(project);
+        if (dir != null) {
+            VirtualFile inDir = dir.findChild(fileName);
+            if (inDir != null) {
+                return inDir;
+            }
+        }
+        GlobalSearchScope scope = GlobalSearchScope.allScope(project);
+        PsiManager psiManager = PsiManager.getInstance(project);
+        for (VirtualFile vf : FilenameIndex.getVirtualFilesByName(project, fileName, scope)) {
+            PsiFile pf = psiManager.findFile(vf);
+            if (pf != null && declaresPackageApplog(pf)) {
+                return vf;
             }
         }
         return null;
@@ -1346,7 +1357,7 @@ public final class InfraGoApplogYamlNavigation {
             lineEnd = s.length();
         }
         String line = s.substring(idx, lineEnd).trim();
-        return line.equals("package applog") || line.startsWith("package applog ");
+        return line.equals("package logx") || line.startsWith("package logx ");
     }
 
     private static @Nullable PsiElement findConstIdentifier(@NotNull PsiFile file, @NotNull String constName) {

@@ -5,7 +5,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * infra-go {@code applog}：{@code applog.yaml} 键的 Quick Documentation / 快速导航说明。
+ * infra-go {@code logx}：{@code logx.yaml} 键的 Quick Documentation / 快速导航说明。
  */
 public final class InfraGoApplogYamlDocs {
     private InfraGoApplogYamlDocs() {
@@ -43,7 +43,7 @@ public final class InfraGoApplogYamlDocs {
         if (doc.detail != null && !doc.detail.isBlank()) {
             b.append("<p>").append(doc.detail).append("</p>");
         }
-        b.append("<p><i>infra-go/applog</i></p>");
+        b.append("<p><i>infra-go/logx</i></p>");
         return b.toString();
     }
 
@@ -52,7 +52,7 @@ public final class InfraGoApplogYamlDocs {
             return new ApplogKeyDoc(
                     "callerFileMaxLen",
                     "日志中 file:line 显示的最大宽度（超出左侧省略）。",
-                    "对应 <code>yamlRoot.CallerFileMaxLen</code>，见 infra-go <code>applog/config.go</code>。"
+                    "对应 <code>yamlRoot.CallerFileMaxLen</code>，见 infra-go <code>logx/config.go</code>。"
             );
         }
         if ("appenders".equals(key)) {
@@ -90,7 +90,7 @@ public final class InfraGoApplogYamlDocs {
         if ("loggers".equals(key)) {
             return new ApplogKeyDoc(
                     "loggers",
-                    "命名 logger 表，与代码中 <code>applog.Get(name)</code> / <code>Name*</code> 常量一致。",
+                    "命名 logger 表，与代码中 <code>logx.Get(name)</code> / <code>Name*</code> 常量一致。",
                     "常见键：<code>app</code>、<code>access</code>、<code>gorm</code>、<code>gin</code>。"
             );
         }
@@ -105,7 +105,7 @@ public final class InfraGoApplogYamlDocs {
                 case "gorm" -> "<code>NameGorm</code>（<code>gorm.go</code>）";
                 case "gin" -> "<code>NameGinWriter</code>（<code>gin.go</code>）";
                 case "root" -> "<code>NameRoot</code>（<code>logger.go</code>）";
-                default -> "自定义命名；代码里使用相同字符串调用 applog.Get(\"" + StringUtil.escapeXmlEntities(id) + "\")。";
+                default -> "自定义命名；代码里使用相同字符串调用 logx.Get(\"" + StringUtil.escapeXmlEntities(id) + "\")。";
             };
             if (sub.isBlank()) {
                 return new ApplogKeyDoc(
@@ -131,7 +131,7 @@ public final class InfraGoApplogYamlDocs {
             case "path" -> "rollingFile 当前日志文件路径。";
             case "colored" -> "控制台是否 ANSI 着色。";
             case "maxLinesPerFile", "retentionDays" -> "rollingFile 单文件最大行数、历史文件保留天数。";
-            default -> "见 <code>yamlAppender</code> 结构体（<code>applog/config.go</code>）。";
+            default -> "见 <code>yamlAppender</code> 结构体（<code>logx/config.go</code>）。";
         };
     }
 
@@ -139,7 +139,7 @@ public final class InfraGoApplogYamlDocs {
         return switch (sub) {
             case "level" -> "trace / debug / info / warn / error / fatal；控制该 logger 是否输出及最低级别。";
             case "appenders" -> "引用的 appender 名称列表，对应 <code>appenders.*</code> 下定义的键。";
-            default -> "见 <code>yamlLoggerDef</code>（<code>applog/config.go</code>）。";
+            default -> "见 <code>yamlLoggerDef</code>（<code>logx/config.go</code>）。";
         };
     }
 
