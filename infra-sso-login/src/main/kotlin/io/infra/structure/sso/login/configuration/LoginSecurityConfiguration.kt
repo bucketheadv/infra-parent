@@ -12,7 +12,10 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.annotation.Order
+import org.springframework.http.HttpMethod
+import org.springframework.http.MediaType
 import org.springframework.security.config.Customizer
+import org.springframework.security.config.ObjectPostProcessor
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration
 import org.springframework.security.config.annotation.web.configurers.oauth2.server.authorization.OAuth2AuthorizationServerConfigurer
@@ -32,9 +35,13 @@ import org.springframework.security.oauth2.server.authorization.settings.ClientS
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.web.access.AccessDeniedHandler
+import org.springframework.security.web.access.AccessDeniedHandlerImpl
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint
+import org.springframework.security.web.csrf.CsrfFilter
+import org.springframework.security.web.csrf.InvalidCsrfTokenException
+import org.springframework.security.web.csrf.MissingCsrfTokenException
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher
-import org.springframework.http.MediaType
 import java.security.KeyPairGenerator
 import java.security.interfaces.RSAPrivateKey
 import java.security.interfaces.RSAPublicKey
@@ -82,10 +89,43 @@ class LoginSecurityConfiguration {
                 .anyRequest().authenticated()
         }.formLogin { form ->
             form.loginPage("/login").permitAll()
+        }.csrf { csrf ->
+            // 过期 Session 提交的旧退出表单不会被放行，仅安全地回到登录页。
+            csrf.withObjectPostProcessor(logoutCsrfAccessDeniedPostProcessor())
         }.logout { logout ->
             logout.logoutSuccessUrl("/login?logout")
         }
         return http.build()
+    }
+
+    /**
+     * 为登录中心的 CsrfFilter 注入过期会话退出处理策略。
+     *
+     * 处理器只改变展示结果，不会禁用 CSRF 或执行未经校验的注销操作。
+     */
+    private fun logoutCsrfAccessDeniedPostProcessor(): ObjectPostProcessor<CsrfFilter> =
+        object : ObjectPostProcessor<CsrfFilter> {
+            override fun <O : CsrfFilter> postProcess(filter: O): O {
+                filter.setAccessDeniedHandler(expiredSessionLogoutCsrfHandler())
+                return filter
+            }
+        }
+
+    /**
+     * 将服务端 Session 已失效时的退出表单重定向至登录页，其余 CSRF 校验失败仍使用默认 403 响应。
+     */
+    private fun expiredSessionLogoutCsrfHandler(): AccessDeniedHandler {
+        val defaultHandler = AccessDeniedHandlerImpl()
+        return AccessDeniedHandler { request, response, exception ->
+            val isLogoutRequest = request.method.equals(HttpMethod.POST.name(), ignoreCase = true) &&
+                request.requestURI.removePrefix(request.contextPath) == "/logout"
+            val isExpiredSessionCsrfFailure = exception is MissingCsrfTokenException || exception is InvalidCsrfTokenException
+            if (request.getSession(false) == null && isLogoutRequest && isExpiredSessionCsrfFailure) {
+                response.sendRedirect(request.contextPath + "/login?logout")
+            } else {
+                defaultHandler.handle(request, response, exception)
+            }
+        }
     }
 
     /**

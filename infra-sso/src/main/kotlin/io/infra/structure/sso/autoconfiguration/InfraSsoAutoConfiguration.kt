@@ -10,7 +10,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.HttpMethod
 import org.springframework.http.MediaType
+import org.springframework.security.config.ObjectPostProcessor
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.oauth2.client.oidc.web.logout.OidcClientInitiatedLogoutSuccessHandler
@@ -28,8 +30,13 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.web.access.AccessDeniedHandler
+import org.springframework.security.web.access.AccessDeniedHandlerImpl
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint
 import org.springframework.security.web.authentication.logout.LogoutSuccessHandler
+import org.springframework.security.web.csrf.CsrfFilter
+import org.springframework.security.web.csrf.InvalidCsrfTokenException
+import org.springframework.security.web.csrf.MissingCsrfTokenException
 import org.springframework.security.web.savedrequest.RequestCache
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher
 import org.springframework.util.StringUtils
@@ -193,6 +200,8 @@ class InfraSsoAutoConfiguration {
             properties.permitAll.forEach { pattern -> authorize.requestMatchers(pattern).permitAll() }
             authorize.anyRequest().authenticated()
         }
+            // 会话过期后的旧退出表单不放行，只返回固定站内地址，避免将用户看到的 403 页面留在浏览器中。
+            .csrf { csrf -> csrf.withObjectPostProcessor(logoutCsrfAccessDeniedPostProcessor("/")) }
             // SavedRequest 与 OAuth2 state 都保存在业务系统自己的会话中，不能与登录中心共用 Cookie。
             .requestCache { cache -> cache.requestCache(requestCache) }
             .exceptionHandling { exceptions ->
@@ -213,5 +222,40 @@ class InfraSsoAutoConfiguration {
                 resourceServer.jwt { jwt -> jwt.jwtAuthenticationConverter(converter) }
             }
         return http.build()
+    }
+
+    /**
+     * 为 CsrfFilter 安装“过期会话退出”专用的拒绝处理器。
+     *
+     * CsrfConfigurer 没有直接暴露拒绝处理器配置，因此通过 ObjectPostProcessor 在过滤器创建后
+     * 注入处理器；校验规则本身保持不变。
+     */
+    private fun logoutCsrfAccessDeniedPostProcessor(redirectTarget: String): ObjectPostProcessor<CsrfFilter> =
+        object : ObjectPostProcessor<CsrfFilter> {
+            override fun <O : CsrfFilter> postProcess(filter: O): O {
+                filter.setAccessDeniedHandler(expiredSessionLogoutCsrfHandler(redirectTarget))
+                return filter
+            }
+        }
+
+    /**
+     * 创建失效会话下退出请求的 CSRF 拒绝处理器。
+     *
+     * 只有服务端 Session 已不存在，且 POST /logout 出现 MissingCsrfTokenException 或
+     * InvalidCsrfTokenException 时会重定向；其余请求继续由 Spring Security 返回 403，
+     * 不能借此绕过 CSRF 校验。
+     */
+    private fun expiredSessionLogoutCsrfHandler(redirectTarget: String): AccessDeniedHandler {
+        val defaultHandler = AccessDeniedHandlerImpl()
+        return AccessDeniedHandler { request, response, exception ->
+            val isLogoutRequest = request.method.equals(HttpMethod.POST.name(), ignoreCase = true) &&
+                request.requestURI.removePrefix(request.contextPath) == "/logout"
+            val isExpiredSessionCsrfFailure = exception is MissingCsrfTokenException || exception is InvalidCsrfTokenException
+            if (request.getSession(false) == null && isLogoutRequest && isExpiredSessionCsrfFailure) {
+                response.sendRedirect(request.contextPath + redirectTarget)
+            } else {
+                defaultHandler.handle(request, response, exception)
+            }
+        }
     }
 }
