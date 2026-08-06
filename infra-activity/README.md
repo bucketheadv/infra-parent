@@ -1,6 +1,27 @@
 # infra-activity
 
-活动业务模块，演示如何组合 OAuth2 Client 登录跳转与 `infra-sso` JWT 校验。
+活动业务模块，提供基于 SSO 的活动配置管理能力，并演示如何组合 OAuth2 Client 登录跳转与 `infra-sso` JWT 校验。
+
+## 活动配置
+
+登录后可访问以下独立页面：`http://localhost:8081/activity/component`（模板组件配置）、`http://localhost:8081/activity/template`（活动模板配置）和 `http://localhost:8081/activity/config`（活动配置）。配置能力分为三个层级：
+
+- 模板组件配置：定义可复用组件。一个组件可以包含文本、数字、日期、日期时间、单选下拉、多选下拉、多行文本、分组和已保存的子组件；子组件可选择单个对象或数组形式。日期时间控件支持精确到秒。下拉候选项只会在节点类型为单选或多选下拉时显示。
+- 活动模板配置：按顺序挂载多个组件，也可直接配置普通输入项，形成活动的动态表单蓝图。
+- 活动配置：选择模板后按组件定义自动渲染表单，校验必填项和下拉值后保存配置。
+
+子组件数组在活动配置页可新增或移除实例，保存时每个实例按其索引保留字段路径。为避免无限递归，组件引用不能直接或间接引用自身。
+
+活动模板可按顺序重复挂载同一个组件，但每次挂载必须手动设置模板内唯一的挂载键、展示用的挂载标题，并选择单个组件或组件数组。挂载键只允许小写字母、数字和下划线，并作为活动配置数据的根路径；挂载标题用于活动动态表单中该组件实例的分组标题。模板还可直接配置普通输入项。活动支持永久有效，或配置精确到秒的开始、结束时间；接口和数据库均以毫秒 `Long` 时间戳保存有效期。活动列表可复制现有活动，副本保留模板、有效期和配置值，并固定为草稿、下线状态。活动状态与上下线状态独立维护，上下线状态支持 `ONLINE` 和 `OFFLINE`。新建数据库使用 `schema.sql`；原始表结构的已有数据库执行 `migration-allow-duplicate-template-components.sql`。如果此前已执行过重复组件迁移，则依次执行 `migration-add-template-mount-mode.sql`、`migration-add-template-input-definition.sql`、`migration-add-template-mount-title.sql`、`migration-add-activity-validity.sql`、`migration-add-activity-online-status.sql` 和 `migration-drop-activity-code.sql`。
+
+活动数据源默认是 `jdbc:mysql://localhost:3306/infra_activity`，可通过 `ACTIVITY_DB_URL`、`ACTIVITY_DB_USERNAME`、`ACTIVITY_DB_PASSWORD` 覆盖。启动前执行：
+
+```text
+src/main/resources/db/mysql/schema.sql
+src/main/resources/db/mysql/test-data.sql
+```
+
+演示数据会创建“基础信息”组件和“基础活动模板”，可直接用于创建第一个活动。
 
 先启动登录模块，再启动本模块：
 

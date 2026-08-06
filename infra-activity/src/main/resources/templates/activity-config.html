@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
+    <title>活动配置 | Infra Activity</title>
+    <link rel="stylesheet" th:href="@{/activity/config.css}" href="/activity/config.css">
+    <script defer th:src="@{/activity/config.js}" src="/activity/config.js"></script>
+</head>
+<body>
+<header class="topbar">
+    <a class="brand" th:href="@{/}" href="/" aria-label="Infra Activity 首页">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>Infra Activity</span>
+    </a>
+    <div class="topbar-actions">
+        <a class="back-link" th:href="@{/}" href="/">返回工作台</a>
+        <form th:action="@{/logout}" action="/logout" method="post">
+            <button class="logout-button" type="submit">退出登录</button>
+        </form>
+    </div>
+</header>
+
+<main class="config-shell">
+    <aside class="navigation" aria-label="活动配置导航">
+        <p class="eyebrow">Activity studio</p>
+        <h1>活动配置</h1>
+        <p class="navigation-copy">从组件定义到模板编排，再按模板创建具体活动。</p>
+        <nav class="tab-list">
+            <a class="tab-button" th:classappend="${activeSection == 'components'} ? ' is-active'" th:href="@{/activity/component}" href="/activity/component">模板组件配置</a>
+            <a class="tab-button" th:classappend="${activeSection == 'templates'} ? ' is-active'" th:href="@{/activity/template}" href="/activity/template">活动模板配置</a>
+            <a class="tab-button" th:classappend="${activeSection == 'activities'} ? ' is-active'" th:href="@{/activity/config}" href="/activity/config">活动配置</a>
+        </nav>
+    </aside>
+
+    <section class="workspace" aria-live="polite">
+        <p id="notice" class="notice" hidden></p>
+
+        <section class="tab-panel" th:classappend="${activeSection == 'components'} ? ' is-active'" th:hidden="${activeSection != 'components'}">
+            <header class="panel-header"><div><p class="eyebrow">Component library</p><h2>模板组件配置</h2></div><p>组件可以包含输入节点或已保存的子组件，并可将子组件配置为单个对象或数组。</p></header>
+            <div class="work-grid">
+                <form id="component-form" class="editor-form" novalidate>
+                    <div class="form-heading"><h3 id="component-form-title">新建组件</h3><div class="form-heading-actions"><button id="cancel-component-edit" class="secondary-button" type="button" hidden>取消编辑</button><span>字段定义</span></div></div>
+                    <div class="field-grid"><label>组件编码<input name="code" required pattern="[a-z][a-z0-9_]{0,63}" placeholder="basic_info"></label><label>组件名称<input name="name" required placeholder="基础信息"></label></div>
+                    <label>组件说明<textarea name="description" rows="2" placeholder="说明该组件适用的活动信息"></textarea></label>
+                    <label class="check-field"><input name="enabled" type="checkbox" checked>允许新模板引用此组件</label>
+                    <div class="node-builder"><div class="builder-heading"><h4>输入节点</h4><button class="icon-command" type="button" id="add-root-node" title="添加根节点">+</button></div><div id="component-nodes" class="node-list"></div></div>
+                    <button class="primary-button" type="submit">保存组件</button>
+                </form>
+                <section class="inventory" aria-label="已保存组件"><div class="form-heading"><h3>已保存组件</h3><span id="component-count">0</span></div><label class="record-search"><span class="sr-only">搜索已保存组件</span><input id="component-search" type="search" placeholder="搜索名称、编码或说明"></label><div id="component-list" class="record-list"></div></section>
+            </div>
+        </section>
+
+        <section class="tab-panel" th:classappend="${activeSection == 'templates'} ? ' is-active'" th:hidden="${activeSection != 'templates'}">
+            <header class="panel-header"><div><p class="eyebrow">Template assembly</p><h2>活动模板配置</h2></div><p>选择组件并调整顺序，模板会成为活动配置的动态表单蓝图。</p></header>
+            <div class="work-grid">
+                <form id="template-form" class="editor-form" novalidate>
+                    <div class="form-heading"><h3 id="template-form-title">新建模板</h3><div class="form-heading-actions"><button id="cancel-template-edit" class="secondary-button" type="button" hidden>取消编辑</button><span>组件编排</span></div></div>
+                    <div class="field-grid"><label>模板编码<input name="code" required pattern="[a-z][a-z0-9_]{0,63}" placeholder="campaign_template"></label><label>模板名称<input name="name" required placeholder="营销活动模板"></label></div>
+                    <label>模板说明<textarea name="description" rows="2" placeholder="说明这个模板适用的活动场景"></textarea></label>
+                    <label class="check-field"><input name="enabled" type="checkbox" checked>允许用于创建新活动</label>
+                    <section class="template-bindings" aria-label="模板组件编排"><div class="builder-heading"><h4>模板组件</h4><div class="builder-actions"><span id="template-binding-count">0 项</span><button id="add-template-binding" class="icon-command" type="button" title="添加组件" aria-label="添加组件">+</button></div></div><div id="template-component-bindings" class="template-binding-list"></div></section>
+                    <div class="node-builder"><div class="builder-heading"><h4>普通输入项</h4><button class="icon-command" type="button" id="add-template-node" title="添加普通输入项" aria-label="添加普通输入项">+</button></div><div id="template-nodes" class="node-list"></div></div>
+                    <button class="primary-button" type="submit">保存模板</button>
+                </form>
+                <section class="inventory" aria-label="已保存模板"><div class="form-heading"><h3>已保存模板</h3><span id="template-count">0</span></div><label class="record-search"><span class="sr-only">搜索已保存模板</span><input id="template-search" type="search" placeholder="搜索名称、编码或组件"></label><div id="template-list" class="record-list"></div></section>
+            </div>
+        </section>
+
+        <section class="tab-panel" th:classappend="${activeSection == 'activities'} ? ' is-active'" th:hidden="${activeSection != 'activities'}">
+            <header class="panel-header"><div><p class="eyebrow">Activity configuration</p><h2>活动配置</h2></div><p>选择活动模板后，系统会根据其中的组件递归渲染配置字段。</p></header>
+            <div class="work-grid">
+                <form id="activity-form" class="editor-form" novalidate>
+                    <div class="form-heading"><h3 id="activity-form-title">创建活动</h3><div class="form-heading-actions"><button id="cancel-activity-edit" class="secondary-button" type="button" hidden>取消编辑</button><span>动态表单</span></div></div>
+                    <label>活动名称<input name="name" required placeholder="夏日会员活动"></label>
+                    <div class="field-grid activity-status-grid"><label>活动模板<select name="templateId" id="activity-template-select" required></select></label><label>活动状态<select name="status"><option value="DRAFT">草稿</option><option value="ACTIVE">已启用</option></select></label><label>上下线状态<select name="onlineStatus"><option value="OFFLINE">已下线</option><option value="ONLINE">已上线</option></select></label></div>
+                    <section class="activity-validity" aria-label="活动有效期"><div class="builder-heading"><h4>活动有效期</h4><label class="check-field"><input id="activity-valid-forever" name="validForever" type="checkbox">永久有效</label></div><div id="activity-validity-fields" class="field-grid" hidden><label>开始时间<input name="validStartTime" type="datetime-local" step="1"></label><label>结束时间<input name="validEndTime" type="datetime-local" step="1"></label></div></section>
+                    <div id="activity-dynamic-fields" class="dynamic-fields"><p class="empty-state">请选择一个活动模板。</p></div>
+                    <button class="primary-button" type="submit">保存活动配置</button>
+                </form>
+                <section class="inventory" aria-label="已保存活动"><div class="form-heading"><h3>已保存活动</h3><span id="activity-count">0</span></div><label class="record-search"><span class="sr-only">搜索已保存活动</span><input id="activity-search" type="search" placeholder="搜索名称或状态"></label><div id="activity-list" class="record-list"></div></section>
+            </div>
+        </section>
+    </section>
+</main>
+
+<template id="node-template">
+    <fieldset class="component-node">
+        <div class="node-toolbar"><span class="node-caption">字段节点</span><button class="remove-node" type="button" title="移除节点">移除</button></div>
+        <div class="node-grid"><label>字段键<input class="node-key" required placeholder="venue"></label><label>字段标题<input class="node-label" required placeholder="活动地点"></label><label>类型<select class="node-type"><option value="TEXT">单行文本</option><option value="TEXTAREA">多行文本</option><option value="NUMBER">数字</option><option value="DATE">日期</option><option value="DATE_TIME">日期时间</option><option value="SELECT">下拉菜单</option><option value="MULTI_SELECT">多选下拉</option><option value="COMPONENT">子组件</option><option value="GROUP">分组</option></select></label><label>提示<input class="node-placeholder" placeholder="请输入内容"></label></div>
+        <label class="check-field"><input class="node-required" type="checkbox">必填</label>
+        <label class="node-options-field">下拉选项<textarea class="node-options" rows="2" placeholder="online:线上活动&#10;offline:线下活动"></textarea></label>
+        <div class="node-component-fields" hidden><label>引用组件<select class="node-component-id"></select></label><label>承载形式<select class="node-component-mode"><option value="SINGLE">单个组件</option><option value="ARRAY">组件数组</option></select></label></div>
+        <label class="node-default-field">默认值<input class="node-default" placeholder="可选"></label>
+        <div class="child-nodes"><div class="builder-heading"><h5>子组件</h5><button class="add-child-node" type="button">添加子节点</button></div><div class="node-list"></div></div>
+    </fieldset>
+</template>
+
+<dialog id="activity-debug-dialog" class="confirm-dialog debug-dialog" aria-labelledby="activity-debug-dialog-title">
+    <form id="activity-debug-form" class="confirm-dialog-content" novalidate>
+        <header class="confirm-dialog-header">
+            <span class="confirm-dialog-icon" aria-hidden="true">&lt;/&gt;</span>
+            <div><p class="eyebrow">访问调试</p><h3 id="activity-debug-dialog-title">调试模式</h3></div>
+        </header>
+        <p class="confirm-dialog-message">调试模式仅对用户 ID 白名单生效，可使用强制指定时间验证活动有效期。</p>
+        <label class="check-field"><input id="activity-debug-mode" name="debugMode" type="checkbox">启用调试模式</label>
+        <div id="activity-debug-fields" class="debug-fields" hidden>
+            <label>用户 ID 白名单<textarea id="activity-debug-user-ids" name="debugUserIds" rows="3" inputmode="numeric" placeholder="多个用户 ID 请使用逗号或换行分隔"></textarea></label>
+            <label>强制指定时间<input id="activity-debug-force-time" name="debugForceTime" type="datetime-local" step="1"></label>
+        </div>
+        <footer class="confirm-dialog-actions"><button id="cancel-activity-debug" class="secondary-button" type="button">取消</button><button class="primary-button" type="submit">确认配置</button></footer>
+    </form>
+</dialog>
+
+<dialog id="activity-online-status-dialog" class="confirm-dialog" aria-labelledby="activity-online-status-dialog-title">
+    <form method="dialog" class="confirm-dialog-content">
+        <header class="confirm-dialog-header">
+            <span id="activity-online-status-dialog-icon" class="confirm-dialog-icon" aria-hidden="true">↑</span>
+            <div><p class="eyebrow">状态变更</p><h3 id="activity-online-status-dialog-title">确认上线活动</h3></div>
+        </header>
+        <p id="activity-online-status-dialog-message" class="confirm-dialog-message"></p>
+        <div id="activity-online-status-dialog-preview" class="confirm-dialog-preview"></div>
+        <footer class="confirm-dialog-actions"><button class="secondary-button" type="submit" value="cancel">取消</button><button id="activity-online-status-dialog-confirm" class="primary-button" type="submit" value="confirm">确认上线</button></footer>
+    </form>
+</dialog>
+
+<dialog id="activity-copy-dialog" class="confirm-dialog" aria-labelledby="activity-copy-dialog-title">
+    <form method="dialog" class="confirm-dialog-content">
+        <header class="confirm-dialog-header">
+            <span class="confirm-dialog-icon" aria-hidden="true">⧉</span>
+            <div><p class="eyebrow">创建副本</p><h3 id="activity-copy-dialog-title">确认复制活动</h3></div>
+        </header>
+        <p class="confirm-dialog-message">副本会继承当前模板、有效期和活动配置，并固定创建为草稿、已下线状态。</p>
+        <div id="activity-copy-dialog-preview" class="confirm-dialog-preview"></div>
+        <footer class="confirm-dialog-actions"><button class="secondary-button" type="submit" value="cancel">取消</button><button class="primary-button" type="submit" value="confirm">确认复制</button></footer>
+    </form>
+</dialog>
+
+<dialog id="configuration-delete-dialog" class="confirm-dialog is-destructive" aria-labelledby="configuration-delete-dialog-title">
+    <form method="dialog" class="confirm-dialog-content">
+        <header class="confirm-dialog-header">
+            <span class="confirm-dialog-icon" aria-hidden="true">!</span>
+            <div><p class="eyebrow">删除确认</p><h3 id="configuration-delete-dialog-title">确认删除</h3></div>
+        </header>
+        <p id="configuration-delete-dialog-message" class="confirm-dialog-message">删除后无法恢复，请确认是否继续。</p>
+        <div id="configuration-delete-dialog-preview" class="confirm-dialog-preview"></div>
+        <footer class="confirm-dialog-actions"><button class="secondary-button" type="submit" value="cancel">取消</button><button id="configuration-delete-dialog-confirm" class="primary-button" type="submit" value="confirm">确认删除</button></footer>
+    </form>
+</dialog>
+</body>
+</html>

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Infra Activity 工作台</title>
-    <link rel="stylesheet" th:href="@{/infra-activity/dashboard.css}" href="/infra-activity/dashboard.css">
+    <link rel="stylesheet" th:href="@{/activity/dashboard.css}" href="/activity/dashboard.css">
 </head>
 <body>
 <header class="topbar">
@@ -12,9 +12,12 @@
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
         <span>Infra Activity</span>
     </a>
-    <form th:action="@{/logout}" action="/logout" method="post">
-        <button class="logout-button" type="submit">退出登录</button>
-    </form>
+    <div class="topbar-actions">
+        <a class="back-link" th:href="@{/activity/config}" href="/activity/config">活动配置</a>
+        <form th:action="@{/logout}" action="/logout" method="post">
+            <button class="logout-button" type="submit">退出登录</button>
+        </form>
+    </div>
 </header>
 
 <main class="workspace">

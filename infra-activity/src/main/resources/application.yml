@@ -6,22 +6,13 @@ server:
         # 仅在同一主机名（如 localhost）部署多个应用时需要；Cookie 不按端口隔离。
         name: INFRA_ACTIVITY_SESSION
 
-infra:
-  sso:
-    enabled: true
-    issuer-uri: http://localhost:9000
-    audience: infra-activity
-    permit-all:
-      - /error
-      - /api/public/**
-      - /infra-activity/**
-    client:
-      enabled: true
-      registration-id: infra-activity
-      pkce-enabled: true
-      post-logout-redirect-uri: "{baseUrl}/"
-
 spring:
+  datasource:
+    # 活动配置使用独立数据库；可通过 ACTIVITY_DB_* 环境变量覆盖。
+    url: ${ACTIVITY_DB_URL:jdbc:mysql://localhost:3306/infra_activity}
+    username: ${ACTIVITY_DB_USERNAME:root}
+    password: ${ACTIVITY_DB_PASSWORD:123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
   security:
     oauth2:
       client:
@@ -38,3 +29,18 @@ spring:
         provider:
           infra-activity:
             issuer-uri: http://localhost:9000
+
+infra:
+  sso:
+    enabled: true
+    issuer-uri: http://localhost:9000
+    audience: infra-activity
+    permit-all:
+      - /error
+      - /api/public/**
+      - /infra-activity/**
+    client:
+      enabled: true
+      registration-id: infra-activity
+      pkce-enabled: true
+      post-logout-redirect-uri: "{baseUrl}/"
