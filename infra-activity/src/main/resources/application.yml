@@ -1,0 +1,40 @@
+server:
+  port: 8081
+  servlet:
+    session:
+      cookie:
+        # 仅在同一主机名（如 localhost）部署多个应用时需要；Cookie 不按端口隔离。
+        name: INFRA_ACTIVITY_SESSION
+
+infra:
+  sso:
+    enabled: true
+    issuer-uri: http://localhost:9000
+    audience: infra-activity
+    permit-all:
+      - /error
+      - /api/public/**
+      - /infra-activity/**
+    client:
+      enabled: true
+      registration-id: infra-activity
+      pkce-enabled: true
+      post-logout-redirect-uri: "{baseUrl}/"
+
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          infra-activity:
+            client-id: infra-activity
+            client-secret: activity-secret
+            authorization-grant-type: authorization_code
+            redirect-uri: http://localhost:8081/login/oauth2/code/infra-activity
+            scope:
+              - openid
+              - profile
+              - email
+        provider:
+          infra-activity:
+            issuer-uri: http://localhost:9000

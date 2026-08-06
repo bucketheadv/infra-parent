@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Infra SSO 身份中心</title>
+    <link rel="stylesheet" th:href="@{/sso-login/home.css}" href="/sso-login/home.css">
+</head>
+<body>
+<header class="topbar">
+    <a class="brand" th:href="@{/}" href="/" aria-label="Infra SSO 身份中心首页">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>Infra SSO</span>
+    </a>
+    <form th:action="@{/logout}" action="/logout" method="post">
+        <button class="logout-button" type="submit">退出登录</button>
+    </form>
+</header>
+
+<main class="workspace">
+    <section class="welcome">
+        <p class="eyebrow">Identity center</p>
+        <h1>你好，<span th:text="${username}">用户</span></h1>
+        <p>你的统一身份会话处于有效状态，可安全访问已接入的业务系统。</p>
+    </section>
+
+    <section class="identity-summary" aria-label="当前登录身份">
+        <div class="identity">
+            <span class="avatar" th:text="${#strings.substring(username, 0, 1)}">U</span>
+            <div>
+                <p class="label">当前账号</p>
+                <strong th:text="${username}">用户</strong>
+                <dl class="identity-fields">
+                    <div><dt>唯一标识</dt><dd th:text="${subject}">-</dd></div>
+                    <div><dt>用户名</dt><dd th:text="${username}">用户</dd></div>
+                    <div><dt>邮箱</dt><dd th:text="${email}">未提供</dd></div>
+                </dl>
+            </div>
+        </div>
+        <div class="session-state"><span class="state-dot"></span>统一认证已验证</div>
+    </section>
+
+    <section class="permissions" aria-label="已授予角色">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Authorization</p>
+                <h2>已授予角色</h2>
+            </div>
+            <span class="count" th:text="${#lists.size(authorities)}">0</span>
+        </div>
+        <ul class="authority-list" th:if="${not #lists.isEmpty(authorities)}">
+            <li th:each="authority : ${authorities}" th:text="${authority}">ROLE_ORDER_READ</li>
+        </ul>
+        <p class="empty-state" th:if="${#lists.isEmpty(authorities)}">当前账号尚未分配业务角色。</p>
+    </section>
+</main>
+</body>
+</html>

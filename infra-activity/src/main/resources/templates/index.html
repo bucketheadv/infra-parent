@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Infra Activity 工作台</title>
+    <link rel="stylesheet" th:href="@{/infra-activity/dashboard.css}" href="/infra-activity/dashboard.css">
+</head>
+<body>
+<header class="topbar">
+    <a class="brand" th:href="@{/}" href="/" aria-label="Infra Activity 首页">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>Infra Activity</span>
+    </a>
+    <form th:action="@{/logout}" action="/logout" method="post">
+        <button class="logout-button" type="submit">退出登录</button>
+    </form>
+</header>
+
+<main class="workspace">
+    <section class="welcome">
+        <p class="eyebrow">Activity application</p>
+        <h1>欢迎回来，<span th:text="${username}">用户</span></h1>
+        <p>当前页面由业务系统保护。认证由 Infra SSO 完成，授权码与令牌仅在受信任的回调链路中交换。</p>
+    </section>
+
+    <section class="summary" aria-label="登录状态">
+        <div class="identity">
+            <span class="avatar" th:text="${#strings.substring(username, 0, 1)}">D</span>
+            <div>
+                <p class="label">当前身份</p>
+                <strong th:text="${username}">用户</strong>
+                <dl class="identity-fields">
+                    <div><dt>唯一标识</dt><dd th:text="${subject}">-</dd></div>
+                    <div><dt>用户名</dt><dd th:text="${username}">用户</dd></div>
+                    <div><dt>邮箱</dt><dd th:text="${email}">未提供</dd></div>
+                </dl>
+            </div>
+        </div>
+        <div class="session-state"><span class="state-dot"></span>SSO 会话已验证</div>
+    </section>
+
+    <section class="content-grid">
+        <section class="panel permissions">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">Authorization</p>
+                    <h2>当前权限</h2>
+                </div>
+                <span class="count" th:text="${#lists.size(authorities)}">1</span>
+            </div>
+            <ul class="authority-list">
+                <li th:each="authority : ${authorities}" th:text="${authority}">OIDC_USER</li>
+            </ul>
+        </section>
+
+        <section class="panel flow-panel">
+            <p class="eyebrow">Session</p>
+            <h2>登录状态</h2>
+            <dl>
+                <div><dt>认证协议</dt><dd>OpenID Connect</dd></div>
+                <div><dt>授权方式</dt><dd>Authorization Code + PKCE</dd></div>
+                <div><dt>登出行为</dt><dd>本地会话和 SSO 会话</dd></div>
+            </dl>
+        </section>
+    </section>
+</main>
+</body>
+</html>

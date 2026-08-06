@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Infra SSO 登录</title>
+    <link rel="stylesheet" th:href="@{/sso-login/login.css}" href="/sso-login/login.css">
+</head>
+<body>
+<main class="page-shell">
+    <section class="brand-panel" aria-label="Infra SSO">
+        <div class="brand-mark" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <p class="eyebrow">Infra Structure</p>
+        <h1>统一身份认证</h1>
+        <p class="brand-copy">一次登录，安全访问多个业务系统。登录成功后会回到你刚才访问的页面。</p>
+        <div class="trust-row" aria-label="安全能力">
+            <span>OIDC</span>
+            <span>PKCE</span>
+            <span>JWT</span>
+        </div>
+    </section>
+
+    <section class="login-panel" aria-label="登录表单">
+        <div class="login-card">
+            <div class="card-heading">
+                <p class="eyebrow">Welcome back</p>
+                <h2>登录到工作台</h2>
+            </div>
+
+            <div class="notice notice-error" role="alert" th:if="${param.error}">
+                账号或密码不正确，请确认后再试。
+            </div>
+            <div class="notice notice-success" role="status" th:if="${param.logout}">
+                已安全退出登录。
+            </div>
+
+            <form class="login-form" th:action="@{/login}" action="/login" method="post">
+                <label for="username">账号</label>
+                <input id="username" name="username" type="text" autocomplete="username" autofocus required>
+
+                <label for="password">密码</label>
+                <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+                <button type="submit">登录</button>
+            </form>
+        </div>
+    </section>
+</main>
+</body>
+</html>

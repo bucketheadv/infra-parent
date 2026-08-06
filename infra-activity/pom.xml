@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
@@ -8,22 +9,21 @@
         <version>0.9.6-RELEASE</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
-    <artifactId>infra-redis</artifactId>
-    <packaging>jar</packaging>
+    <artifactId>infra-activity</artifactId>
 
     <dependencies>
         <dependency>
-            <groupId>redis.clients</groupId>
-            <artifactId>jedis</artifactId>
+            <groupId>io.infra.structure</groupId>
+            <artifactId>infra-sso</artifactId>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.infra.structure</groupId>
-            <artifactId>infra-core</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.infra.structure</groupId>
-            <artifactId>infra-db</artifactId>
-            <scope>provided</scope>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
         </dependency>
     </dependencies>
 

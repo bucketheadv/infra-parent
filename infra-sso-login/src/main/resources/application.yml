@@ -1,0 +1,32 @@
+server:
+  port: 9000
+  servlet:
+    session:
+      cookie:
+        # 仅在同一主机名（如 localhost）部署多个应用时需要；Cookie 不按端口隔离。
+        name: INFRA_SSO_LOGIN_SESSION
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/infra_sso
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+infra:
+  sso:
+    login:
+      issuer: http://localhost:9000
+      clients:
+        infra-activity:
+          client-id: infra-activity
+          client-secret: activity-secret
+          redirect-uris:
+            - http://localhost:8081/login/oauth2/code/infra-activity
+          post-logout-redirect-uris:
+            - http://localhost:8081/
+          scopes:
+            - openid
+            - profile
+            - email
+          require-proof-key: true
