@@ -42,14 +42,15 @@
             <header class="panel-header"><div><p class="eyebrow">Component library</p><h2>模板组件配置</h2></div><p>组件可以包含输入节点或已保存的子组件，并可将子组件配置为单个对象或数组。</p></header>
             <div class="work-grid">
                 <form id="component-form" class="editor-form" novalidate>
-                    <div class="form-heading"><h3 id="component-form-title">新建组件</h3><div class="form-heading-actions"><button id="cancel-component-edit" class="secondary-button" type="button" hidden>取消编辑</button><span>字段定义</span></div></div>
+                    <div class="form-heading"><h3 id="component-form-title">新建组件</h3><div class="form-heading-actions"><span id="component-form-mode" class="editor-mode">新建</span><button id="cancel-component-edit" class="secondary-button" type="button" hidden>取消编辑</button><span>字段定义</span></div></div>
+                    <p id="component-form-status" class="editor-status">正在创建新的可复用组件。</p>
                     <div class="field-grid"><label>组件编码<input name="code" required pattern="[a-z][a-z0-9_]{0,63}" placeholder="basic_info"></label><label>组件名称<input name="name" required placeholder="基础信息"></label></div>
                     <label>组件说明<textarea name="description" rows="2" placeholder="说明该组件适用的活动信息"></textarea></label>
                     <label class="check-field"><input name="enabled" type="checkbox" checked>允许新模板引用此组件</label>
                     <div class="node-builder"><div class="builder-heading"><h4>输入节点</h4><button class="icon-command" type="button" id="add-root-node" title="添加根节点">+</button></div><div id="component-nodes" class="node-list"></div></div>
                     <button class="primary-button" type="submit">保存组件</button>
                 </form>
-                <section class="inventory" aria-label="已保存组件"><div class="form-heading"><h3>已保存组件</h3><span id="component-count">0</span></div><label class="record-search"><span class="sr-only">搜索已保存组件</span><input id="component-search" type="search" placeholder="搜索名称、编码或说明"></label><div id="component-list" class="record-list"></div></section>
+                <section class="inventory" aria-label="已保存组件"><div class="form-heading"><h3>已保存组件</h3><span id="component-count">0</span></div><label class="record-search"><span class="sr-only">搜索已保存组件</span><input id="component-search" type="search" placeholder="搜索名称、编码或说明"></label><div id="component-list" class="record-list"></div><nav id="component-pagination" class="record-pagination" aria-label="组件列表分页"></nav></section>
             </div>
         </section>
 
@@ -57,7 +58,8 @@
             <header class="panel-header"><div><p class="eyebrow">Template assembly</p><h2>活动模板配置</h2></div><p>选择组件并调整顺序，模板会成为活动配置的动态表单蓝图。</p></header>
             <div class="work-grid">
                 <form id="template-form" class="editor-form" novalidate>
-                    <div class="form-heading"><h3 id="template-form-title">新建模板</h3><div class="form-heading-actions"><button id="cancel-template-edit" class="secondary-button" type="button" hidden>取消编辑</button><span>组件编排</span></div></div>
+                    <div class="form-heading"><h3 id="template-form-title">新建模板</h3><div class="form-heading-actions"><span id="template-form-mode" class="editor-mode">新建</span><button id="cancel-template-edit" class="secondary-button" type="button" hidden>取消编辑</button><span>组件编排</span></div></div>
+                    <p id="template-form-status" class="editor-status">正在创建新的活动模板。</p>
                     <div class="field-grid"><label>模板编码<input name="code" required pattern="[a-z][a-z0-9_]{0,63}" placeholder="campaign_template"></label><label>模板名称<input name="name" required placeholder="营销活动模板"></label></div>
                     <label>模板说明<textarea name="description" rows="2" placeholder="说明这个模板适用的活动场景"></textarea></label>
                     <label class="check-field"><input name="enabled" type="checkbox" checked>允许用于创建新活动</label>
@@ -65,7 +67,7 @@
                     <div class="node-builder"><div class="builder-heading"><h4>普通输入项</h4><button class="icon-command" type="button" id="add-template-node" title="添加普通输入项" aria-label="添加普通输入项">+</button></div><div id="template-nodes" class="node-list"></div></div>
                     <button class="primary-button" type="submit">保存模板</button>
                 </form>
-                <section class="inventory" aria-label="已保存模板"><div class="form-heading"><h3>已保存模板</h3><span id="template-count">0</span></div><label class="record-search"><span class="sr-only">搜索已保存模板</span><input id="template-search" type="search" placeholder="搜索名称、编码或组件"></label><div id="template-list" class="record-list"></div></section>
+                <section class="inventory" aria-label="已保存模板"><div class="form-heading"><h3>已保存模板</h3><span id="template-count">0</span></div><label class="record-search"><span class="sr-only">搜索已保存模板</span><input id="template-search" type="search" placeholder="搜索名称、编码或组件"></label><div id="template-list" class="record-list"></div><nav id="template-pagination" class="record-pagination" aria-label="模板列表分页"></nav></section>
             </div>
         </section>
 
@@ -73,14 +75,15 @@
             <header class="panel-header"><div><p class="eyebrow">Activity configuration</p><h2>活动配置</h2></div><p>选择活动模板后，系统会根据其中的组件递归渲染配置字段。</p></header>
             <div class="work-grid">
                 <form id="activity-form" class="editor-form" novalidate>
-                    <div class="form-heading"><h3 id="activity-form-title">创建活动</h3><div class="form-heading-actions"><button id="cancel-activity-edit" class="secondary-button" type="button" hidden>取消编辑</button><span>动态表单</span></div></div>
+                    <div class="form-heading"><h3 id="activity-form-title">创建活动</h3><div class="form-heading-actions"><span id="activity-form-mode" class="editor-mode">新建</span><button id="cancel-activity-edit" class="secondary-button" type="button" hidden>取消编辑</button><span>动态表单</span></div></div>
+                    <p id="activity-form-status" class="editor-status">正在创建新的活动配置。</p>
                     <label>活动名称<input name="name" required placeholder="夏日会员活动"></label>
                     <div class="field-grid activity-status-grid"><label>活动模板<select name="templateId" id="activity-template-select" required></select></label><label>活动状态<select name="status"><option value="DRAFT">草稿</option><option value="ACTIVE">已启用</option></select></label><label>上下线状态<select name="onlineStatus"><option value="OFFLINE">已下线</option><option value="ONLINE">已上线</option></select></label></div>
                     <section class="activity-validity" aria-label="活动有效期"><div class="builder-heading"><h4>活动有效期</h4><label class="check-field"><input id="activity-valid-forever" name="validForever" type="checkbox">永久有效</label></div><div id="activity-validity-fields" class="field-grid" hidden><label>开始时间<input name="validStartTime" type="datetime-local" step="1"></label><label>结束时间<input name="validEndTime" type="datetime-local" step="1"></label></div></section>
                     <div id="activity-dynamic-fields" class="dynamic-fields"><p class="empty-state">请选择一个活动模板。</p></div>
                     <button class="primary-button" type="submit">保存活动配置</button>
                 </form>
-                <section class="inventory" aria-label="已保存活动"><div class="form-heading"><h3>已保存活动</h3><span id="activity-count">0</span></div><label class="record-search"><span class="sr-only">搜索已保存活动</span><input id="activity-search" type="search" placeholder="搜索名称或状态"></label><div id="activity-list" class="record-list"></div></section>
+                <section class="inventory" aria-label="已保存活动"><div class="form-heading"><h3>已保存活动</h3><span id="activity-count">0</span></div><label class="record-search"><span class="sr-only">搜索已保存活动</span><input id="activity-search" type="search" placeholder="搜索名称或状态"></label><div id="activity-list" class="record-list"></div><nav id="activity-pagination" class="record-pagination" aria-label="活动列表分页"></nav></section>
             </div>
         </section>
     </section>

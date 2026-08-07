@@ -3,8 +3,10 @@
 
     const state = {
         components: [], templates: [], activities: [], currentForm: null,
-        editingComponentId: null, editingTemplateId: null, editingActivityId: null, templateBindings: []
+        editingComponentId: null, editingTemplateId: null, editingActivityId: null, templateBindings: [],
+        listPages: { components: 1, templates: 1, activities: 1 }
     };
+    const RECORD_PAGE_SIZE = 8;
     const csrfToken = document.querySelector('meta[name="_csrf"]')?.content;
     const csrfHeader = document.querySelector('meta[name="_csrf_header"]')?.content;
     const componentNodes = document.getElementById("component-nodes");
@@ -39,6 +41,39 @@
         document.getElementById(elementId).textContent = filteredCount === totalCount
             ? totalCount
             : `${filteredCount} / ${totalCount}`;
+    };
+
+    // 将较长的本地记录集合切分为稳定页面，搜索或删除后会自动回退到有效页码。
+    const paginateRecords = (type, records) => {
+        const totalPages = Math.max(1, Math.ceil(records.length / RECORD_PAGE_SIZE));
+        const page = Math.min(Math.max(state.listPages[type], 1), totalPages);
+        state.listPages[type] = page;
+        const pagination = document.getElementById({
+            components: "component-pagination",
+            templates: "template-pagination",
+            activities: "activity-pagination"
+        }[type]);
+        pagination.hidden = records.length <= RECORD_PAGE_SIZE;
+        pagination.innerHTML = records.length <= RECORD_PAGE_SIZE ? "" : `
+            <button class="pagination-button" type="button" data-page-type="${type}" data-page="${page - 1}" ${page === 1 ? "disabled" : ""}>上一页</button>
+            <span class="pagination-summary">第 ${page} / ${totalPages} 页，共 ${records.length} 条</span>
+            <button class="pagination-button" type="button" data-page-type="${type}" data-page="${page + 1}" ${page === totalPages ? "disabled" : ""}>下一页</button>`;
+        const offset = (page - 1) * RECORD_PAGE_SIZE;
+        return records.slice(offset, offset + RECORD_PAGE_SIZE);
+    };
+
+    // 为新建和编辑状态提供一致的视觉提示，避免误将更新操作当成新增操作。
+    const setEditorMode = (type, editingId = null) => {
+        const editing = editingId !== null;
+        const labels = {
+            component: ["新建", "正在创建新的可复用组件。", "编辑中", `正在编辑组件 #${editingId}，保存将覆盖原有配置。`],
+            template: ["新建", "正在创建新的活动模板。", "编辑中", `正在编辑模板 #${editingId}，保存将覆盖原有配置。`],
+            activity: ["新建", "正在创建新的活动配置。", "编辑中", `正在编辑活动 #${editingId}，保存将覆盖原有配置。`]
+        };
+        const [newMode, newStatus, editMode, editStatus] = labels[type];
+        document.getElementById(`${type}-form`).classList.toggle("is-editing", editing);
+        document.getElementById(`${type}-form-mode`).textContent = editing ? editMode : newMode;
+        document.getElementById(`${type}-form-status`).textContent = editing ? editStatus : newStatus;
     };
 
     const showNotice = (message, error = false) => {
@@ -270,6 +305,7 @@
         state.editingComponentId = null;
         form.code.disabled = false;
         document.getElementById("component-form-title").textContent = "新建组件";
+        setEditorMode("component");
         document.getElementById("cancel-component-edit").hidden = true;
         componentNodes.replaceChildren();
         addNode(componentNodes);
@@ -292,6 +328,7 @@
         componentNodes.replaceChildren();
         component.definition.nodes.forEach((node) => populateNode(componentNodes, node));
         document.getElementById("component-form-title").textContent = "编辑组件";
+        setEditorMode("component", component.id);
         document.getElementById("cancel-component-edit").hidden = false;
         document.getElementById("component-form").scrollIntoView({ behavior: "smooth", block: "start" });
     };
@@ -305,6 +342,7 @@
         form.code.disabled = false;
         templateNodes.replaceChildren();
         document.getElementById("template-form-title").textContent = "新建模板";
+        setEditorMode("template");
         document.getElementById("cancel-template-edit").hidden = true;
         renderTemplateBindings();
     };
@@ -333,6 +371,7 @@
         templateNodes.replaceChildren();
         template.definition.nodes.forEach((node) => populateNode(templateNodes, node));
         document.getElementById("template-form-title").textContent = "编辑模板";
+        setEditorMode("template", template.id);
         document.getElementById("cancel-template-edit").hidden = false;
         renderTemplateBindings();
         form.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -347,6 +386,7 @@
         syncValidityFields();
         syncActivityOnlineStatus();
         document.getElementById("activity-form-title").textContent = "创建活动";
+        setEditorMode("activity");
         document.getElementById("cancel-activity-edit").hidden = true;
         document.getElementById("activity-dynamic-fields").innerHTML = '<p class="empty-state">请选择一个活动模板。</p>';
         renderTemplates();
@@ -372,6 +412,7 @@
         renderTemplates();
         form.templateId.value = String(activity.templateId);
         document.getElementById("activity-form-title").textContent = "编辑活动";
+        setEditorMode("activity", activity.id);
         document.getElementById("cancel-activity-edit").hidden = false;
         await loadTemplateForm(activity.values, true);
         form.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -491,10 +532,11 @@
     };
 
     const renderComponents = () => {
-        const components = filterRecords(state.components, "component-search", (component) => [
+        const matchedComponents = filterRecords(state.components, "component-search", (component) => [
             component.name, component.code, component.description, component.enabled ? "可用" : "已停用"
         ]);
-        renderRecordCount("component-count", components.length, state.components.length);
+        renderRecordCount("component-count", matchedComponents.length, state.components.length);
+        const components = paginateRecords("components", matchedComponents);
         document.getElementById("component-list").innerHTML = components.length
             ? components.map((component) => `
                 <article class="record">
@@ -511,14 +553,15 @@
     };
 
     const renderTemplates = () => {
-        const templates = filterRecords(state.templates, "template-search", (template) => [
+        const matchedTemplates = filterRecords(state.templates, "template-search", (template) => [
             template.name,
             template.code,
             template.description,
             template.enabled ? "可用" : "已停用",
             ...template.components.flatMap((binding) => [binding.component.name, binding.component.code, binding.mountKey, binding.mountTitle])
         ]);
-        renderRecordCount("template-count", templates.length, state.templates.length);
+        renderRecordCount("template-count", matchedTemplates.length, state.templates.length);
+        const templates = paginateRecords("templates", matchedTemplates);
         document.getElementById("template-list").innerHTML = templates.length
             ? templates.map((template) => `
                 <article class="record">
@@ -544,13 +587,14 @@
     };
 
     const renderActivities = () => {
-        const activities = filterRecords(state.activities, "activity-search", (activity) => [
+        const matchedActivities = filterRecords(state.activities, "activity-search", (activity) => [
             activity.name,
             activity.status,
             activity.onlineStatus === "ONLINE" ? "已上线" : "已下线",
             `模板 ${activity.templateId}`
         ]);
-        renderRecordCount("activity-count", activities.length, state.activities.length);
+        renderRecordCount("activity-count", matchedActivities.length, state.activities.length);
+        const activities = paginateRecords("activities", matchedActivities);
         document.getElementById("activity-list").innerHTML = activities.length
             ? activities.map((activity) => {
                 const validity = activity.validForever !== false
@@ -888,9 +932,24 @@
             await editActivity(Number(button.dataset.activityId));
         }
     });
-    // 组件、模板与活动列表均在输入时立即应用本地搜索条件。
-    [["component-search", renderComponents], ["template-search", renderTemplates], ["activity-search", renderActivities]]
-        .forEach(([inputId, render]) => document.getElementById(inputId).addEventListener("input", render));
+    // 分页操作只改变当前列表页码，不影响正在编辑的内容或其他列表。
+    document.querySelectorAll(".record-pagination").forEach((pagination) => {
+        pagination.addEventListener("click", (event) => {
+            const button = event.target.closest(".pagination-button");
+            if (!button || button.disabled) {
+                return;
+            }
+            const type = button.dataset.pageType;
+            state.listPages[type] = Number(button.dataset.page);
+            ({ components: renderComponents, templates: renderTemplates, activities: renderActivities }[type])();
+        });
+    });
+    // 搜索关键词变化时回到第一页，确保搜索结果不会停留在不存在的后续页面。
+    [["component-search", "components", renderComponents], ["template-search", "templates", renderTemplates], ["activity-search", "activities", renderActivities]]
+        .forEach(([inputId, type, render]) => document.getElementById(inputId).addEventListener("input", () => {
+            state.listPages[type] = 1;
+            render();
+        }));
     // 仅当用户在弹窗中点击确认时，才执行已暂存的上下线状态变更。
     onlineStatusDialog.addEventListener("close", async () => {
         const pending = pendingActivityOnlineStatus;
