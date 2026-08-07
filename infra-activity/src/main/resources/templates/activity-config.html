@@ -34,10 +34,22 @@
         <p class="eyebrow">Activity studio</p>
         <h1>活动配置</h1>
         <p class="navigation-copy">从组件定义到模板编排，再按模板创建具体活动。</p>
-        <nav class="tab-list">
-            <a class="tab-button" th:classappend="${activeSection == 'components'} ? ' is-active'" th:href="@{/activity/component}" href="/activity/component">模板组件配置</a>
-            <a class="tab-button" th:classappend="${activeSection == 'templates'} ? ' is-active'" th:href="@{/activity/template}" href="/activity/template">活动模板配置</a>
-            <a class="tab-button" th:classappend="${activeSection == 'activities'} ? ' is-active'" th:href="@{/activity/config}" href="/activity/config">活动配置</a>
+        <nav class="navigation-menu" aria-label="配置菜单">
+            <section class="navigation-menu-group" aria-labelledby="activity-menu-title">
+                <p id="activity-menu-title" class="navigation-menu-title">活动配置</p>
+                <div class="tab-list">
+                    <a class="tab-button" th:classappend="${activeSection == 'components'} ? ' is-active'" th:href="@{/activity/component}" href="/activity/component">模板组件配置</a>
+                    <a class="tab-button" th:classappend="${activeSection == 'templates'} ? ' is-active'" th:href="@{/activity/template}" href="/activity/template">活动模板配置</a>
+                    <a class="tab-button" th:classappend="${activeSection == 'activities'} ? ' is-active'" th:href="@{/activity/config}" href="/activity/config">活动配置</a>
+                </div>
+            </section>
+            <section class="navigation-menu-group" aria-labelledby="reward-menu-title">
+                <p id="reward-menu-title" class="navigation-menu-title">奖励配置</p>
+                <div class="tab-list">
+                    <a class="tab-button" th:classappend="${activeSection == 'rewardComponents'} ? ' is-active'" th:href="@{/activity/reward/component}" href="/activity/reward/component">奖励组件配置</a>
+                    <a class="tab-button" th:classappend="${activeSection == 'rewardTemplates'} ? ' is-active'" th:href="@{/activity/reward/template}" href="/activity/reward/template">奖励模板配置</a>
+                </div>
+            </section>
         </nav>
     </aside>
 
@@ -60,6 +72,23 @@
             </div>
         </section>
 
+        <section class="tab-panel" th:classappend="${activeSection == 'rewardComponents'} ? ' is-active'" th:hidden="${activeSection != 'rewardComponents'}">
+            <header class="panel-header"><div><p class="eyebrow">Reward component library</p><h2>奖励组件配置</h2></div><p>奖励组件可配置普通输入项和固定奖品组件，随后可挂载到奖励模板。</p></header>
+            <div class="work-grid">
+                <form id="reward-component-form" class="editor-form" novalidate>
+                    <div class="form-heading"><h3 id="reward-component-form-title">新建奖励组件</h3><div class="form-heading-actions"><span id="reward-component-form-mode" class="editor-mode">新建</span><button id="cancel-reward-component-edit" class="secondary-button" type="button" hidden>取消编辑</button><span>字段定义</span></div></div>
+                    <p id="reward-component-form-status" class="editor-status">正在创建新的可复用奖励组件。</p>
+                    <div class="field-grid"><label>组件编码<input name="code" required pattern="[a-z][a-z0-9_]{0,63}" placeholder="reward_limit"></label><label>组件名称<input name="name" required placeholder="发放限制"></label></div>
+                    <label>组件说明<textarea name="description" rows="2" placeholder="说明该组件适用的奖励规则"></textarea></label>
+                    <label class="check-field"><input name="enabled" type="checkbox" checked>允许新奖励模板引用此组件</label>
+                    <div class="node-builder"><div class="builder-heading"><h4>输入节点</h4><button class="icon-command" type="button" id="add-reward-root-node" title="添加根节点">+</button></div><div id="reward-component-nodes" class="node-list"></div></div>
+                    <section class="template-bindings prize-bindings" aria-label="奖励组件奖品编排"><div class="builder-heading"><h4>奖品组件</h4><div class="builder-actions"><span id="reward-component-prize-binding-count">0 项</span><button id="add-reward-component-prize-binding" class="icon-command" type="button" title="添加奖品组件" aria-label="添加奖品组件">+</button></div></div><p class="binding-hint">奖品组件固定包含类型、ID、名称、图标、价值和数量；装扮、礼物类型会按 ID 查询并回填属性。</p><div id="reward-component-prize-bindings" class="template-binding-list"></div></section>
+                    <button class="primary-button" type="submit">保存奖励组件</button>
+                </form>
+                <section class="inventory" aria-label="已保存奖励组件"><div class="form-heading"><h3>已保存奖励组件</h3><span id="reward-component-count">0</span></div><label class="record-search"><span class="sr-only">搜索已保存奖励组件</span><input id="reward-component-search" type="search" placeholder="搜索名称、编码或说明"></label><div id="reward-component-list" class="record-list"></div><nav id="reward-component-pagination" class="record-pagination" aria-label="奖励组件列表分页"></nav></section>
+            </div>
+        </section>
+
         <section class="tab-panel" th:classappend="${activeSection == 'templates'} ? ' is-active'" th:hidden="${activeSection != 'templates'}">
             <header class="panel-header"><div><p class="eyebrow">Template assembly</p><h2>活动模板配置</h2></div><p>选择组件并调整顺序，模板会成为活动配置的动态表单蓝图。</p></header>
             <div class="work-grid">
@@ -70,10 +99,27 @@
                     <label>模板说明<textarea name="description" rows="2" placeholder="说明这个模板适用的活动场景"></textarea></label>
                     <label class="check-field"><input name="enabled" type="checkbox" checked>允许用于创建新活动</label>
                     <section class="template-bindings" aria-label="模板组件编排"><div class="builder-heading"><h4>模板组件</h4><div class="builder-actions"><span id="template-binding-count">0 项</span><button id="add-template-binding" class="icon-command" type="button" title="添加组件" aria-label="添加组件">+</button></div></div><div id="template-component-bindings" class="template-binding-list"></div></section>
+                    <section class="template-bindings" aria-label="模板奖励编排"><div class="builder-heading"><h4>奖励模板</h4><div class="builder-actions"><span id="template-reward-binding-count">0 项</span><button id="add-template-reward-binding" class="icon-command" type="button" title="添加奖励模板" aria-label="添加奖励模板">+</button></div></div><div id="template-reward-bindings" class="template-binding-list"></div></section>
                     <div class="node-builder"><div class="builder-heading"><h4>普通输入项</h4><button class="icon-command" type="button" id="add-template-node" title="添加普通输入项" aria-label="添加普通输入项">+</button></div><div id="template-nodes" class="node-list"></div></div>
                     <button class="primary-button" type="submit">保存模板</button>
                 </form>
                 <section class="inventory" aria-label="已保存模板"><div class="form-heading"><h3>已保存模板</h3><span id="template-count">0</span></div><label class="record-search"><span class="sr-only">搜索已保存模板</span><input id="template-search" type="search" placeholder="搜索名称、编码或组件"></label><div id="template-list" class="record-list"></div><nav id="template-pagination" class="record-pagination" aria-label="模板列表分页"></nav></section>
+            </div>
+        </section>
+
+        <section class="tab-panel" th:classappend="${activeSection == 'rewardTemplates'} ? ' is-active'" th:hidden="${activeSection != 'rewardTemplates'}">
+            <header class="panel-header"><div><p class="eyebrow">Reward template assembly</p><h2>奖励模板配置</h2></div><p>奖励模板用于组合已配置字段和奖品的奖励组件，并由活动模板统一挂载。</p></header>
+            <div class="work-grid">
+                <form id="reward-template-form" class="editor-form" novalidate>
+                    <div class="form-heading"><h3 id="reward-template-form-title">新建奖励模板</h3><div class="form-heading-actions"><span id="reward-template-form-mode" class="editor-mode">新建</span><button id="cancel-reward-template-edit" class="secondary-button" type="button" hidden>取消编辑</button><span>奖励编排</span></div></div>
+                    <p id="reward-template-form-status" class="editor-status">正在创建新的奖励模板。</p>
+                    <div class="field-grid"><label>模板编码<input name="code" required pattern="[a-z][a-z0-9_]{0,63}" placeholder="daily_reward"></label><label>模板名称<input name="name" required placeholder="每日奖励"></label></div>
+                    <label>模板说明<textarea name="description" rows="2" placeholder="说明这个奖励模板适用的发放场景"></textarea></label>
+                    <label class="check-field"><input name="enabled" type="checkbox" checked>允许活动模板引用此奖励模板</label>
+                    <section class="template-bindings" aria-label="奖励模板组件编排"><div class="builder-heading"><h4>奖励组件</h4><div class="builder-actions"><span id="reward-template-component-binding-count">0 项</span><button id="add-reward-template-component-binding" class="icon-command" type="button" title="添加奖励组件" aria-label="添加奖励组件">+</button></div></div><div id="reward-template-component-bindings" class="template-binding-list"></div></section>
+                    <button class="primary-button" type="submit">保存奖励模板</button>
+                </form>
+                <section class="inventory" aria-label="已保存奖励模板"><div class="form-heading"><h3>已保存奖励模板</h3><span id="reward-template-count">0</span></div><label class="record-search"><span class="sr-only">搜索已保存奖励模板</span><input id="reward-template-search" type="search" placeholder="搜索名称、编码或组件"></label><div id="reward-template-list" class="record-list"></div><nav id="reward-template-pagination" class="record-pagination" aria-label="奖励模板列表分页"></nav></section>
             </div>
         </section>
 
@@ -170,6 +216,18 @@
         <p id="configuration-delete-dialog-message" class="confirm-dialog-message">删除后无法恢复，请确认是否继续。</p>
         <div id="configuration-delete-dialog-preview" class="confirm-dialog-preview"></div>
         <footer class="confirm-dialog-actions"><button class="secondary-button" type="submit" value="cancel">取消</button><button id="configuration-delete-dialog-confirm" class="primary-button" type="submit" value="confirm">确认删除</button></footer>
+    </form>
+</dialog>
+
+<dialog id="configuration-update-dialog" class="confirm-dialog" aria-labelledby="configuration-update-dialog-title">
+    <form method="dialog" class="confirm-dialog-content">
+        <header class="confirm-dialog-header">
+            <span class="confirm-dialog-icon" aria-hidden="true">↻</span>
+            <div><p class="eyebrow">更新确认</p><h3 id="configuration-update-dialog-title">确认更新</h3></div>
+        </header>
+        <p id="configuration-update-dialog-message" class="confirm-dialog-message">更新会覆盖当前已保存的配置，确认后立即生效。</p>
+        <div id="configuration-update-dialog-preview" class="confirm-dialog-preview"></div>
+        <footer class="confirm-dialog-actions"><button class="secondary-button" type="submit" value="cancel">取消</button><button id="configuration-update-dialog-confirm" class="primary-button" type="submit" value="confirm">确认更新</button></footer>
     </form>
 </dialog>
 </body>

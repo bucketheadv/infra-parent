@@ -12,13 +12,21 @@
 
 子组件数组在活动配置页可新增或移除实例，保存时每个实例按其索引保留字段路径。为避免无限递归，组件引用不能直接或间接引用自身。
 
-活动模板可按顺序重复挂载同一个组件，但每次挂载必须手动设置模板内唯一的挂载键、展示用的挂载标题，并选择单个组件或组件数组。挂载键只允许小写字母、数字和下划线，并作为活动配置数据的根路径；挂载标题用于活动动态表单中该组件实例的分组标题。模板还可直接配置普通输入项。活动支持永久有效，或配置精确到秒的开始、结束时间；接口和数据库均以毫秒 `Long` 时间戳保存有效期。活动列表可复制现有活动，副本保留模板、有效期和配置值，并固定为草稿、下线状态。活动状态与上下线状态独立维护，上下线状态支持 `ONLINE` 和 `OFFLINE`。新建数据库使用 `schema.sql`；原始表结构的已有数据库执行 `migration-allow-duplicate-template-components.sql`。如果此前已执行过重复组件迁移，则依次执行 `migration-add-template-mount-mode.sql`、`migration-add-template-input-definition.sql`、`migration-add-template-mount-title.sql`、`migration-add-activity-validity.sql`、`migration-add-activity-online-status.sql` 和 `migration-drop-activity-code.sql`。
+活动模板可按顺序重复挂载同一个组件，但每次挂载必须手动设置模板内唯一的挂载键、展示用的挂载标题，并选择单个组件或组件数组。挂载键只允许小写字母、数字和下划线，并作为活动配置数据的根路径；挂载标题用于活动动态表单中该组件实例的分组标题。模板还可直接配置普通输入项。活动支持永久有效，或配置精确到秒的开始、结束时间；接口和数据库均以毫秒 `Long` 时间戳保存有效期。活动列表可复制现有活动，副本保留模板、有效期和配置值，并固定为草稿、下线状态。活动状态与上下线状态独立维护，上下线状态支持 `ONLINE` 和 `OFFLINE`。
 
-活动数据源默认是 `jdbc:mysql://localhost:3306/infra_activity`，可通过 `ACTIVITY_DB_URL`、`ACTIVITY_DB_USERNAME`、`ACTIVITY_DB_PASSWORD` 覆盖。启动前执行：
+## 数据库脚本
+
+数据库脚本按用途分目录，所有生成脚本均使用 `yyyyMMddHHmmss_说明.sql` 的秒级日期时间整数前缀；按文件名升序即可得到升级执行顺序。
+
+- `src/main/resources/db/mysql/schema/`：新数据库的完整建表脚本。
+- `src/main/resources/db/mysql/migration/`：已有数据库的增量升级脚本，只执行尚未执行过的文件，并按文件名升序执行。
+- `src/main/resources/db/mysql/seed/`：本地测试数据，可在建表后按需执行。
+
+活动数据源默认是 `jdbc:mysql://localhost:3306/infra_activity`，可通过 `ACTIVITY_DB_URL`、`ACTIVITY_DB_USERNAME`、`ACTIVITY_DB_PASSWORD` 覆盖。新建数据库启动前执行：
 
 ```text
-src/main/resources/db/mysql/schema.sql
-src/main/resources/db/mysql/test-data.sql
+src/main/resources/db/mysql/schema/20260807090000_activity_schema.sql
+src/main/resources/db/mysql/seed/20260807090100_activity_test_data.sql
 ```
 
 演示数据会创建“基础信息”组件和“基础活动模板”，可直接用于创建第一个活动。

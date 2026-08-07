@@ -68,6 +68,8 @@ enum class ComponentNodeType {
     SELECT,
     /** 可同时选择多项候选值的下拉菜单。 */
     MULTI_SELECT,
+    /** 奖励模板自动生成的固定奖品组件。 */
+    PRIZE,
     /** 仅用于承载子节点的分组。 */
     GROUP
 }

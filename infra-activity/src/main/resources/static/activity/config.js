@@ -2,26 +2,30 @@
     "use strict";
 
     const state = {
-        components: [], templates: [], activities: [], currentForm: null,
-        editingComponentId: null, editingTemplateId: null, editingActivityId: null, templateBindings: [],
-        listPages: { components: 1, templates: 1, activities: 1 }
+        components: [], rewardComponents: [], templates: [], rewardTemplates: [], activities: [], currentForm: null,
+        editingComponentId: null, editingRewardComponentId: null, editingTemplateId: null, editingRewardTemplateId: null, editingActivityId: null,
+        templateBindings: [], templateRewardBindings: [], rewardComponentPrizeBindings: [], rewardTemplateComponentBindings: [],
+        listPages: { components: 1, rewardComponents: 1, templates: 1, rewardTemplates: 1, activities: 1 }
     };
     const RECORD_PAGE_SIZE = 8;
     const THEME_STORAGE_KEY = "infra_activity_theme";
     const csrfToken = document.querySelector('meta[name="_csrf"]')?.content;
     const csrfHeader = document.querySelector('meta[name="_csrf_header"]')?.content;
     const componentNodes = document.getElementById("component-nodes");
+    const rewardComponentNodes = document.getElementById("reward-component-nodes");
     const templateNodes = document.getElementById("template-nodes");
     const nodeTemplate = document.getElementById("node-template");
     const notice = document.getElementById("notice");
     const onlineStatusDialog = document.getElementById("activity-online-status-dialog");
     const copyDialog = document.getElementById("activity-copy-dialog");
     const configurationDeleteDialog = document.getElementById("configuration-delete-dialog");
+    const configurationUpdateDialog = document.getElementById("configuration-update-dialog");
     const debugDialog = document.getElementById("activity-debug-dialog");
     const personalSettingsDialog = document.getElementById("personal-settings-dialog");
     let pendingActivityOnlineStatus = null;
     let pendingActivityCopyId = null;
     let pendingConfigurationDeletion = null;
+    let pendingConfigurationUpdate = null;
     let pendingActivityDebugId = null;
 
     // 主题色仅保存在当前浏览器，切换后对同一站点下的配置页面立即生效。
@@ -77,7 +81,9 @@
         state.listPages[type] = page;
         const pagination = document.getElementById({
             components: "component-pagination",
+            rewardComponents: "reward-component-pagination",
             templates: "template-pagination",
+            rewardTemplates: "reward-template-pagination",
             activities: "activity-pagination"
         }[type]);
         pagination.hidden = records.length <= RECORD_PAGE_SIZE;
@@ -94,13 +100,16 @@
         const editing = editingId !== null;
         const labels = {
             component: ["新建", "正在创建新的可复用组件。", "编辑中", `正在编辑组件 #${editingId}，保存将覆盖原有配置。`],
+            rewardComponent: ["新建", "正在创建新的可复用奖励组件。", "编辑中", `正在编辑奖励组件 #${editingId}，保存将覆盖原有配置。`],
             template: ["新建", "正在创建新的活动模板。", "编辑中", `正在编辑模板 #${editingId}，保存将覆盖原有配置。`],
+            rewardTemplate: ["新建", "正在创建新的奖励模板。", "编辑中", `正在编辑奖励模板 #${editingId}，保存将覆盖原有配置。`],
             activity: ["新建", "正在创建新的活动配置。", "编辑中", `正在编辑活动 #${editingId}，保存将覆盖原有配置。`]
         };
+        const elementPrefix = { rewardComponent: "reward-component", rewardTemplate: "reward-template" }[type] || type;
         const [newMode, newStatus, editMode, editStatus] = labels[type];
-        document.getElementById(`${type}-form`).classList.toggle("is-editing", editing);
-        document.getElementById(`${type}-form-mode`).textContent = editing ? editMode : newMode;
-        document.getElementById(`${type}-form-status`).textContent = editing ? editStatus : newStatus;
+        document.getElementById(`${elementPrefix}-form`).classList.toggle("is-editing", editing);
+        document.getElementById(`${elementPrefix}-form-mode`).textContent = editing ? editMode : newMode;
+        document.getElementById(`${elementPrefix}-form-status`).textContent = editing ? editStatus : newStatus;
     };
 
     const showNotice = (message, error = false) => {
@@ -197,8 +206,15 @@
         return localDate.toISOString().slice(0, 19);
     };
 
-    // 将毫秒时间戳转换为页面列表展示的本地时间文本。
-    const formatValidityTime = (timestamp) => toDateTimeInputValue(timestamp).replace("T", " ");
+    // 将毫秒时间戳显式格式化为短横线日期，避免受到浏览器地区日期分隔符的影响。
+    const formatValidityTime = (timestamp) => {
+        if (timestamp === null || timestamp === undefined || timestamp === "") {
+            return "";
+        }
+        const date = new Date(Number(timestamp));
+        const pad = (value) => String(value).padStart(2, "0");
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    };
 
     const request = async (path, options = {}) => {
         const headers = { Accept: "application/json", ...(options.headers || {}) };
@@ -299,6 +315,15 @@
         return node;
     };
 
+    // 奖励组件仅支持普通输入与分组节点，移除普通活动组件引用以保持奖励域独立。
+    const addRewardNode = (container) => {
+        const node = nodeTemplate.content.firstElementChild.cloneNode(true);
+        node.querySelector('option[value="COMPONENT"]').remove();
+        container.appendChild(node);
+        refreshNodeEditor(node);
+        return node;
+    };
+
     // 将服务端返回的递归节点定义回填为可继续编辑的页面节点。
     const populateNode = (container, definition) => {
         const node = addNode(container);
@@ -325,6 +350,28 @@
         }
     };
 
+    // 将奖励组件的字段定义回填为可编辑节点，结构与普通组件一致但不允许组件引用。
+    const populateRewardNode = (container, definition) => {
+        const node = addRewardNode(container);
+        node.querySelector(".node-key").value = definition.key;
+        node.querySelector(".node-label").value = definition.label;
+        node.querySelector(".node-type").value = definition.type;
+        node.querySelector(".node-required").checked = definition.required;
+        node.querySelector(".node-placeholder").value = definition.placeholder || "";
+        node.querySelector(".node-options").value = (definition.options || [])
+            .map((option) => `${option.value}:${option.label}`)
+            .join("\n");
+        refreshNodeEditor(node);
+        const defaultField = node.querySelector(".node-default");
+        if (definition.type === "MULTI_SELECT") {
+            const selectedValues = new Set((definition.defaultValue || "").split(",").filter(Boolean));
+            Array.from(defaultField.options).forEach((option) => { option.selected = selectedValues.has(option.value); });
+        } else {
+            defaultField.value = definition.defaultValue || "";
+        }
+        (definition.children || []).forEach((child) => populateRewardNode(node.querySelector(".child-nodes > .node-list"), child));
+    };
+
     // 恢复新建组件状态，并清空正在编辑的组件标识。
     const resetComponentForm = () => {
         const form = document.getElementById("component-form");
@@ -336,6 +383,21 @@
         document.getElementById("cancel-component-edit").hidden = true;
         componentNodes.replaceChildren();
         addNode(componentNodes);
+    };
+
+    // 恢复新建奖励组件状态，并重建一项默认输入节点。
+    const resetRewardComponentForm = () => {
+        const form = document.getElementById("reward-component-form");
+        form.reset();
+        state.editingRewardComponentId = null;
+        state.rewardComponentPrizeBindings = [];
+        form.code.disabled = false;
+        document.getElementById("reward-component-form-title").textContent = "新建奖励组件";
+        setEditorMode("rewardComponent");
+        document.getElementById("cancel-reward-component-edit").hidden = true;
+        rewardComponentNodes.replaceChildren();
+        addRewardNode(rewardComponentNodes);
+        renderRewardComponentPrizeBindings();
     };
 
     // 进入编辑状态时保留组件编码，避免已保存活动的数据键发生变化。
@@ -360,12 +422,43 @@
         document.getElementById("component-form").scrollIntoView({ behavior: "smooth", block: "start" });
     };
 
+    // 进入奖励组件编辑状态时固定编码，避免奖励模板和活动配置的字段路径变化。
+    const editRewardComponent = (componentId) => {
+        const component = state.rewardComponents.find((item) => item.id === componentId);
+        if (!component) {
+            showNotice("未找到要编辑的奖励组件。", true);
+            return;
+        }
+        const form = document.getElementById("reward-component-form");
+        state.editingRewardComponentId = component.id;
+        form.code.value = component.code;
+        form.code.disabled = true;
+        form.name.value = component.name;
+        form.description.value = component.description || "";
+        form.enabled.checked = component.enabled;
+        rewardComponentNodes.replaceChildren();
+        component.definition.nodes.forEach((node) => populateRewardNode(rewardComponentNodes, node));
+        state.rewardComponentPrizeBindings = (component.prizes || []).map((prize) => ({
+            mountKey: prize.mountKey,
+            mountTitle: prize.mountTitle,
+            mountMode: prize.mountMode || "SINGLE",
+            arraySize: prize.arraySize ?? null,
+            required: prize.required
+        }));
+        document.getElementById("reward-component-form-title").textContent = "编辑奖励组件";
+        setEditorMode("rewardComponent", component.id);
+        document.getElementById("cancel-reward-component-edit").hidden = false;
+        renderRewardComponentPrizeBindings();
+        form.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
     // 恢复新建模板状态，同时移除当前模板的所有回填字段和挂载记录。
     const resetTemplateForm = () => {
         const form = document.getElementById("template-form");
         form.reset();
         state.editingTemplateId = null;
         state.templateBindings = [];
+        state.templateRewardBindings = [];
         form.code.disabled = false;
         templateNodes.replaceChildren();
         document.getElementById("template-form-title").textContent = "新建模板";
@@ -395,12 +488,59 @@
             mountMode: binding.mountMode,
             required: binding.required
         }));
+        state.templateRewardBindings = (template.rewardTemplates || []).map((binding) => ({
+            rewardTemplateId: binding.rewardTemplate.id,
+            mountKey: binding.mountKey,
+            mountTitle: binding.mountTitle || binding.rewardTemplate.name,
+            required: binding.required
+        }));
         templateNodes.replaceChildren();
         template.definition.nodes.forEach((node) => populateNode(templateNodes, node));
         document.getElementById("template-form-title").textContent = "编辑模板";
         setEditorMode("template", template.id);
         document.getElementById("cancel-template-edit").hidden = false;
         renderTemplateBindings();
+        form.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    // 恢复新建奖励模板状态，并清空奖励组件和奖品组件编排。
+    const resetRewardTemplateForm = () => {
+        const form = document.getElementById("reward-template-form");
+        form.reset();
+        state.editingRewardTemplateId = null;
+        state.rewardTemplateComponentBindings = [];
+        form.code.disabled = false;
+        document.getElementById("reward-template-form-title").textContent = "新建奖励模板";
+        setEditorMode("rewardTemplate");
+        document.getElementById("cancel-reward-template-edit").hidden = true;
+        renderRewardTemplateBindings();
+    };
+
+    // 回填奖励模板中的奖励组件、奖品组件编排，供运营人员继续修改。
+    const editRewardTemplate = (templateId) => {
+        const template = state.rewardTemplates.find((item) => item.id === templateId);
+        if (!template) {
+            showNotice("未找到要编辑的奖励模板。", true);
+            return;
+        }
+        const form = document.getElementById("reward-template-form");
+        state.editingRewardTemplateId = template.id;
+        form.code.value = template.code;
+        form.code.disabled = true;
+        form.name.value = template.name;
+        form.description.value = template.description || "";
+        form.enabled.checked = template.enabled;
+        state.rewardTemplateComponentBindings = template.components.map((binding) => ({
+            componentId: binding.component.id,
+            mountKey: binding.mountKey,
+            mountTitle: binding.mountTitle || binding.component.name,
+            mountMode: binding.mountMode || "SINGLE",
+            required: binding.required
+        }));
+        document.getElementById("reward-template-form-title").textContent = "编辑奖励模板";
+        setEditorMode("rewardTemplate", template.id);
+        document.getElementById("cancel-reward-template-edit").hidden = false;
+        renderRewardTemplateBindings();
         form.scrollIntoView({ behavior: "smooth", block: "start" });
     };
 
@@ -556,6 +696,64 @@
                 </div>`;
             }).join("")
             : '<p class="empty-state">添加组件后，在下方选择组件类型并填写挂载配置。</p>';
+        renderTemplateRewardBindings();
+    };
+
+    // 渲染活动模板中已添加的奖励模板挂载项。
+    const renderTemplateRewardBindings = () => {
+        document.getElementById("template-reward-binding-count").textContent = `${state.templateRewardBindings.length} 项`;
+        document.getElementById("template-reward-bindings").innerHTML = state.templateRewardBindings.length
+            ? state.templateRewardBindings.map((binding, index) => {
+                const options = state.rewardTemplates
+                    .filter((template) => template.enabled || template.id === binding.rewardTemplateId)
+                    .map((template) => `<option value="${template.id}" ${template.id === binding.rewardTemplateId ? "selected" : ""}>${escapeHtml(template.name)} (${escapeHtml(template.code)})</option>`)
+                    .join("");
+                return `<div class="template-binding reward-template-binding">
+                    <span class="template-binding-order">${index + 1}</span>
+                    <label class="template-binding-component">奖励模板<select class="template-reward-binding-id" data-binding-index="${index}" required><option value="">请选择奖励模板</option>${options}</select></label>
+                    <label class="template-binding-key">挂载键<input class="template-reward-binding-key" data-binding-index="${index}" value="${escapeHtml(binding.mountKey)}" required pattern="[a-z][a-z0-9_]{0,63}" placeholder="rewards"></label>
+                    <label class="template-binding-title">挂载标题<input class="template-reward-binding-title" data-binding-index="${index}" value="${escapeHtml(binding.mountTitle)}" required maxlength="128" placeholder="活动奖励"></label>
+                    <span class="template-binding-actions"><label><input class="template-reward-binding-required" type="checkbox" data-binding-index="${index}" ${binding.required ? "checked" : ""}>必填</label><button class="remove-template-reward-binding" type="button" data-binding-index="${index}" title="移除奖励模板" aria-label="移除奖励模板">&#215;</button></span>
+                </div>`;
+            }).join("")
+            : '<p class="empty-state">添加奖励模板后，填写活动配置中的挂载键和标题。</p>';
+    };
+
+    // 渲染奖励模板内的奖励组件编排；奖品组件由奖励组件自身维护。
+    const renderRewardTemplateBindings = () => {
+        document.getElementById("reward-template-component-binding-count").textContent = `${state.rewardTemplateComponentBindings.length} 项`;
+        document.getElementById("reward-template-component-bindings").innerHTML = state.rewardTemplateComponentBindings.length
+            ? state.rewardTemplateComponentBindings.map((binding, index) => {
+                const options = state.rewardComponents
+                    .filter((component) => component.enabled || component.id === binding.componentId)
+                    .map((component) => `<option value="${component.id}" ${component.id === binding.componentId ? "selected" : ""}>${escapeHtml(component.name)} (${escapeHtml(component.code)})</option>`)
+                    .join("");
+                return `<div class="template-binding reward-template-binding">
+                    <span class="template-binding-order">${index + 1}</span>
+                    <label class="template-binding-component">奖励组件<select class="reward-template-component-id" data-binding-index="${index}" required><option value="">请选择奖励组件</option>${options}</select></label>
+                    <label class="template-binding-key">挂载键<input class="reward-template-component-key" data-binding-index="${index}" value="${escapeHtml(binding.mountKey)}" required pattern="[a-z][a-z0-9_]{0,63}" placeholder="delivery_limit"></label>
+                    <label class="template-binding-title">挂载标题<input class="reward-template-component-title" data-binding-index="${index}" value="${escapeHtml(binding.mountTitle)}" required maxlength="128" placeholder="发放限制"></label>
+                    <label class="template-binding-mode">挂载形式<select class="reward-template-component-mode" data-binding-index="${index}"><option value="SINGLE" ${binding.mountMode === "SINGLE" ? "selected" : ""}>单个组件</option><option value="ARRAY" ${binding.mountMode === "ARRAY" ? "selected" : ""}>组件数组</option></select></label>
+                    <span class="template-binding-actions"><label><input class="reward-template-component-required" type="checkbox" data-binding-index="${index}" ${binding.required ? "checked" : ""}>必填</label><button class="remove-reward-template-component-binding" type="button" data-binding-index="${index}" title="移除奖励组件" aria-label="移除奖励组件">&#215;</button></span>
+                </div>`;
+            }).join("")
+            : '<p class="empty-state">可选挂载奖励条件、发放次数等可复用组件。</p>';
+    };
+
+    // 渲染奖励组件内的固定奖品组件编排。
+    const renderRewardComponentPrizeBindings = () => {
+        document.getElementById("reward-component-prize-binding-count").textContent = `${state.rewardComponentPrizeBindings.length} 项`;
+        document.getElementById("reward-component-prize-bindings").innerHTML = state.rewardComponentPrizeBindings.length
+            ? state.rewardComponentPrizeBindings.map((binding, index) => `<div class="template-binding prize-template-binding">
+                <span class="template-binding-order">${index + 1}</span>
+                <span class="fixed-binding-label">固定格式奖品</span>
+                <label class="template-binding-key">挂载键<input class="reward-component-prize-key" data-binding-index="${index}" value="${escapeHtml(binding.mountKey)}" required pattern="[a-z][a-z0-9_]{0,63}" placeholder="main_prize"></label>
+                <label class="template-binding-title">挂载标题<input class="reward-component-prize-title" data-binding-index="${index}" value="${escapeHtml(binding.mountTitle)}" required maxlength="128" placeholder="主奖品"></label>
+                <label class="template-binding-mode">挂载形式<select class="reward-component-prize-mode" data-binding-index="${index}"><option value="SINGLE" ${binding.mountMode === "SINGLE" ? "selected" : ""}>单个奖品</option><option value="ARRAY" ${binding.mountMode === "ARRAY" ? "selected" : ""}>奖品数组</option></select></label>
+                ${binding.mountMode === "ARRAY" ? `<label class="template-binding-size">固定数量（可选）<input class="reward-component-prize-array-size" data-binding-index="${index}" type="number" min="1" max="1000" step="1" value="${binding.arraySize ?? ""}" placeholder="不填可自由增删"></label>` : ""}
+                <span class="template-binding-actions"><label><input class="reward-component-prize-required" type="checkbox" data-binding-index="${index}" ${binding.required ? "checked" : ""}>必填</label><button class="remove-reward-component-prize-binding" type="button" data-binding-index="${index}" title="移除奖品组件" aria-label="移除奖品组件">&#215;</button></span>
+            </div>`).join("")
+            : '<p class="empty-state">添加奖品组件后，活动配置会自动生成固定奖品字段。</p>';
     };
 
     const renderComponents = () => {
@@ -579,13 +777,51 @@
         refreshComponentReferenceChoices();
     };
 
+    // 渲染奖励组件列表，并同步奖励模板内的可选组件。
+    const renderRewardComponents = () => {
+        const matchedComponents = filterRecords(state.rewardComponents, "reward-component-search", (component) => [
+            component.name, component.code, component.description, component.enabled ? "可用" : "已停用"
+        ]);
+        renderRecordCount("reward-component-count", matchedComponents.length, state.rewardComponents.length);
+        const components = paginateRecords("rewardComponents", matchedComponents);
+        document.getElementById("reward-component-list").innerHTML = components.length
+            ? components.map((component) => `<article class="record reward-record">
+                <p class="record-title">${escapeHtml(component.name)}</p><p class="record-code">${escapeHtml(component.code)}</p>
+                <p class="record-copy">${escapeHtml(component.description || "未填写奖励组件说明")}</p>
+                <div class="record-tags"><span class="record-tag">${component.definition.nodes.length} 个根节点</span><span class="record-tag">${(component.prizes || []).length} 个奖品组件</span><span class="record-tag">${component.enabled ? "可用" : "已停用"}</span></div>
+                <div class="record-actions"><button class="secondary-button edit-reward-component" type="button" data-component-id="${component.id}">编辑</button><button class="secondary-button delete-configuration" type="button" data-configuration-type="rewardComponent" data-configuration-id="${component.id}">删除</button></div>
+            </article>`).join("")
+            : `<p class="empty-state">${state.rewardComponents.length ? "没有匹配的奖励组件。" : "尚未创建奖励组件。"}</p>`;
+        renderRewardTemplateBindings();
+    };
+
+    // 渲染奖励模板列表，并同步活动模板内的可选奖励模板。
+    const renderRewardTemplates = () => {
+        const matchedTemplates = filterRecords(state.rewardTemplates, "reward-template-search", (template) => [
+            template.name, template.code, template.description, template.enabled ? "可用" : "已停用",
+            ...template.components.flatMap((binding) => [binding.component.name, binding.mountKey, binding.mountTitle])
+        ]);
+        renderRecordCount("reward-template-count", matchedTemplates.length, state.rewardTemplates.length);
+        const templates = paginateRecords("rewardTemplates", matchedTemplates);
+        document.getElementById("reward-template-list").innerHTML = templates.length
+            ? templates.map((template) => `<article class="record reward-record">
+                <p class="record-title">${escapeHtml(template.name)}</p><p class="record-code">${escapeHtml(template.code)}</p>
+                <p class="record-copy">${escapeHtml(template.description || "未填写奖励模板说明")}</p>
+                <div class="record-tags"><span class="record-tag">${template.components.length} 个奖励组件</span><span class="record-tag">${template.enabled ? "可用" : "已停用"}</span></div>
+                <div class="record-actions"><button class="secondary-button edit-reward-template" type="button" data-template-id="${template.id}">编辑</button><button class="secondary-button delete-configuration" type="button" data-configuration-type="rewardTemplate" data-configuration-id="${template.id}">删除</button></div>
+            </article>`).join("")
+            : `<p class="empty-state">${state.rewardTemplates.length ? "没有匹配的奖励模板。" : "尚未创建奖励模板。"}</p>`;
+        renderTemplateRewardBindings();
+    };
+
     const renderTemplates = () => {
         const matchedTemplates = filterRecords(state.templates, "template-search", (template) => [
             template.name,
             template.code,
             template.description,
             template.enabled ? "可用" : "已停用",
-            ...template.components.flatMap((binding) => [binding.component.name, binding.component.code, binding.mountKey, binding.mountTitle])
+            ...template.components.flatMap((binding) => [binding.component.name, binding.component.code, binding.mountKey, binding.mountTitle]),
+            ...(template.rewardTemplates || []).flatMap((binding) => [binding.rewardTemplate.name, binding.rewardTemplate.code, binding.mountKey, binding.mountTitle])
         ]);
         renderRecordCount("template-count", matchedTemplates.length, state.templates.length);
         const templates = paginateRecords("templates", matchedTemplates);
@@ -595,7 +831,7 @@
                     <p class="record-title">${escapeHtml(template.name)}</p>
                     <p class="record-code">${escapeHtml(template.code)}</p>
                     <p class="record-copy">${escapeHtml(template.description || "未填写模板说明")}</p>
-                    <div class="record-tags"><span class="record-tag">${template.definition.nodes.length} 个普通输入项</span>${template.components.map((item) => `<span class="record-tag">${escapeHtml(item.component.name)}</span>`).join("") || '<span class="record-tag">未配置组件</span>'}</div>
+                    <div class="record-tags"><span class="record-tag">${template.definition.nodes.length} 个普通输入项</span>${template.components.map((item) => `<span class="record-tag">${escapeHtml(item.component.name)}</span>`).join("")}${(template.rewardTemplates || []).map((item) => `<span class="record-tag">奖励 · ${escapeHtml(item.rewardTemplate.name)}</span>`).join("") || (template.components.length ? "" : '<span class="record-tag">未配置组件</span>')}</div>
                     <div class="record-actions"><button class="secondary-button edit-template" type="button" data-template-id="${template.id}">编辑</button><button class="secondary-button delete-configuration" type="button" data-configuration-type="template" data-configuration-id="${template.id}">删除</button></div>
                 </article>`).join("")
             : `<p class="empty-state">${state.templates.length ? "没有匹配的活动模板。" : "尚未创建活动模板。"}</p>`;
@@ -649,7 +885,7 @@
     // 通过专用接口切换上下线状态，避免快捷操作提交或覆盖动态表单配置。
     const updateActivityOnlineStatus = async (activityId, onlineStatus) => {
         try {
-            const activity = await request(`/activities/${activityId}/online-status`, {
+            const activity = await request(`/activities/${activityId}/online/status`, {
                 method: "PATCH",
                 body: JSON.stringify({ onlineStatus })
             });
@@ -681,7 +917,9 @@
     const deleteConfiguration = async (type, id) => {
         const metadata = {
             component: { path: "/components", label: "组件" },
+            rewardComponent: { path: "/reward/components", label: "奖励组件" },
             template: { path: "/templates", label: "活动模板" },
+            rewardTemplate: { path: "/reward/templates", label: "奖励模板" },
             activity: { path: "/activities", label: "活动" }
         }[type];
         if (!metadata) {
@@ -692,8 +930,14 @@
             if (type === "component" && state.editingComponentId === id) {
                 resetComponentForm();
             }
+            if (type === "rewardComponent" && state.editingRewardComponentId === id) {
+                resetRewardComponentForm();
+            }
             if (type === "template" && state.editingTemplateId === id) {
                 resetTemplateForm();
+            }
+            if (type === "rewardTemplate" && state.editingRewardTemplateId === id) {
+                resetRewardTemplateForm();
             }
             if (type === "activity" && state.editingActivityId === id) {
                 resetActivityForm();
@@ -709,7 +953,9 @@
     const openConfigurationDeleteDialog = (type, id) => {
         const metadata = {
             component: { list: state.components, label: "组件", message: "删除后，该组件的字段定义将无法恢复。" },
+            rewardComponent: { list: state.rewardComponents, label: "奖励组件", message: "删除后，该奖励组件的字段定义将无法恢复。" },
             template: { list: state.templates, label: "活动模板", message: "删除后，该模板及其组件挂载配置将无法恢复。" },
+            rewardTemplate: { list: state.rewardTemplates, label: "奖励模板", message: "删除后，该奖励模板及其中的奖品组件配置将无法恢复。" },
             activity: { list: state.activities, label: "活动", message: "删除后，该活动及其填写的配置将无法恢复。" }
         }[type];
         const target = metadata?.list.find((item) => item.id === id);
@@ -723,6 +969,27 @@
         document.getElementById("configuration-delete-dialog-preview").textContent = target.name;
         document.getElementById("configuration-delete-dialog-confirm").textContent = `确认删除${metadata.label}`;
         configurationDeleteDialog.showModal();
+    };
+
+    // 模板和组件更新前统一弹出确认框，取消或关闭时保留当前编辑内容且不会发起更新请求。
+    const openConfigurationUpdateDialog = (type, name, onConfirm) => {
+        const metadata = {
+            component: { label: "组件", message: "更新会覆盖当前组件的字段定义，并影响后续引用该组件的配置。" },
+            rewardComponent: { label: "奖励组件", message: "更新会覆盖当前奖励组件的字段和奖品编排。" },
+            template: { label: "活动模板", message: "更新会覆盖当前模板的字段及挂载配置。" },
+            rewardTemplate: { label: "奖励模板", message: "更新会覆盖当前奖励模板的组件和奖品配置。" }
+        }[type];
+        if (!metadata) {
+            showNotice("未找到要更新的配置。", true);
+            return;
+        }
+        pendingConfigurationUpdate = onConfirm;
+        document.getElementById("configuration-update-dialog-title").textContent = `确认更新${metadata.label}`;
+        document.getElementById("configuration-update-dialog-message").textContent = metadata.message;
+        document.getElementById("configuration-update-dialog-preview").textContent = name || "未命名配置";
+        document.getElementById("configuration-update-dialog-confirm").textContent = `确认更新${metadata.label}`;
+        configurationUpdateDialog.returnValue = "";
+        configurationUpdateDialog.showModal();
     };
 
     // 打开复制确认弹窗，确认前不创建活动副本。
@@ -774,8 +1041,112 @@
             ${field.children.map((child) => renderDynamicField(child, resolveChildFieldKey(child, field, `${fieldKey}.${index}`), values)).join("")}
         </section>`;
 
+    // 渲染奖品数组的一项；每项仍使用统一的固定奖品编辑器。
+    const renderPrizeArrayItem = (field, index, fieldKey = field.key, values = {}) => `
+        <section class="dynamic-component-item" data-array-item-index="${index}">
+            ${field.collectionSize == null ? '<button class="remove-array-item" type="button">移除此项</button>' : ""}
+            ${renderPrizeField(field, `${fieldKey}.${index}`, values)}
+        </section>`;
+
+    // 渲染固定格式奖品组件，属性统一保存到奖品挂载键下，装扮和礼物支持按 ID 查询后继续编辑。
+    const renderPrizeField = (field, fieldKey, values) => {
+        const valueOf = (property) => Object.prototype.hasOwnProperty.call(values, `${fieldKey}.${property}`)
+            ? values[`${fieldKey}.${property}`]
+            : "";
+        const prizeType = String(valueOf("prizeType") || "");
+        const requiresId = ["DECORATION", "GIFT"].includes(prizeType);
+        const required = field.required ? "required" : "";
+        const options = [["", "请选择奖品类型"], ["DECORATION", "装扮"], ["GIFT", "礼物"], ["COIN", "金币"], ["POINT", "积分"], ["COUPON", "优惠券"], ["OTHER", "其他"]]
+            .map(([value, label]) => `<option value="${value}" ${value === prizeType ? "selected" : ""}>${label}</option>`)
+            .join("");
+        return `<section class="prize-component" style="--depth:${field.depth}" data-prize-field-key="${escapeHtml(fieldKey)}" data-required="${field.required}">
+            <header class="dynamic-component-header"><div><h4>${escapeHtml(field.label)}${field.required ? " *" : ""}</h4><p>装扮和礼物输入奖品 ID 后可查询属性，回填结果仍可修改。</p></div><button class="secondary-button query-prize" type="button" ${requiresId ? "" : "hidden"}>查询奖品</button></header>
+            <div class="prize-field-grid">
+                <label>奖品类型<select data-prize-type data-field-key="${escapeHtml(fieldKey)}.prizeType" ${required}>${options}</select></label>
+                <label>奖品 ID<input data-prize-id data-field-key="${escapeHtml(fieldKey)}.prizeId" value="${escapeHtml(valueOf("prizeId"))}" ${requiresId ? "required" : ""} placeholder="装扮、礼物类型必填"></label>
+                <label>奖品名称<input data-field-key="${escapeHtml(fieldKey)}.prizeName" value="${escapeHtml(valueOf("prizeName"))}" ${required} placeholder="可由查询回填或手动填写"></label>
+                <label>奖品图标<input data-prize-icon data-field-key="${escapeHtml(fieldKey)}.prizeIcon" value="${escapeHtml(valueOf("prizeIcon"))}" ${required} placeholder="请输入图标地址"><span class="prize-icon-preview" data-prize-icon-preview hidden><img alt="奖品图标预览"></span></label>
+                <label>奖品价值<input data-field-key="${escapeHtml(fieldKey)}.prizeValue" type="number" min="0" step="0.01" value="${escapeHtml(valueOf("prizeValue"))}" ${required} placeholder="0"></label>
+                <label>展示价值（可选）<input data-field-key="${escapeHtml(fieldKey)}.prizeDisplayValue" value="${escapeHtml(valueOf("prizeDisplayValue"))}" placeholder="例如：价值 100 金币"></label>
+                <label>奖品数量<input data-field-key="${escapeHtml(fieldKey)}.prizeQuantity" type="number" min="1" step="1" value="${escapeHtml(valueOf("prizeQuantity") || (field.required ? "1" : ""))}" ${required}></label>
+            </div>
+        </section>`;
+    };
+
+    // 同步奖品类型对查询按钮和奖品 ID 必填状态的影响。
+    const syncPrizeEditor = (element) => {
+        const type = element.querySelector("[data-prize-type]").value;
+        const requiresId = ["DECORATION", "GIFT"].includes(type);
+        const id = element.querySelector("[data-prize-id]");
+        id.required = requiresId;
+        element.querySelector(".query-prize").hidden = !requiresId;
+    };
+
+    // 根据图标地址更新预览；加载失败时自动隐藏预览，不影响继续编辑或保存地址。
+    const syncPrizeIconPreview = (element) => {
+        const iconInput = element.querySelector("[data-prize-icon]");
+        const preview = element.querySelector("[data-prize-icon-preview]");
+        const image = preview.querySelector("img");
+        const icon = iconInput.value.trim();
+        preview.hidden = !icon;
+        if (!icon) {
+            image.removeAttribute("src");
+            return;
+        }
+        image.onerror = () => {
+            preview.hidden = true;
+        };
+        image.onload = () => {
+            preview.hidden = false;
+        };
+        image.src = icon;
+    };
+
+    // 查询装扮或礼物属性并回填表单；所有回填字段均保持可编辑。
+    const lookupPrize = async (element) => {
+        const type = element.querySelector("[data-prize-type]").value;
+        const id = element.querySelector("[data-prize-id]").value.trim();
+        if (!["DECORATION", "GIFT"].includes(type) || !id) {
+            showNotice("请选择装扮或礼物类型，并填写奖品 ID。", true);
+            return;
+        }
+        try {
+            const prize = await request(`/prizes/lookup?prizeType=${encodeURIComponent(type)}&prizeId=${encodeURIComponent(id)}`);
+            const key = element.dataset.prizeFieldKey;
+            const values = { prizeType: prize.prizeType, prizeId: prize.prizeId, prizeName: prize.prizeName, prizeIcon: prize.prizeIcon, prizeValue: prize.prizeValue, prizeDisplayValue: prize.prizeDisplayValue, prizeQuantity: prize.prizeQuantity };
+            Object.entries(values).forEach(([property, value]) => {
+                const input = Array.from(element.querySelectorAll("[data-field-key]")).find((item) => item.dataset.fieldKey === `${key}.${property}`);
+                if (input) {
+                    input.value = value;
+                }
+            });
+            syncPrizeIconPreview(element);
+            showNotice("已回填奖品属性，仍可按实际业务修改。\n");
+        } catch (error) {
+            showNotice(error.message, true);
+        }
+    };
+
     // 递归渲染普通字段、分组、单个子组件和子组件数组。
     const renderDynamicField = (field, fieldKey = field.key, values = {}) => {
+        if (field.type === "PRIZE") {
+            if (field.collection) {
+                const fixedSize = Number.isInteger(field.collectionSize) ? field.collectionSize : null;
+                const indexes = fixedSize === null
+                    ? arrayIndexes(values, fieldKey)
+                    : Array.from({ length: fixedSize }, (_, index) => index);
+                const content = indexes.length
+                    ? indexes.map((index) => renderPrizeArrayItem(field, index, fieldKey, values)).join("")
+                    : (field.required ? renderPrizeArrayItem(field, 0, fieldKey, values) : "");
+                const title = `<div class="dynamic-component-title"><h4>${escapeHtml(field.label)}${field.required ? " *" : ""}</h4>${fixedSize === null ? "" : `<span class="fixed-size-badge">固定 ${fixedSize} 项</span>`}</div>`;
+                const addButton = fixedSize === null ? '<button class="secondary-button add-array-item" type="button">添加奖品</button>' : "";
+                return `<section class="dynamic-component prize-component-array" style="--depth:${field.depth}" data-component-field-key="${escapeHtml(fieldKey)}" data-schema-field-key="${escapeHtml(field.key)}">
+                    <header class="dynamic-component-header">${title}${addButton}</header>
+                    <div class="dynamic-component-items">${content}</div>
+                </section>`;
+            }
+            return renderPrizeField(field, fieldKey, values);
+        }
         if (field.type === "GROUP") {
             return `<section class="dynamic-group" style="--depth:${field.depth}"><h4>${escapeHtml(field.label)}</h4>${field.children.map((child) => renderDynamicField(child, resolveChildFieldKey(child, field, fieldKey), values)).join("")}</section>`;
         }
@@ -835,6 +1206,10 @@
             return;
         }
         container.innerHTML = form.fields.map((field) => renderDynamicField(field, field.key, values)).join("");
+        container.querySelectorAll(".prize-component").forEach((element) => {
+            syncPrizeEditor(element);
+            syncPrizeIconPreview(element);
+        });
     };
 
     const loadTemplateForm = async (values = {}, storedValues = false) => {
@@ -855,14 +1230,18 @@
 
     const loadAll = async () => {
         try {
-            const [components, templates, activities] = await Promise.all([
-                request("/components"), request("/templates"), request("/activities")
+            const [components, rewardComponents, templates, rewardTemplates, activities] = await Promise.all([
+                request("/components"), request("/reward/components"), request("/templates"), request("/reward/templates"), request("/activities")
             ]);
             state.components = components;
+            state.rewardComponents = rewardComponents;
             state.templates = templates;
+            state.rewardTemplates = rewardTemplates;
             state.activities = activities;
             renderComponents();
+            renderRewardComponents();
             renderTemplates();
+            renderRewardTemplates();
             renderActivities();
         } catch (error) {
             showNotice(error.message || "无法加载活动配置数据，请检查数据库连接。", true);
@@ -870,6 +1249,7 @@
     };
 
     document.getElementById("add-root-node").addEventListener("click", () => addNode(componentNodes));
+    document.getElementById("add-reward-root-node").addEventListener("click", () => addRewardNode(rewardComponentNodes));
     document.getElementById("open-personal-settings").addEventListener("click", (event) => {
         event.currentTarget.closest(".account-menu")?.removeAttribute("open");
         personalSettingsDialog.showModal();
@@ -879,7 +1259,9 @@
     });
     document.getElementById("add-template-node").addEventListener("click", () => addNode(templateNodes));
     document.getElementById("cancel-component-edit").addEventListener("click", resetComponentForm);
+    document.getElementById("cancel-reward-component-edit").addEventListener("click", resetRewardComponentForm);
     document.getElementById("cancel-template-edit").addEventListener("click", resetTemplateForm);
+    document.getElementById("cancel-reward-template-edit").addEventListener("click", resetRewardTemplateForm);
     document.getElementById("cancel-activity-edit").addEventListener("click", resetActivityForm);
     document.getElementById("activity-valid-forever").addEventListener("change", syncValidityFields);
     document.getElementById("activity-form").status.addEventListener("change", syncActivityOnlineStatus);
@@ -929,6 +1311,17 @@
             editComponent(Number(button.dataset.componentId));
         }
     });
+    document.getElementById("reward-component-list").addEventListener("click", (event) => {
+        const deleteButton = event.target.closest(".delete-configuration");
+        if (deleteButton) {
+            openConfigurationDeleteDialog(deleteButton.dataset.configurationType, Number(deleteButton.dataset.configurationId));
+            return;
+        }
+        const button = event.target.closest(".edit-reward-component");
+        if (button) {
+            editRewardComponent(Number(button.dataset.componentId));
+        }
+    });
     document.getElementById("template-list").addEventListener("click", (event) => {
         const deleteButton = event.target.closest(".delete-configuration");
         if (deleteButton) {
@@ -938,6 +1331,17 @@
         const button = event.target.closest(".edit-template");
         if (button) {
             editTemplate(Number(button.dataset.templateId));
+        }
+    });
+    document.getElementById("reward-template-list").addEventListener("click", (event) => {
+        const deleteButton = event.target.closest(".delete-configuration");
+        if (deleteButton) {
+            openConfigurationDeleteDialog(deleteButton.dataset.configurationType, Number(deleteButton.dataset.configurationId));
+            return;
+        }
+        const button = event.target.closest(".edit-reward-template");
+        if (button) {
+            editRewardTemplate(Number(button.dataset.templateId));
         }
     });
     document.getElementById("activity-list").addEventListener("click", async (event) => {
@@ -975,11 +1379,11 @@
             }
             const type = button.dataset.pageType;
             state.listPages[type] = Number(button.dataset.page);
-            ({ components: renderComponents, templates: renderTemplates, activities: renderActivities }[type])();
+            ({ components: renderComponents, rewardComponents: renderRewardComponents, templates: renderTemplates, rewardTemplates: renderRewardTemplates, activities: renderActivities }[type])();
         });
     });
     // 搜索关键词变化时回到第一页，确保搜索结果不会停留在不存在的后续页面。
-    [["component-search", "components", renderComponents], ["template-search", "templates", renderTemplates], ["activity-search", "activities", renderActivities]]
+    [["component-search", "components", renderComponents], ["reward-component-search", "rewardComponents", renderRewardComponents], ["template-search", "templates", renderTemplates], ["reward-template-search", "rewardTemplates", renderRewardTemplates], ["activity-search", "activities", renderActivities]]
         .forEach(([inputId, type, render]) => document.getElementById(inputId).addEventListener("input", () => {
             state.listPages[type] = 1;
             render();
@@ -1006,6 +1410,14 @@
         pendingConfigurationDeletion = null;
         if (configurationDeleteDialog.returnValue === "confirm" && pending) {
             await deleteConfiguration(pending.type, pending.id);
+        }
+    });
+    // 仅在更新确认弹窗明确确认后提交修改，取消或关闭弹窗会保留表单内容。
+    configurationUpdateDialog.addEventListener("close", async () => {
+        const onConfirm = pendingConfigurationUpdate;
+        pendingConfigurationUpdate = null;
+        if (configurationUpdateDialog.returnValue === "confirm" && onConfirm) {
+            await onConfirm();
         }
     });
     document.getElementById("add-template-binding").addEventListener("click", () => {
@@ -1043,12 +1455,138 @@
             state.templateBindings[Number(event.target.dataset.bindingIndex)].mountTitle = event.target.value;
         }
     });
+    document.getElementById("add-template-reward-binding").addEventListener("click", () => {
+        state.templateRewardBindings.push({ rewardTemplateId: null, mountKey: "", mountTitle: "", required: false });
+        renderTemplateRewardBindings();
+    });
+    document.getElementById("template-reward-bindings").addEventListener("click", (event) => {
+        const button = event.target.closest(".remove-template-reward-binding");
+        if (button) {
+            state.templateRewardBindings.splice(Number(button.dataset.bindingIndex), 1);
+            renderTemplateRewardBindings();
+        }
+    });
+    document.getElementById("template-reward-bindings").addEventListener("change", (event) => {
+        const index = Number(event.target.dataset.bindingIndex);
+        const binding = state.templateRewardBindings[index];
+        if (!binding) {
+            return;
+        }
+        if (event.target.classList.contains("template-reward-binding-id")) {
+            binding.rewardTemplateId = Number(event.target.value) || null;
+            if (!binding.mountTitle.trim() && binding.rewardTemplateId) {
+                binding.mountTitle = state.rewardTemplates.find((template) => template.id === binding.rewardTemplateId)?.name || "";
+                event.target.closest(".template-binding").querySelector(".template-reward-binding-title").value = binding.mountTitle;
+            }
+        }
+        if (event.target.classList.contains("template-reward-binding-required")) {
+            binding.required = event.target.checked;
+        }
+    });
+    document.getElementById("template-reward-bindings").addEventListener("input", (event) => {
+        const binding = state.templateRewardBindings[Number(event.target.dataset.bindingIndex)];
+        if (!binding) {
+            return;
+        }
+        if (event.target.classList.contains("template-reward-binding-key")) {
+            binding.mountKey = event.target.value;
+        }
+        if (event.target.classList.contains("template-reward-binding-title")) {
+            binding.mountTitle = event.target.value;
+        }
+    });
+    document.getElementById("add-reward-template-component-binding").addEventListener("click", () => {
+        state.rewardTemplateComponentBindings.push({ componentId: null, mountKey: "", mountTitle: "", mountMode: "SINGLE", required: false });
+        renderRewardTemplateBindings();
+    });
+    document.getElementById("reward-template-component-bindings").addEventListener("click", (event) => {
+        const button = event.target.closest(".remove-reward-template-component-binding");
+        if (button) {
+            state.rewardTemplateComponentBindings.splice(Number(button.dataset.bindingIndex), 1);
+            renderRewardTemplateBindings();
+        }
+    });
+    document.getElementById("reward-template-component-bindings").addEventListener("change", (event) => {
+        const index = Number(event.target.dataset.bindingIndex);
+        const binding = state.rewardTemplateComponentBindings[index];
+        if (!binding) {
+            return;
+        }
+        if (event.target.classList.contains("reward-template-component-id")) {
+            binding.componentId = Number(event.target.value) || null;
+            if (!binding.mountTitle.trim() && binding.componentId) {
+                binding.mountTitle = state.rewardComponents.find((component) => component.id === binding.componentId)?.name || "";
+                event.target.closest(".template-binding").querySelector(".reward-template-component-title").value = binding.mountTitle;
+            }
+        }
+        if (event.target.classList.contains("reward-template-component-required")) {
+            binding.required = event.target.checked;
+        }
+        if (event.target.classList.contains("reward-template-component-mode")) {
+            binding.mountMode = event.target.value;
+        }
+    });
+    document.getElementById("reward-template-component-bindings").addEventListener("input", (event) => {
+        const binding = state.rewardTemplateComponentBindings[Number(event.target.dataset.bindingIndex)];
+        if (!binding) {
+            return;
+        }
+        if (event.target.classList.contains("reward-template-component-key")) {
+            binding.mountKey = event.target.value;
+        }
+        if (event.target.classList.contains("reward-template-component-title")) {
+            binding.mountTitle = event.target.value;
+        }
+    });
+    document.getElementById("add-reward-component-prize-binding").addEventListener("click", () => {
+        state.rewardComponentPrizeBindings.push({ mountKey: "", mountTitle: "", mountMode: "SINGLE", arraySize: null, required: true });
+        renderRewardComponentPrizeBindings();
+    });
+    document.getElementById("reward-component-prize-bindings").addEventListener("click", (event) => {
+        const button = event.target.closest(".remove-reward-component-prize-binding");
+        if (button) {
+            state.rewardComponentPrizeBindings.splice(Number(button.dataset.bindingIndex), 1);
+            renderRewardComponentPrizeBindings();
+        }
+    });
+    document.getElementById("reward-component-prize-bindings").addEventListener("change", (event) => {
+        const binding = state.rewardComponentPrizeBindings[Number(event.target.dataset.bindingIndex)];
+        if (!binding) {
+            return;
+        }
+        if (event.target.classList.contains("reward-component-prize-required")) {
+            binding.required = event.target.checked;
+        }
+        if (event.target.classList.contains("reward-component-prize-mode")) {
+            binding.mountMode = event.target.value;
+            if (binding.mountMode === "SINGLE") {
+                binding.arraySize = null;
+            }
+            renderRewardComponentPrizeBindings();
+        }
+    });
+    document.getElementById("reward-component-prize-bindings").addEventListener("input", (event) => {
+        const binding = state.rewardComponentPrizeBindings[Number(event.target.dataset.bindingIndex)];
+        if (!binding) {
+            return;
+        }
+        if (event.target.classList.contains("reward-component-prize-key")) {
+            binding.mountKey = event.target.value;
+        }
+        if (event.target.classList.contains("reward-component-prize-title")) {
+            binding.mountTitle = event.target.value;
+        }
+        if (event.target.classList.contains("reward-component-prize-array-size")) {
+            const value = event.target.value.trim();
+            binding.arraySize = value ? Number(value) : null;
+        }
+    });
     // 为组件和模板的节点构建区统一绑定新增、删除与类型切换行为。
-    const bindNodeBuilder = (form) => {
+    const bindNodeBuilder = (form, add = addNode) => {
         form.addEventListener("click", (event) => {
             const target = event.target;
             if (target.classList.contains("add-child-node")) {
-                addNode(target.closest(".child-nodes").querySelector(".node-list"));
+                add(target.closest(".child-nodes").querySelector(".node-list"));
             }
             if (target.classList.contains("remove-node")) {
                 target.closest(".component-node").remove();
@@ -1069,6 +1607,7 @@
         });
     };
     bindNodeBuilder(document.getElementById("component-form"));
+    bindNodeBuilder(document.getElementById("reward-component-form"), addRewardNode);
     bindNodeBuilder(document.getElementById("template-form"));
 
     document.getElementById("component-form").addEventListener("submit", async (event) => {
@@ -1079,28 +1618,84 @@
             showNotice("请至少添加一个输入节点或分组组件。", true);
             return;
         }
-        try {
-            const componentPath = state.editingComponentId ? `/components/${state.editingComponentId}` : "/components";
-            await request(componentPath, {
-                method: state.editingComponentId ? "PUT" : "POST",
-                body: JSON.stringify({
-                    code: form.code.value.trim(), name: form.name.value.trim(), description: form.description.value.trim() || null,
-                    enabled: form.enabled.checked, definition
-                })
-            });
-            const editing = state.editingComponentId !== null;
-            resetComponentForm();
-            showNotice(editing ? "组件已更新。" : "组件已保存。");
-            await loadAll();
-        } catch (error) { showNotice(error.message, true); }
+        const editingId = state.editingComponentId;
+        const payload = {
+            code: form.code.value.trim(), name: form.name.value.trim(), description: form.description.value.trim() || null,
+            enabled: form.enabled.checked, definition
+        };
+        const save = async () => {
+            try {
+                await request(editingId ? `/components/${editingId}` : "/components", {
+                    method: editingId ? "PUT" : "POST",
+                    body: JSON.stringify(payload)
+                });
+                resetComponentForm();
+                showNotice(editingId ? "组件已更新。" : "组件已保存。");
+                await loadAll();
+            } catch (error) { showNotice(error.message, true); }
+        };
+        if (editingId) {
+            openConfigurationUpdateDialog("component", payload.name, save);
+            return;
+        }
+        await save();
+    });
+
+    document.getElementById("reward-component-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const definition = { nodes: collectNodes(rewardComponentNodes) };
+        const prizes = state.rewardComponentPrizeBindings;
+        if (!definition.nodes.length && !prizes.length) {
+            showNotice("请至少添加一个奖励输入节点、分组或奖品组件。", true);
+            return;
+        }
+        const keys = [...definition.nodes.map((node) => node.key), ...prizes.map((prize) => prize.mountKey)];
+        if (prizes.some((prize) => !/^[a-z][a-z0-9_]{0,63}$/.test(prize.mountKey)) || new Set(keys).size !== keys.length) {
+            showNotice("请为每个奖品组件填写不重复、仅含小写字母、数字和下划线的挂载键。", true);
+            return;
+        }
+        if (prizes.some((prize) => !prize.mountTitle.trim() || prize.mountTitle.trim().length > 128)) {
+            showNotice("请为每个奖品组件填写不超过 128 个字符的挂载标题。", true);
+            return;
+        }
+        if (prizes.some((prize) => prize.mountMode === "SINGLE" && prize.arraySize !== null)) {
+            showNotice("单个奖品不能配置固定数量。", true);
+            return;
+        }
+        if (prizes.some((prize) => prize.mountMode === "ARRAY" && prize.arraySize !== null && (!Number.isInteger(prize.arraySize) || prize.arraySize < 1 || prize.arraySize > 1000))) {
+            showNotice("奖品数组的固定数量必须是 1 到 1000 之间的整数。", true);
+            return;
+        }
+        const editingId = state.editingRewardComponentId;
+        const payload = {
+            code: form.code.value.trim(), name: form.name.value.trim(), description: form.description.value.trim() || null,
+            enabled: form.enabled.checked, definition, prizes
+        };
+        const save = async () => {
+            try {
+                await request(editingId ? `/reward/components/${editingId}` : "/reward/components", {
+                    method: editingId ? "PUT" : "POST",
+                    body: JSON.stringify(payload)
+                });
+                resetRewardComponentForm();
+                showNotice(editingId ? "奖励组件已更新。" : "奖励组件已保存。");
+                await loadAll();
+            } catch (error) { showNotice(error.message, true); }
+        };
+        if (editingId) {
+            openConfigurationUpdateDialog("rewardComponent", payload.name, save);
+            return;
+        }
+        await save();
     });
 
     document.getElementById("template-form").addEventListener("submit", async (event) => {
         event.preventDefault();
         const form = event.currentTarget;
         const definition = { nodes: collectNodes(templateNodes) };
-        if (!state.templateBindings.length && !definition.nodes.length) {
-            showNotice("请至少添加一个活动组件或普通输入项。", true);
+        if (!state.templateBindings.length && !state.templateRewardBindings.length && !definition.nodes.length) {
+            showNotice("请至少添加一个活动组件、奖励模板或普通输入项。", true);
             return;
         }
         if (state.templateBindings.some((binding) => !binding.componentId)) {
@@ -1115,28 +1710,101 @@
             showNotice("请为每个组件填写不超过 128 个字符的挂载标题。", true);
             return;
         }
-        if (new Set(state.templateBindings.map((binding) => binding.mountKey)).size !== state.templateBindings.length) {
-            showNotice("同一模板中的挂载键不能重复。", true);
+        if (state.templateRewardBindings.some((binding) => !binding.rewardTemplateId)) {
+            showNotice("请为每个奖励挂载选择奖励模板。", true);
             return;
         }
-        try {
-            const templatePath = state.editingTemplateId ? `/templates/${state.editingTemplateId}` : "/templates";
-            await request(templatePath, {
-                method: state.editingTemplateId ? "PUT" : "POST",
-                body: JSON.stringify({
-                    code: form.code.value.trim(), name: form.name.value.trim(), description: form.description.value.trim() || null,
-                    enabled: form.enabled.checked, definition, components: state.templateBindings
-                })
-            });
-            const editing = state.editingTemplateId !== null;
-            resetTemplateForm();
-            showNotice(editing ? "活动模板已更新。" : "活动模板已保存。");
-            await loadAll();
-        } catch (error) { showNotice(error.message, true); }
+        if (state.templateRewardBindings.some((binding) => !/^[a-z][a-z0-9_]{0,63}$/.test(binding.mountKey))) {
+            showNotice("请为每个奖励模板填写仅含小写字母、数字和下划线的挂载键。", true);
+            return;
+        }
+        if (state.templateRewardBindings.some((binding) => !binding.mountTitle.trim() || binding.mountTitle.trim().length > 128)) {
+            showNotice("请为每个奖励模板填写不超过 128 个字符的挂载标题。", true);
+            return;
+        }
+        const allMountKeys = [...definition.nodes.map((node) => node.key), ...state.templateBindings.map((binding) => binding.mountKey), ...state.templateRewardBindings.map((binding) => binding.mountKey)];
+        if (new Set(allMountKeys).size !== allMountKeys.length) {
+            showNotice("同一模板中的字段键和挂载键不能重复。", true);
+            return;
+        }
+        const editingId = state.editingTemplateId;
+        const payload = {
+            code: form.code.value.trim(), name: form.name.value.trim(), description: form.description.value.trim() || null,
+            enabled: form.enabled.checked, definition, components: state.templateBindings, rewardTemplates: state.templateRewardBindings
+        };
+        const save = async () => {
+            try {
+                await request(editingId ? `/templates/${editingId}` : "/templates", {
+                    method: editingId ? "PUT" : "POST",
+                    body: JSON.stringify(payload)
+                });
+                resetTemplateForm();
+                showNotice(editingId ? "活动模板已更新。" : "活动模板已保存。");
+                await loadAll();
+            } catch (error) { showNotice(error.message, true); }
+        };
+        if (editingId) {
+            openConfigurationUpdateDialog("template", payload.name, save);
+            return;
+        }
+        await save();
+    });
+
+    document.getElementById("reward-template-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const components = state.rewardTemplateComponentBindings;
+        if (!components.length) {
+            showNotice("请至少添加一个奖励组件。", true);
+            return;
+        }
+        if (components.some((binding) => !binding.componentId)) {
+            showNotice("请为每个奖励挂载选择奖励组件。", true);
+            return;
+        }
+        const bindings = components;
+        if (bindings.some((binding) => !/^[a-z][a-z0-9_]{0,63}$/.test(binding.mountKey))) {
+            showNotice("请为每个挂载填写仅含小写字母、数字和下划线的挂载键。", true);
+            return;
+        }
+        if (bindings.some((binding) => !binding.mountTitle.trim() || binding.mountTitle.trim().length > 128)) {
+            showNotice("请为每个挂载填写不超过 128 个字符的挂载标题。", true);
+            return;
+        }
+        if (new Set(bindings.map((binding) => binding.mountKey)).size !== bindings.length) {
+            showNotice("同一奖励模板中的挂载键不能重复。", true);
+            return;
+        }
+        const editingId = state.editingRewardTemplateId;
+        const payload = {
+            code: form.code.value.trim(), name: form.name.value.trim(), description: form.description.value.trim() || null,
+            enabled: form.enabled.checked, components
+        };
+        const save = async () => {
+            try {
+                await request(editingId ? `/reward/templates/${editingId}` : "/reward/templates", {
+                    method: editingId ? "PUT" : "POST",
+                    body: JSON.stringify(payload)
+                });
+                resetRewardTemplateForm();
+                showNotice(editingId ? "奖励模板已更新。" : "奖励模板已保存。");
+                await loadAll();
+            } catch (error) { showNotice(error.message, true); }
+        };
+        if (editingId) {
+            openConfigurationUpdateDialog("rewardTemplate", payload.name, save);
+            return;
+        }
+        await save();
     });
 
     document.getElementById("activity-template-select").addEventListener("change", loadTemplateForm);
     document.getElementById("activity-dynamic-fields").addEventListener("click", (event) => {
+        const queryButton = event.target.closest(".query-prize");
+        if (queryButton) {
+            lookupPrize(queryButton.closest(".prize-component"));
+            return;
+        }
         const addButton = event.target.closest(".add-array-item");
         if (addButton) {
             const component = addButton.closest(".dynamic-component");
@@ -1149,12 +1817,30 @@
             const indexes = Array.from(items.querySelectorAll(".dynamic-component-item"))
                 .map((item) => Number(item.dataset.arrayItemIndex));
             const nextIndex = indexes.length ? Math.max(...indexes) + 1 : 0;
-            items.insertAdjacentHTML("beforeend", renderArrayItem(field, nextIndex, component.dataset.componentFieldKey));
+            const renderer = field.type === "PRIZE" ? renderPrizeArrayItem : renderArrayItem;
+            items.insertAdjacentHTML("beforeend", renderer(field, nextIndex, component.dataset.componentFieldKey));
+            if (field.type === "PRIZE") {
+                const prize = items.lastElementChild?.querySelector(".prize-component");
+                if (prize) {
+                    syncPrizeEditor(prize);
+                    syncPrizeIconPreview(prize);
+                }
+            }
             return;
         }
         const removeButton = event.target.closest(".remove-array-item");
         if (removeButton) {
             removeButton.closest(".dynamic-component-item").remove();
+        }
+    });
+    document.getElementById("activity-dynamic-fields").addEventListener("change", (event) => {
+        if (event.target.matches("[data-prize-type]")) {
+            syncPrizeEditor(event.target.closest(".prize-component"));
+        }
+    });
+    document.getElementById("activity-dynamic-fields").addEventListener("input", (event) => {
+        if (event.target.matches("[data-prize-icon]")) {
+            syncPrizeIconPreview(event.target.closest(".prize-component"));
         }
     });
     document.getElementById("activity-form").addEventListener("submit", async (event) => {
@@ -1195,6 +1881,8 @@
     });
 
     addNode(componentNodes);
+    addRewardNode(rewardComponentNodes);
+    renderRewardComponentPrizeBindings();
     restoreTheme();
     syncValidityFields();
     syncActivityOnlineStatus();

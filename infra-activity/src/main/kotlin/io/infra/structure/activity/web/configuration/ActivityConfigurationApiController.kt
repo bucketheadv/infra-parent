@@ -1,6 +1,8 @@
 package io.infra.structure.activity.web.configuration
 
 import io.infra.structure.activity.service.ActivityConfigurationService
+import io.infra.structure.activity.service.PrizeCatalogGateway
+import io.infra.structure.activity.service.RewardConfigurationService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 
 /**
@@ -22,7 +25,9 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api/activity")
 class ActivityConfigurationApiController(
-    private val activityConfigurationService: ActivityConfigurationService
+    private val activityConfigurationService: ActivityConfigurationService,
+    private val rewardConfigurationService: RewardConfigurationService,
+    private val prizeCatalogGateway: PrizeCatalogGateway
 ) {
 
     /** 返回全部可复用活动组件。 */
@@ -47,6 +52,60 @@ class ActivityConfigurationApiController(
         activityConfigurationService.deleteComponent(componentId)
         return ResponseEntity.noContent().build()
     }
+
+    /** 返回全部可复用奖励组件。 */
+    @GetMapping("/reward/components")
+    fun rewardComponents(): List<RewardComponentResponse> = rewardConfigurationService.listComponents()
+
+    /** 新建奖励组件。 */
+    @PostMapping("/reward/components")
+    fun createRewardComponent(@RequestBody request: CreateRewardComponentRequest): RewardComponentResponse =
+        rewardConfigurationService.createComponent(request)
+
+    /** 更新指定奖励组件。 */
+    @PutMapping("/reward/components/{componentId}")
+    fun updateRewardComponent(
+        @PathVariable componentId: Long,
+        @RequestBody request: CreateRewardComponentRequest
+    ): RewardComponentResponse = rewardConfigurationService.updateComponent(componentId, request)
+
+    /** 删除未被奖励模板引用的奖励组件。 */
+    @DeleteMapping("/reward/components/{componentId}")
+    fun deleteRewardComponent(@PathVariable componentId: Long): ResponseEntity<Void> {
+        rewardConfigurationService.deleteComponent(componentId)
+        return ResponseEntity.noContent().build()
+    }
+
+    /** 返回全部奖励模板及其奖励组件、固定奖品组件编排。 */
+    @GetMapping("/reward/templates")
+    fun rewardTemplates(): List<RewardTemplateResponse> = rewardConfigurationService.listTemplates()
+
+    /** 新建奖励模板。 */
+    @PostMapping("/reward/templates")
+    fun createRewardTemplate(@RequestBody request: CreateRewardTemplateRequest): RewardTemplateResponse =
+        rewardConfigurationService.createTemplate(request)
+
+    /** 更新指定奖励模板。 */
+    @PutMapping("/reward/templates/{templateId}")
+    fun updateRewardTemplate(
+        @PathVariable templateId: Long,
+        @RequestBody request: CreateRewardTemplateRequest
+    ): RewardTemplateResponse = rewardConfigurationService.updateTemplate(templateId, request)
+
+    /** 删除未被活动模板引用的奖励模板。 */
+    @DeleteMapping("/reward/templates/{templateId}")
+    fun deleteRewardTemplate(@PathVariable templateId: Long): ResponseEntity<Void> {
+        rewardConfigurationService.deleteTemplate(templateId)
+        return ResponseEntity.noContent().build()
+    }
+
+    /** 查询装扮或礼物奖品的推荐属性；返回值可被运营人员继续修改。 */
+    @GetMapping("/prizes/lookup")
+    fun lookupPrize(
+        @RequestParam prizeType: String,
+        @RequestParam prizeId: String
+    ): PrizeLookupResponse = prizeCatalogGateway.query(prizeType, prizeId)
+        ?: throw IllegalArgumentException("未找到对应的奖品信息")
 
     /** 返回全部活动模板及其组件编排。 */
     @GetMapping("/templates")
@@ -105,7 +164,7 @@ class ActivityConfigurationApiController(
     }
 
     /** 仅更新指定活动的上下线状态，不改写活动表单配置。 */
-    @PatchMapping("/activities/{activityId}/online-status")
+    @PatchMapping("/activities/{activityId}/online/status")
     fun updateActivityOnlineStatus(
         @PathVariable activityId: Long,
         @RequestBody request: UpdateActivityOnlineStatusRequest

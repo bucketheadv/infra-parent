@@ -11,10 +11,12 @@ import io.infra.structure.activity.persistence.entity.ActivityComponentEntity
 import io.infra.structure.activity.persistence.entity.ActivityEntity
 import io.infra.structure.activity.persistence.entity.ActivityTemplateComponentEntity
 import io.infra.structure.activity.persistence.entity.ActivityTemplateEntity
+import io.infra.structure.activity.persistence.entity.ActivityTemplateRewardTemplateEntity
 import io.infra.structure.activity.persistence.mapper.ActivityComponentMapper
 import io.infra.structure.activity.persistence.mapper.ActivityMapper
 import io.infra.structure.activity.persistence.mapper.ActivityTemplateComponentMapper
 import io.infra.structure.activity.persistence.mapper.ActivityTemplateMapper
+import io.infra.structure.activity.persistence.mapper.ActivityTemplateRewardTemplateMapper
 import io.infra.structure.activity.web.configuration.ActivityComponentResponse
 import io.infra.structure.activity.web.configuration.ActivityFormField
 import io.infra.structure.activity.web.configuration.ActivityFormResponse
@@ -24,6 +26,7 @@ import io.infra.structure.activity.web.configuration.CreateActivityRequest
 import io.infra.structure.activity.web.configuration.CreateComponentRequest
 import io.infra.structure.activity.web.configuration.CreateTemplateRequest
 import io.infra.structure.activity.web.configuration.TemplateComponentResponse
+import io.infra.structure.activity.web.configuration.TemplateRewardTemplateResponse
 import io.infra.structure.activity.web.configuration.UpdateActivityDebugConfigurationRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -40,7 +43,9 @@ class ActivityConfigurationService(
     private val componentMapper: ActivityComponentMapper,
     private val templateMapper: ActivityTemplateMapper,
     private val templateComponentMapper: ActivityTemplateComponentMapper,
+    private val templateRewardTemplateMapper: ActivityTemplateRewardTemplateMapper,
     private val activityMapper: ActivityMapper,
+    private val rewardConfigurationService: RewardConfigurationService,
     private val objectMapper: ObjectMapper
 ) {
 
@@ -150,6 +155,13 @@ class ActivityConfigurationService(
                     children = children,
                     depth = 0
                 )
+            } + template.rewardTemplates.map { binding ->
+                rewardConfigurationService.formField(
+                    template = binding.rewardTemplate,
+                    mountKey = binding.mountKey,
+                    mountTitle = binding.mountTitle,
+                    required = binding.required
+                )
             }
         )
     }
@@ -160,6 +172,7 @@ class ActivityConfigurationService(
         validateCode(request.code, "模板编码")
         require(request.name.isNotBlank()) { "模板名称不能为空" }
         val components = validateTemplateConfiguration(request)
+        validateTemplateRewardTemplates(request)
         require(templateMapper.selectOneByQuery(QueryWrapper.create().eq("code", request.code)) == null) {
             "模板编码已存在"
         }
@@ -189,6 +202,7 @@ class ActivityConfigurationService(
                 )
             )
         }
+        saveTemplateRewardBindings(templateId, request)
         return templateResponse(template)
     }
 
@@ -205,6 +219,12 @@ class ActivityConfigurationService(
             .map { it.componentId }
             .toSet()
         val components = validateTemplateConfiguration(request, existingComponentIds)
+        val existingRewardTemplateIds = templateRewardTemplateMapper
+            .selectListByQuery(QueryWrapper.create().eq("template_id", templateId))
+            .orEmpty()
+            .map { it.rewardTemplateId }
+            .toSet()
+        validateTemplateRewardTemplates(request, existingRewardTemplateIds)
 
         template.name = request.name.trim()
         template.description = request.description?.trim()?.takeIf(String::isNotBlank)
@@ -214,6 +234,7 @@ class ActivityConfigurationService(
         require(templateMapper.update(template) == 1) { "模板更新失败" }
 
         templateComponentMapper.deleteByQuery(QueryWrapper.create().eq("template_id", templateId))
+        templateRewardTemplateMapper.deleteByQuery(QueryWrapper.create().eq("template_id", templateId))
         request.components.forEachIndexed { index, binding ->
             templateComponentMapper.insert(
                 ActivityTemplateComponentEntity(
@@ -228,6 +249,7 @@ class ActivityConfigurationService(
                 )
             )
         }
+        saveTemplateRewardBindings(templateId, request)
         return templateResponse(template)
     }
 
@@ -239,6 +261,7 @@ class ActivityConfigurationService(
             "模板 ${template.name} 已被活动使用，不能删除"
         }
         templateComponentMapper.deleteByQuery(QueryWrapper.create().eq("template_id", templateId))
+        templateRewardTemplateMapper.deleteByQuery(QueryWrapper.create().eq("template_id", templateId))
         require(templateMapper.deleteById(templateId) == 1) { "模板删除失败" }
     }
 
@@ -391,6 +414,19 @@ class ActivityConfigurationService(
                     component = componentResponse(requiredComponent(binding.componentId))
                 )
             }
+        val rewardTemplateBindings = templateRewardTemplateMapper
+            .selectListByQuery(QueryWrapper.create().eq("template_id", templateId).orderBy("sort_no"))
+            .orEmpty()
+            .map { binding ->
+                TemplateRewardTemplateResponse(
+                    id = requireNotNull(binding.id) { "模板奖励模板关联主键不能为空" },
+                    sortNo = binding.sortNo,
+                    mountKey = binding.mountKey,
+                    mountTitle = binding.mountTitle,
+                    required = binding.required,
+                    rewardTemplate = rewardConfigurationService.getTemplate(binding.rewardTemplateId)
+                )
+            }
         return ActivityTemplateResponse(
             id = templateId,
             code = entity.code,
@@ -398,7 +434,8 @@ class ActivityConfigurationService(
             description = entity.description,
             enabled = entity.enabled,
             definition = templateDefinition(entity),
-            components = bindings
+            components = bindings,
+            rewardTemplates = rewardTemplateBindings
         )
     }
 
@@ -484,8 +521,8 @@ class ActivityConfigurationService(
         request: CreateTemplateRequest,
         allowedDisabledComponentIds: Set<Long> = emptySet()
     ): List<ActivityComponentEntity> {
-        require(request.components.isNotEmpty() || request.definition.nodes.isNotEmpty()) {
-            "活动模板至少需要配置一个组件或普通输入项"
+        require(request.components.isNotEmpty() || request.rewardTemplates.isNotEmpty() || request.definition.nodes.isNotEmpty()) {
+            "活动模板至少需要配置一个组件、奖励模板或普通输入项"
         }
         validateTemplateDefinition(request.definition)
         validateComponentReferences(null, request.definition)
@@ -505,12 +542,49 @@ class ActivityConfigurationService(
         }
     }
 
+    /** 校验活动模板对奖励模板的挂载配置。 */
+    private fun validateTemplateRewardTemplates(
+        request: CreateTemplateRequest,
+        allowedDisabledTemplateIds: Set<Long> = emptySet()
+    ) {
+        request.rewardTemplates.forEach { binding -> validateCode(binding.mountKey, "奖励挂载键") }
+        require(request.rewardTemplates.all { it.mountTitle.isNotBlank() && it.mountTitle.trim().length <= 128 }) {
+            "奖励挂载标题不能为空且不能超过 128 个字符"
+        }
+        val rootKeys = request.definition.nodes.map { it.key } +
+            request.components.map { it.mountKey } + request.rewardTemplates.map { it.mountKey }
+        require(rootKeys.toSet().size == rootKeys.size) { "同一活动模板中的字段键和挂载键不能重复" }
+        request.rewardTemplates.forEach { binding ->
+            rewardConfigurationService.selectableTemplate(
+                templateId = binding.rewardTemplateId,
+                allowDisabled = binding.rewardTemplateId in allowedDisabledTemplateIds
+            )
+        }
+    }
+
+    /** 保存活动模板与奖励模板的挂载记录。 */
+    private fun saveTemplateRewardBindings(templateId: Long, request: CreateTemplateRequest) {
+        request.rewardTemplates.forEachIndexed { index, binding ->
+            templateRewardTemplateMapper.insert(
+                ActivityTemplateRewardTemplateEntity(
+                    templateId = templateId,
+                    rewardTemplateId = binding.rewardTemplateId,
+                    mountKey = binding.mountKey.trim(),
+                    mountTitle = binding.mountTitle.trim(),
+                    sortNo = index + 1,
+                    required = binding.required
+                )
+            )
+        }
+    }
+
     /** 校验同级节点，并递归校验其子节点。 */
     private fun validateNodes(nodes: List<ComponentNode>, parentPath: String) {
         require(nodes.map { it.key }.toSet().size == nodes.size) { "同一组件层级中字段键不能重复" }
         nodes.forEach { node ->
             validateCode(node.key, "字段键")
             require(node.label.isNotBlank()) { "字段标题不能为空" }
+            require(node.type != ComponentNodeType.PRIZE) { "固定奖品组件只能在奖励模板中配置" }
             if (node.type == ComponentNodeType.SELECT || node.type == ComponentNodeType.MULTI_SELECT) {
                 require(node.options.isNotEmpty()) { "下拉字段 ${node.key} 至少需要一个候选项" }
                 require(node.options.all { it.value.isNotBlank() && it.label.isNotBlank() }) { "下拉候选项的值和名称不能为空" }
@@ -596,6 +670,10 @@ class ActivityConfigurationService(
         values: Map<String, Any?>,
         acceptedKeys: MutableSet<String>
     ) {
+        if (field.type == ComponentNodeType.PRIZE) {
+            validatePrizeFieldValue(field, key, values, acceptedKeys)
+            return
+        }
         if (field.type == ComponentNodeType.GROUP) {
             field.children.forEach { child -> validateFieldValue(child, nestedFieldKey(child, field.key, key), values, acceptedKeys) }
             return
@@ -643,6 +721,55 @@ class ActivityConfigurationService(
         }
         if (field.type == ComponentNodeType.SELECT && !isBlank(value)) {
             require(field.options.any { it.value == value.toString() }) { "${field.label} 的候选值无效" }
+        }
+    }
+
+    /** 校验固定奖品组件；装扮和礼物必须提供奖品 ID，其他属性均允许运营继续编辑。 */
+    private fun validatePrizeFieldValue(
+        field: ActivityFormField,
+        key: String,
+        values: Map<String, Any?>,
+        acceptedKeys: MutableSet<String>
+    ) {
+        if (field.collection) {
+            val indexes = values.keys.asSequence()
+                .filter { it.startsWith("$key.") }
+                .mapNotNull { it.removePrefix("$key.").substringBefore('.').toIntOrNull() }
+                .toSet()
+            if (field.collectionSize != null) {
+                val expectedIndexes = (0 until field.collectionSize).toSet()
+                require(indexes == expectedIndexes) { "${field.label} 必须配置 ${field.collectionSize} 个奖品" }
+            } else if (field.required) {
+                require(indexes.isNotEmpty()) { "${field.label} 至少需要配置一个奖品" }
+            }
+            indexes.forEach { index ->
+                validatePrizeFieldValue(
+                    field.copy(collection = false, required = field.required || field.collectionSize != null),
+                    "$key.$index",
+                    values,
+                    acceptedKeys
+                )
+            }
+            return
+        }
+        val keys = PRIZE_PROPERTY_KEYS.associateWith { property -> "$key.$property" }
+        acceptedKeys += keys.values
+        val prizeType = values[keys.getValue("prizeType")]?.toString()?.trim().orEmpty()
+        val hasValue = keys.values.any { candidate -> !isBlank(values[candidate]) }
+        if (!hasValue && !field.required) {
+            return
+        }
+        require(prizeType in PRIZE_TYPES) { "${field.label} 的奖品类型不合法" }
+        require(!isBlank(values[keys.getValue("prizeName")])) { "${field.label} 的奖品名称不能为空" }
+        require(!isBlank(values[keys.getValue("prizeIcon")])) { "${field.label} 的奖品图标不能为空" }
+        val value = values[keys.getValue("prizeValue")]?.toString()?.trim().orEmpty()
+        require(value.toBigDecimalOrNull()?.let { it >= java.math.BigDecimal.ZERO } == true) {
+            "${field.label} 的奖品价值必须是非负数字"
+        }
+        val quantity = values[keys.getValue("prizeQuantity")]?.toString()?.trim().orEmpty()
+        require(quantity.toLongOrNull()?.let { it > 0 } == true) { "${field.label} 的奖品数量必须是正整数" }
+        if (prizeType in PRIZE_TYPES_REQUIRING_ID) {
+            require(!isBlank(values[keys.getValue("prizeId")])) { "${field.label} 的装扮或礼物奖品 ID 不能为空" }
         }
     }
 
@@ -847,6 +974,15 @@ class ActivityConfigurationService(
 
         /** 活动可设置的上下线状态集合。 */
         val ONLINE_STATUSES = setOf("ONLINE", "OFFLINE")
+
+        /** 固定奖品组件支持的奖品类型。 */
+        val PRIZE_TYPES = setOf("DECORATION", "GIFT", "COIN", "POINT", "COUPON", "OTHER")
+
+        /** 装扮、礼物类型必须提供外部奖品唯一标识。 */
+        val PRIZE_TYPES_REQUIRING_ID = setOf("DECORATION", "GIFT")
+
+        /** 固定奖品组件在活动 JSON 中使用的属性键。 */
+        val PRIZE_PROPERTY_KEYS = listOf("prizeType", "prizeId", "prizeName", "prizeIcon", "prizeValue", "prizeDisplayValue", "prizeQuantity")
 
         /** JSON 反序列化活动配置值时使用的泛型类型。 */
         val MAP_TYPE = object : TypeReference<Map<String, Any?>>() {}
