@@ -7,6 +7,7 @@
         listPages: { components: 1, templates: 1, activities: 1 }
     };
     const RECORD_PAGE_SIZE = 8;
+    const THEME_STORAGE_KEY = "infra_activity_theme";
     const csrfToken = document.querySelector('meta[name="_csrf"]')?.content;
     const csrfHeader = document.querySelector('meta[name="_csrf_header"]')?.content;
     const componentNodes = document.getElementById("component-nodes");
@@ -17,10 +18,36 @@
     const copyDialog = document.getElementById("activity-copy-dialog");
     const configurationDeleteDialog = document.getElementById("configuration-delete-dialog");
     const debugDialog = document.getElementById("activity-debug-dialog");
+    const personalSettingsDialog = document.getElementById("personal-settings-dialog");
     let pendingActivityOnlineStatus = null;
     let pendingActivityCopyId = null;
     let pendingConfigurationDeletion = null;
     let pendingActivityDebugId = null;
+
+    // 主题色仅保存在当前浏览器，切换后对同一站点下的配置页面立即生效。
+    const applyTheme = (theme) => {
+        const supportedThemes = ["emerald", "green", "orange", "red", "ocean", "violet"];
+        const selectedTheme = supportedThemes.includes(theme) ? theme : "emerald";
+        document.documentElement.dataset.theme = selectedTheme;
+        document.querySelectorAll(".theme-option").forEach((button) => {
+            const active = button.dataset.theme === selectedTheme;
+            button.classList.toggle("is-active", active);
+            button.setAttribute("aria-pressed", String(active));
+        });
+        try {
+            window.localStorage.setItem(THEME_STORAGE_KEY, selectedTheme);
+        } catch (_) {
+            // 隐私模式等无法使用本地存储时仅保留当前页面的主题色。
+        }
+    };
+
+    const restoreTheme = () => {
+        try {
+            applyTheme(window.localStorage.getItem(THEME_STORAGE_KEY) || "emerald");
+        } catch (_) {
+            applyTheme("emerald");
+        }
+    };
 
     const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", "\"": "&quot;"
@@ -607,7 +634,7 @@
                 <article class="record">
                     <p class="record-title">${escapeHtml(activity.name)}</p>
                     <div class="record-tags"><span class="record-tag">${escapeHtml(activity.status)}</span><span class="record-tag ${online ? "online-status-tag" : "offline-status-tag"}">${online ? "已上线" : "已下线"}</span><span class="record-tag">${escapeHtml(validity)}</span>${debug ? `<span class="record-tag debug-status-tag">调试模式 · ${(activity.debugUserIds || []).length} 人${escapeHtml(debugTime)}</span>` : ""}<span class="record-tag">模板 #${activity.templateId}</span><span class="record-tag">${Object.keys(activity.values).length} 项配置</span></div>
-                    <div class="record-actions"><button class="secondary-button configure-activity-debug" type="button" data-activity-id="${activity.id}">调试配置</button><button class="secondary-button copy-activity" type="button" data-activity-id="${activity.id}">复制</button><button class="secondary-button ${online ? "offline-activity" : "online-activity"} toggle-activity-online-status" type="button" data-activity-id="${activity.id}" data-online-status="${online ? "OFFLINE" : "ONLINE"}">${online ? "下线" : "上线"}</button><button class="secondary-button edit-activity" type="button" data-activity-id="${activity.id}">编辑</button><button class="secondary-button delete-configuration" type="button" data-configuration-type="activity" data-configuration-id="${activity.id}">删除</button></div>
+                    <div class="record-actions"><button class="record-icon-button configure-activity-debug" type="button" data-activity-id="${activity.id}" title="调试配置" aria-label="调试配置">⚙</button><button class="record-icon-button copy-activity" type="button" data-activity-id="${activity.id}" title="复制活动" aria-label="复制活动">⧉</button><button class="record-icon-button ${online ? "offline-activity" : "online-activity"} toggle-activity-online-status" type="button" data-activity-id="${activity.id}" data-online-status="${online ? "OFFLINE" : "ONLINE"}" title="${online ? "下线活动" : "上线活动"}" aria-label="${online ? "下线活动" : "上线活动"}">${online ? "↓" : "↑"}</button><button class="record-icon-button edit-activity" type="button" data-activity-id="${activity.id}" title="编辑活动" aria-label="编辑活动">✎</button><button class="secondary-button delete-configuration" type="button" data-configuration-type="activity" data-configuration-id="${activity.id}">删除</button></div>
                 </article>`;
             }).join("")
             : `<p class="empty-state">${state.activities.length ? "没有匹配的活动。" : "尚未创建活动。"}</p>`;
@@ -843,6 +870,13 @@
     };
 
     document.getElementById("add-root-node").addEventListener("click", () => addNode(componentNodes));
+    document.getElementById("open-personal-settings").addEventListener("click", (event) => {
+        event.currentTarget.closest(".account-menu")?.removeAttribute("open");
+        personalSettingsDialog.showModal();
+    });
+    document.querySelectorAll(".theme-option").forEach((button) => {
+        button.addEventListener("click", () => applyTheme(button.dataset.theme));
+    });
     document.getElementById("add-template-node").addEventListener("click", () => addNode(templateNodes));
     document.getElementById("cancel-component-edit").addEventListener("click", resetComponentForm);
     document.getElementById("cancel-template-edit").addEventListener("click", resetTemplateForm);
@@ -1161,6 +1195,7 @@
     });
 
     addNode(componentNodes);
+    restoreTheme();
     syncValidityFields();
     syncActivityOnlineStatus();
     syncDebugFields();
