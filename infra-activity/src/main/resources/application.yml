@@ -11,8 +11,10 @@ server:
 
 spring:
   jackson:
-    # 所有接口字段统一使用 snake_case；Kotlin 属性仍保持 camelCase。
+    # 全局 Mapper 读取此配置，将接口字段序列化为 snake_case。
     property-naming-strategy: SNAKE_CASE
+    # 接口响应仅省略 null 字段，空字符串与空集合保留。
+    default-property-inclusion: NON_NULL
   datasource:
     # 活动配置使用独立数据库；可通过 ACTIVITY_DB_* 环境变量覆盖。
     url: ${ACTIVITY_DB_URL:jdbc:mysql://localhost:3306/infra_activity}
