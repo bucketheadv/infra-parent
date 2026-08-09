@@ -2,6 +2,7 @@ package io.infra.structure.activity.admin.controller
 
 import io.infra.structure.activity.admin.dto.ProfileResponse
 import io.infra.structure.sso.core.SsoContext
+import org.springframework.http.MediaType
 import org.springframework.security.core.Authentication
 import org.springframework.security.oauth2.core.oidc.user.OidcUser
 import org.springframework.web.bind.annotation.GetMapping
@@ -14,7 +15,10 @@ import org.springframework.web.bind.annotation.RestController
  * 用于同时演示浏览器 OIDC 会话和 Bearer JWT 两种认证方式下如何读取当前用户。
  */
 @RestController
-@RequestMapping("/api")
+@RequestMapping(
+    value = ["/api"],
+    produces = [MediaType.APPLICATION_JSON_VALUE]
+)
 class ProfileController {
 
     /**

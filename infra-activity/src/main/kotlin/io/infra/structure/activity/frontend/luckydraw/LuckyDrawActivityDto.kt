@@ -7,6 +7,8 @@ import io.infra.structure.activity.frontend.type.ActivityType
 data class LuckyDrawActivityDto(
     /** 活动主键。 */
     override val id: Long,
+    /** 当前活动类型。 */
+    override val activityType: ActivityType = ActivityType.LUCKY_DRAW,
     /** 活动展示名称。 */
     override val name: String,
     /** 活动采用的模板主键。 */
@@ -35,6 +37,7 @@ data class LuckyDrawActivityDto(
     override val data: LuckyDrawData
 ) : BaseActivityDto<LuckyDrawData>(
     id = id,
+    activityType = activityType,
     name = name,
     templateId = templateId,
     status = status,
@@ -47,6 +50,5 @@ data class LuckyDrawActivityDto(
     debugForceTime = debugForceTime,
     createTime = createTime,
     updateTime = updateTime,
-    activityType = ActivityType.LUCKY_DRAW,
     data = data
 )

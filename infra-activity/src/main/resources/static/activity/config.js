@@ -219,15 +219,45 @@
         return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
     };
 
+    // 这些字段承载可由运营配置的动态 JSON，键名即业务数据路径，不能转换命名风格。
+    const dynamicMapKeys = new Set(["values", "overrides"]);
+
+    // 仅在接口边界转换固定 DTO 字段，页面内部继续使用 camelCase。
+    const toSnakeCase = (key) => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+    const toCamelCase = (key) => key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    const convertJsonKeys = (value, keyConverter, preserveKeys = false) => {
+        if (Array.isArray(value)) {
+            return value.map((item) => convertJsonKeys(item, keyConverter, preserveKeys));
+        }
+        if (value === null || typeof value !== "object") {
+            return value;
+        }
+        return Object.entries(value).reduce((converted, [key, item]) => {
+            const convertedKey = preserveKeys ? key : keyConverter(key);
+            converted[convertedKey] = convertJsonKeys(
+                item,
+                keyConverter,
+                preserveKeys || dynamicMapKeys.has(key)
+            );
+            return converted;
+        }, {});
+    };
+
     const request = async (path, options = {}) => {
         const headers = { Accept: "application/json", ...(options.headers || {}) };
-        if (options.body) {
+        let body = options.body;
+        if (body) {
             headers["Content-Type"] = "application/json";
+            try {
+                body = JSON.stringify(convertJsonKeys(JSON.parse(body), toSnakeCase));
+            } catch (_) {
+                // 非 JSON 请求体按原样发送，避免影响后续可能接入的文件上传等接口。
+            }
         }
         if (csrfToken && csrfHeader && options.method && options.method !== "GET") {
             headers[csrfHeader] = csrfToken;
         }
-        const response = await fetch(`/api/activity${path}`, { credentials: "same-origin", ...options, headers });
+        const response = await fetch(`/api/activity${path}`, { credentials: "same-origin", ...options, body, headers });
         if (!response.ok) {
             const body = await response.json().catch(() => ({}));
             throw new Error(body.message || `请求失败：${response.status}`);
@@ -235,7 +265,7 @@
         if (response.status === 204) {
             return null;
         }
-        return response.json();
+        return convertJsonKeys(await response.json(), toCamelCase);
     };
 
     // 从动态字段树读取所有多选字段的无数组索引路径。
@@ -1144,10 +1174,11 @@
 
     // 渲染固定格式奖品组件和所选奖品扩展字段，属性统一保存到奖品挂载键下。
     const renderPrizeField = (field, fieldKey, values) => {
+        // 新记录统一写入 snake_case；读取历史活动时兼容之前保存的 camelCase 奖品属性。
         const valueOf = (property) => Object.prototype.hasOwnProperty.call(values, `${fieldKey}.${property}`)
             ? values[`${fieldKey}.${property}`]
-            : "";
-        const prizeType = String(valueOf("prizeType") || "");
+            : values[`${fieldKey}.${toCamelCase(property)}`] || "";
+        const prizeType = String(valueOf("prize_type") || "");
         const requiresId = ["DECORATION", "GIFT"].includes(prizeType);
         const required = field.required ? "required" : "";
         const options = [["", "请选择奖品类型"], ["DECORATION", "装扮"], ["GIFT", "礼物"], ["COIN", "金币"], ["POINT", "积分"], ["COUPON", "优惠券"], ["OTHER", "其他"]]
@@ -1156,13 +1187,13 @@
         return `<section class="prize-component" style="--depth:${field.depth}" data-prize-field-key="${escapeHtml(fieldKey)}" data-required="${field.required}">
             <header class="dynamic-component-header"><div><h4>${escapeHtml(field.label)}${field.required ? " *" : ""}</h4><p>装扮和礼物输入奖品 ID 后可查询属性，回填结果仍可修改。</p></div><button class="secondary-button query-prize" type="button" ${requiresId ? "" : "hidden"}>查询奖品</button></header>
             <div class="prize-field-grid">
-                <label>奖品类型<select data-prize-type data-field-key="${escapeHtml(fieldKey)}.prizeType" ${required}>${options}</select></label>
-                <label>奖品 ID<input data-prize-id data-field-key="${escapeHtml(fieldKey)}.prizeId" value="${escapeHtml(valueOf("prizeId"))}" ${requiresId ? "required" : ""} placeholder="装扮、礼物类型必填"></label>
-                <label>奖品名称<input data-field-key="${escapeHtml(fieldKey)}.prizeName" value="${escapeHtml(valueOf("prizeName"))}" ${required} placeholder="可由查询回填或手动填写"></label>
-                <label class="prize-icon-field">奖品图标<span class="prize-icon-input"><input data-prize-icon data-field-key="${escapeHtml(fieldKey)}.prizeIcon" value="${escapeHtml(valueOf("prizeIcon"))}" ${required} placeholder="请输入图标地址"><span class="prize-icon-preview" data-prize-icon-preview hidden><img alt="奖品图标预览"></span></span></label>
-                <label>奖品价值<input data-field-key="${escapeHtml(fieldKey)}.prizeValue" type="number" min="0" step="0.01" value="${escapeHtml(valueOf("prizeValue"))}" ${required} placeholder="0"></label>
-                <label>展示价值（可选）<input data-field-key="${escapeHtml(fieldKey)}.prizeDisplayValue" value="${escapeHtml(valueOf("prizeDisplayValue"))}" placeholder="例如：价值 100 金币"></label>
-                <label>奖品数量<input data-field-key="${escapeHtml(fieldKey)}.prizeQuantity" type="number" min="1" step="1" value="${escapeHtml(valueOf("prizeQuantity") || (field.required ? "1" : ""))}" ${required}></label>
+                <label>奖品类型<select data-prize-type data-field-key="${escapeHtml(fieldKey)}.prize_type" ${required}>${options}</select></label>
+                <label>奖品 ID<input data-prize-id data-field-key="${escapeHtml(fieldKey)}.prize_id" value="${escapeHtml(valueOf("prize_id"))}" ${requiresId ? "required" : ""} placeholder="装扮、礼物类型必填"></label>
+                <label>奖品名称<input data-field-key="${escapeHtml(fieldKey)}.prize_name" value="${escapeHtml(valueOf("prize_name"))}" ${required} placeholder="可由查询回填或手动填写"></label>
+                <label class="prize-icon-field">奖品图标<span class="prize-icon-input"><input data-prize-icon data-field-key="${escapeHtml(fieldKey)}.prize_icon" value="${escapeHtml(valueOf("prize_icon"))}" ${required} placeholder="请输入图标地址"><span class="prize-icon-preview" data-prize-icon-preview hidden><img alt="奖品图标预览"></span></span></label>
+                <label>奖品价值<input data-field-key="${escapeHtml(fieldKey)}.prize_value" type="number" min="0" step="0.01" value="${escapeHtml(valueOf("prize_value"))}" ${required} placeholder="0"></label>
+                <label>展示价值（可选）<input data-field-key="${escapeHtml(fieldKey)}.prize_display_value" value="${escapeHtml(valueOf("prize_display_value"))}" placeholder="例如：价值 100 金币"></label>
+                <label>奖品数量<input data-field-key="${escapeHtml(fieldKey)}.prize_quantity" type="number" min="1" step="1" value="${escapeHtml(valueOf("prize_quantity") || (field.required ? "1" : ""))}" ${required}></label>
             </div>
             ${field.children.length ? `<div class="prize-extension-fields"><p class="prize-extension-title">扩展字段</p>${field.children.map((child) => renderDynamicField(child, resolveChildFieldKey(child, field, fieldKey), values)).join("")}</div>` : ""}
         </section>`;
@@ -1177,7 +1208,7 @@
         element.querySelector(".query-prize").hidden = !requiresId;
         if (clearProperties) {
             const fieldKey = element.dataset.prizeFieldKey;
-            ["prizeId", "prizeName", "prizeIcon", "prizeValue", "prizeDisplayValue", "prizeQuantity"].forEach((property) => {
+            ["prize_id", "prize_name", "prize_icon", "prize_value", "prize_display_value", "prize_quantity"].forEach((property) => {
                 const input = element.querySelector(`[data-field-key="${fieldKey}.${property}"]`);
                 if (input) {
                     input.value = "";
@@ -1218,7 +1249,7 @@
         try {
             const prize = await request(`/prizes/lookup?prizeType=${encodeURIComponent(type)}&prizeId=${encodeURIComponent(id)}`);
             const key = element.dataset.prizeFieldKey;
-            const values = { prizeType: prize.prizeType, prizeId: prize.prizeId, prizeName: prize.prizeName, prizeIcon: prize.prizeIcon, prizeValue: prize.prizeValue, prizeDisplayValue: prize.prizeDisplayValue, prizeQuantity: prize.prizeQuantity };
+            const values = { prize_type: prize.prizeType, prize_id: prize.prizeId, prize_name: prize.prizeName, prize_icon: prize.prizeIcon, prize_value: prize.prizeValue, prize_display_value: prize.prizeDisplayValue, prize_quantity: prize.prizeQuantity };
             Object.entries(values).forEach(([property, value]) => {
                 const input = Array.from(element.querySelectorAll("[data-field-key]")).find((item) => item.dataset.fieldKey === `${key}.${property}`);
                 if (input) {
@@ -1781,7 +1812,7 @@
             showNotice("请至少添加一个奖品扩展字段或分组。", true);
             return;
         }
-        const fixedKeys = new Set(["prizeType", "prizeId", "prizeName", "prizeIcon", "prizeValue", "prizeDisplayValue", "prizeQuantity"]);
+        const fixedKeys = new Set(["prize_type", "prize_id", "prize_name", "prize_icon", "prize_value", "prize_display_value", "prize_quantity"]);
         if (definition.nodes.some((node) => fixedKeys.has(node.key))) {
             showNotice("扩展字段的根字段键不能与固定奖品字段重复。", true);
             return;

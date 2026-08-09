@@ -799,7 +799,7 @@ class ActivityConfigurationService(
         }
         val keys = PRIZE_PROPERTY_KEYS.associateWith { property -> "$key.$property" }
         acceptedKeys += keys.values
-        val prizeType = values[keys.getValue("prizeType")]?.toString()?.trim().orEmpty()
+        val prizeType = values[keys.getValue("prize_type")]?.toString()?.trim().orEmpty()
         val hasValue = keys.values.any { candidate -> !isBlank(values[candidate]) } || field.children.any { child ->
             val childKey = nestedFieldKey(child, field.key, key)
             values.keys.any { candidate -> candidate == childKey || candidate.startsWith("$childKey.") }
@@ -808,16 +808,16 @@ class ActivityConfigurationService(
             return
         }
         require(prizeType in PRIZE_TYPES) { "${field.label} 的奖品类型不合法" }
-        require(!isBlank(values[keys.getValue("prizeName")])) { "${field.label} 的奖品名称不能为空" }
-        require(!isBlank(values[keys.getValue("prizeIcon")])) { "${field.label} 的奖品图标不能为空" }
-        val value = values[keys.getValue("prizeValue")]?.toString()?.trim().orEmpty()
+        require(!isBlank(values[keys.getValue("prize_name")])) { "${field.label} 的奖品名称不能为空" }
+        require(!isBlank(values[keys.getValue("prize_icon")])) { "${field.label} 的奖品图标不能为空" }
+        val value = values[keys.getValue("prize_value")]?.toString()?.trim().orEmpty()
         require(value.toBigDecimalOrNull()?.let { it >= java.math.BigDecimal.ZERO } == true) {
             "${field.label} 的奖品价值必须是非负数字"
         }
-        val quantity = values[keys.getValue("prizeQuantity")]?.toString()?.trim().orEmpty()
+        val quantity = values[keys.getValue("prize_quantity")]?.toString()?.trim().orEmpty()
         require(quantity.toLongOrNull()?.let { it > 0 } == true) { "${field.label} 的奖品数量必须是正整数" }
         if (prizeType in PRIZE_TYPES_REQUIRING_ID) {
-            require(!isBlank(values[keys.getValue("prizeId")])) { "${field.label} 的装扮或礼物奖品 ID 不能为空" }
+            require(!isBlank(values[keys.getValue("prize_id")])) { "${field.label} 的装扮或礼物奖品 ID 不能为空" }
         }
         field.children.forEach { child ->
             validateFieldValue(child, nestedFieldKey(child, field.key, key), values, acceptedKeys)
@@ -1033,7 +1033,7 @@ class ActivityConfigurationService(
         val PRIZE_TYPES_REQUIRING_ID = setOf("DECORATION", "GIFT")
 
         /** 固定奖品组件在活动 JSON 中使用的属性键。 */
-        val PRIZE_PROPERTY_KEYS = listOf("prizeType", "prizeId", "prizeName", "prizeIcon", "prizeValue", "prizeDisplayValue", "prizeQuantity")
+        val PRIZE_PROPERTY_KEYS = listOf("prize_type", "prize_id", "prize_name", "prize_icon", "prize_value", "prize_display_value", "prize_quantity")
 
         /** JSON 反序列化活动配置值时使用的泛型类型。 */
         val MAP_TYPE = object : TypeReference<Map<String, Any?>>() {}

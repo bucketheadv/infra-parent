@@ -10,6 +10,9 @@ server:
         name: INFRA_ACTIVITY_SESSION
 
 spring:
+  jackson:
+    # 所有接口字段统一使用 snake_case；Kotlin 属性仍保持 camelCase。
+    property-naming-strategy: SNAKE_CASE
   datasource:
     # 活动配置使用独立数据库；可通过 ACTIVITY_DB_* 环境变量覆盖。
     url: ${ACTIVITY_DB_URL:jdbc:mysql://localhost:3306/infra_activity}

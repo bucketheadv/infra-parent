@@ -5,6 +5,7 @@ import io.infra.structure.activity.frontend.service.BaseActivityService
 import io.infra.structure.sso.core.SsoContext
 import jakarta.validation.constraints.Positive
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.core.Authentication
@@ -44,5 +45,7 @@ abstract class BaseActivityController<
     /** 将活动类型、状态和有效期等可预期校验失败转换为受控响应。 */
     @ExceptionHandler(IllegalArgumentException::class)
     fun invalidActivity(exception: IllegalArgumentException): ResponseEntity<Map<String, String>> =
-        ResponseEntity.status(HttpStatus.BAD_REQUEST).body(mapOf("message" to (exception.message ?: "活动不可访问")))
+        ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(mapOf("message" to (exception.message ?: "活动不可访问")))
 }

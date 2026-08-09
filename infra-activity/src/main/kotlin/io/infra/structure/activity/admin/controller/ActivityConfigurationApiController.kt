@@ -21,6 +21,7 @@ import io.infra.structure.activity.admin.service.PrizeCatalogGateway
 import io.infra.structure.activity.admin.service.PrizeComponentConfigurationService
 import io.infra.structure.activity.admin.service.RewardConfigurationService
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -40,7 +41,10 @@ import org.springframework.web.bind.annotation.RestController
  * 页面通过此接口维护组件、模板和活动，并在创建活动前读取模板生成的动态字段。
  */
 @RestController
-@RequestMapping("/api/activity")
+@RequestMapping(
+    value = ["/api/activity"],
+    produces = [MediaType.APPLICATION_JSON_VALUE]
+)
 class ActivityConfigurationApiController(
     private val activityConfigurationService: ActivityConfigurationService,
     private val rewardConfigurationService: RewardConfigurationService,
@@ -221,5 +225,7 @@ class ActivityConfigurationApiController(
     /** 将可预期的配置校验失败返回为页面可识别的 400 响应。 */
     @ExceptionHandler(IllegalArgumentException::class)
     fun invalidRequest(exception: IllegalArgumentException): ResponseEntity<Map<String, String>> =
-        ResponseEntity.status(HttpStatus.BAD_REQUEST).body(mapOf("message" to (exception.message ?: "活动配置不合法")))
+        ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(mapOf("message" to (exception.message ?: "活动配置不合法")))
 }

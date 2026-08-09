@@ -10,6 +10,8 @@ import io.infra.structure.activity.frontend.type.ActivityType
 abstract class BaseActivityDto<out FORM_DATA : Any>(
     /** 活动主键。 */
     open val id: Long,
+    /** 当前活动类型。 */
+    open val activityType: ActivityType,
     /** 活动展示名称。 */
     open val name: String,
     /** 活动采用的模板主键。 */
@@ -34,8 +36,6 @@ abstract class BaseActivityDto<out FORM_DATA : Any>(
     open val createTime: Long,
     /** 活动最后更新时间戳，单位为毫秒。 */
     open val updateTime: Long,
-    /** 当前活动类型。 */
-    open val activityType: ActivityType,
     /** 当前活动类型对应的结构化配置数据。 */
     open val data: FORM_DATA
 )

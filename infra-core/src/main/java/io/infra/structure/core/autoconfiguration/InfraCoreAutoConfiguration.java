@@ -2,6 +2,7 @@ package io.infra.structure.core.autoconfiguration;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.module.kotlin.KotlinModule;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +37,9 @@ public class InfraCoreAutoConfiguration {
         } catch (Exception e) {
             log.warn("注册 KotlinModule 失败，Kotlin 支持可能不可用", e);
         }
+
+        // 所有模块的接口和 JSON 配置统一使用 snake_case，Kotlin/Java 属性仍使用 camelCase。
+        objectMapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
         
         // 时间序列化为时间戳
         objectMapper.enable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
