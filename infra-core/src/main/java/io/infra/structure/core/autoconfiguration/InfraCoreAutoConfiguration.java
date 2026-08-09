@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.module.kotlin.KotlinModule;
+import com.fasterxml.jackson.module.kotlin.KotlinFeature;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -38,7 +39,10 @@ public class InfraCoreAutoConfiguration {
         
         // 注册 Kotlin 模块（如果项目使用 Kotlin）
         try {
-            objectMapper.registerModule(new KotlinModule.Builder().build());
+            objectMapper.registerModule(new KotlinModule.Builder()
+                    // 对有默认值的 Kotlin 配置字段，显式传 null 时按默认值处理。
+                    .configure(KotlinFeature.NullIsSameAsDefault, true)
+                    .build());
         } catch (Exception e) {
             log.warn("注册 KotlinModule 失败，Kotlin 支持可能不可用", e);
         }

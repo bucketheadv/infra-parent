@@ -47,6 +47,7 @@ class ActivityConfigurationService(
     private val templateRewardTemplateMapper: ActivityTemplateRewardTemplateMapper,
     private val activityMapper: ActivityMapper,
     private val rewardConfigurationService: RewardConfigurationService,
+    private val activityTaskService: ActivityTaskService,
     private val objectMapper: ObjectMapper
 ) {
 
@@ -300,7 +301,7 @@ class ActivityConfigurationService(
 
     /** 根据模板动态表单校验并保存活动配置。 */
     @Transactional
-    fun createActivity(request: CreateActivityRequest): ActivityResponse {
+    open fun createActivity(request: CreateActivityRequest): ActivityResponse {
         require(request.name.isNotBlank()) { "活动名称不能为空" }
         validateActivityStatuses(request.status, request.onlineStatus)
         validateValidity(request)
@@ -323,12 +324,14 @@ class ActivityConfigurationService(
             updateTime = now
         )
         activityMapper.insert(entity)
+        // 仅“启用且上线”的活动会生成可执行任务，草稿和下线活动不会占用调度资源。
+        activityTaskService.refreshActivityTasks(entity)
         return activityResponse(entity)
     }
 
     /** 更新活动名称、模板、状态和动态表单配置。 */
     @Transactional
-    fun updateActivity(activityId: Long, request: CreateActivityRequest): ActivityResponse {
+    open fun updateActivity(activityId: Long, request: CreateActivityRequest): ActivityResponse {
         val entity = requiredActivity(activityId)
         require(request.name.isNotBlank()) { "活动名称不能为空" }
         validateActivityStatuses(request.status, request.onlineStatus)
@@ -350,6 +353,8 @@ class ActivityConfigurationService(
         entity.formDataJson = objectMapper.writeValueAsString(values)
         entity.updateTime = System.currentTimeMillis()
         require(activityMapper.update(entity) == 1) { "活动更新失败" }
+        // 模板、有效期与上下线状态都可能影响下一次触发时间，更新后重新生成快照。
+        activityTaskService.refreshActivityTasks(entity)
         return activityResponse(entity)
     }
 
@@ -379,18 +384,21 @@ class ActivityConfigurationService(
 
     /** 删除活动及其已经保存的动态表单配置。 */
     @Transactional
-    fun deleteActivity(activityId: Long) {
+    open fun deleteActivity(activityId: Long) {
         requiredActivity(activityId)
         require(activityMapper.deleteById(activityId) == 1) { "活动删除失败" }
     }
 
     /** 仅切换活动上下线状态，避免列表快捷操作覆盖其他活动配置。 */
-    fun updateActivityOnlineStatus(activityId: Long, onlineStatus: String): ActivityResponse {
+    @Transactional
+    open fun updateActivityOnlineStatus(activityId: Long, onlineStatus: String): ActivityResponse {
         val entity = requiredActivity(activityId)
         validateActivityStatuses(entity.status, onlineStatus)
         entity.onlineStatus = onlineStatus
         entity.updateTime = System.currentTimeMillis()
         require(activityMapper.update(entity) == 1) { "活动上下线状态更新失败" }
+        // 上线时创建或刷新任务；下线时取消尚未执行的任务。
+        activityTaskService.refreshActivityTasks(entity)
         return activityResponse(entity)
     }
 

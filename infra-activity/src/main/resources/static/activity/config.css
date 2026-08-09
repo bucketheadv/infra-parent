@@ -124,7 +124,7 @@ button { cursor: pointer; }
 .navigation { padding: clamp(2rem, 5vw, 4rem) 1.25rem 2rem 0; border-right: 1px solid var(--line); }
 .eyebrow { margin: 0 0 .5rem; color: var(--teal); font-size: .73rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 h1, h2, h3, h4, h5, p { margin-top: 0; }
-h1 { margin-bottom: .75rem; font-size: clamp(2rem, 4vw, 3rem); line-height: 1.05; }
+h1 { margin-bottom: .7rem; font-size: clamp(1.45rem, 2.15vw, 2rem); line-height: 1.2; }
 h2 { margin-bottom: 0; font-size: 1.55rem; }
 h3 { margin-bottom: 0; font-size: 1.04rem; }
 h4, h5 { margin-bottom: 0; font-size: .88rem; }

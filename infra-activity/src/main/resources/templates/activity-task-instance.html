@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
+    <title>任务实例 | Infra Activity</title>
+    <link rel="stylesheet" th:href="@{/activity/config.css}" href="/activity/config.css">
+    <link rel="stylesheet" th:href="@{/activity/task.css}" href="/activity/task.css">
+    <script defer th:src="@{/activity/task.js}" src="/activity/task.js"></script>
+</head>
+<body>
+<header class="topbar">
+    <a class="brand" th:href="@{/}" href="/" aria-label="Infra Activity 首页">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Infra Activity</span>
+    </a>
+    <div class="topbar-actions"><a class="back-link" th:href="@{/activity/config}" href="/activity/config">活动配置</a><details class="account-menu"><summary aria-label="打开账户菜单">账户</summary><div class="account-menu-panel"><button id="open-personal-settings" class="account-menu-item" type="button" aria-haspopup="dialog">个人设置</button><form th:action="@{/logout}" action="/logout" method="post"><button class="account-menu-item account-menu-logout" type="submit">退出登录</button></form></div></details></div>
+</header>
+
+<main class="config-shell">
+    <aside class="navigation" aria-label="活动配置导航">
+        <p class="eyebrow">Activity studio</p><h1>任务实例</h1>
+        <p class="navigation-copy">查看活动上线后生成的任务实例，支持手动触发与执行审计。</p>
+        <nav class="navigation-menu" aria-label="配置菜单">
+            <section class="navigation-menu-group" aria-labelledby="activity-menu-title">
+                <p id="activity-menu-title" class="navigation-menu-title">活动配置</p>
+                <div class="tab-list">
+                    <a class="tab-button" th:href="@{/activity/component}" href="/activity/component">模板组件配置</a>
+                    <a class="tab-button" th:href="@{/activity/template}" href="/activity/template">活动模板配置</a>
+                    <a class="tab-button" th:href="@{/activity/config}" href="/activity/config">活动配置</a>
+                    <a class="tab-button" th:href="@{/activity/task/definition}" href="/activity/task/definition">任务定义</a>
+                    <a class="tab-button" th:href="@{/activity/task/binding}" href="/activity/task/binding">模板任务绑定</a>
+                    <a class="tab-button is-active" th:href="@{/activity/task/instance}" href="/activity/task/instance">任务实例</a>
+                </div>
+            </section>
+            <section class="navigation-menu-group" aria-labelledby="reward-menu-title">
+                <p id="reward-menu-title" class="navigation-menu-title">奖励配置</p>
+                <div class="tab-list">
+                    <a class="tab-button" th:href="@{/activity/reward/component}" href="/activity/reward/component">奖励组件配置</a>
+                    <a class="tab-button" th:href="@{/activity/reward/prize}" href="/activity/reward/prize">奖品类型配置</a>
+                    <a class="tab-button" th:href="@{/activity/reward/template}" href="/activity/reward/template">奖励模板配置</a>
+                </div>
+            </section>
+        </nav>
+    </aside>
+
+    <section class="workspace">
+        <p id="notice" class="notice" hidden></p>
+        <header class="panel-header"><div><p class="eyebrow">Task runtime</p><h2>任务实例</h2></div><p>到期任务通过数据库租约抢占执行；失败后按任务定义快照自动重试并保留执行日志。</p></header>
+
+        <div class="task-grid" hidden>
+            <form id="task-template-form" class="editor-form" novalidate>
+                <div class="form-heading"><h3 id="task-template-heading">新建任务模板</h3><button id="cancel-template-edit" class="secondary-button" type="button" hidden>取消编辑</button></div>
+                <label>任务名称<input name="name" required placeholder="活动预热通知"></label>
+                <div class="field-grid"><label>处理器类型<select name="handlerType" required><option value="WARMUP_NOTICE">预热通知</option><option value="REWARD_GRANT">奖励发放</option><option value="ACTIVITY_PROGRESS_CHECK">活动巡检</option></select></label><label>最大重试次数<input name="maxRetryCount" type="number" min="0" max="20" value="3" required></label></div>
+                <label>重试间隔（毫秒）<input name="retryIntervalMillis" type="number" min="1000" max="86400000" value="60000" required></label>
+                <label>任务说明<textarea name="description" rows="2" placeholder="说明任务用途和业务约束"></textarea></label>
+                <label>默认参数 JSON<textarea name="defaultParameters" rows="4" spellcheck="false">{}</textarea></label>
+                <label class="check-field"><input name="enabled" type="checkbox" checked>允许新的活动模板关联</label>
+                <button class="primary-button" type="submit">保存任务模板</button>
+            </form>
+            <section class="inventory"><div class="form-heading"><h3>已保存任务模板</h3><span id="task-template-count">0</span></div><label class="record-search"><span class="sr-only">搜索任务模板</span><input id="task-template-search" type="search" placeholder="搜索名称、编码或处理器"></label><div id="task-template-list" class="record-list"></div></section>
+        </div>
+
+        <section class="task-section" hidden>
+            <header class="section-heading"><div><p class="eyebrow">Template binding</p><h2>活动模板任务</h2></div><label>活动模板<select id="binding-template-select"></select></label></header>
+            <div class="task-binding-toolbar"><p>配置后的任务会在活动同时满足启用和上线时生成实例快照。</p><button id="add-task-binding" class="secondary-button" type="button">添加任务</button></div>
+            <div id="task-bindings" class="task-binding-list"></div>
+            <button id="save-task-bindings" class="primary-button task-save" type="button">保存活动模板任务</button>
+        </section>
+
+        <section class="task-section">
+            <header class="section-heading"><div><p class="eyebrow">Runtime</p><h2>活动任务与执行记录</h2></div><label>活动<select id="activity-select"></select></label></header>
+            <div id="activity-task-list" class="runtime-task-list"></div>
+            <section id="execution-panel" class="execution-panel" hidden><div class="form-heading"><h3>执行记录</h3><button id="close-executions" class="secondary-button" type="button">收起</button></div><div id="execution-list" class="record-list"></div></section>
+        </section>
+    </section>
+</main>
+
+<template id="task-binding-template">
+    <article class="task-binding">
+        <header><strong class="binding-order">1</strong><button class="remove-task-binding" type="button" title="移除任务" aria-label="移除任务">×</button></header>
+        <div class="task-binding-grid">
+            <label>任务模板<select class="binding-template"></select></label><label>任务编码<input class="binding-code" required placeholder="warmup_notice" pattern="[a-z][a-z0-9_]{0,63}"></label><label>任务名称<input class="binding-name" required placeholder="活动预热通知"></label><label>触发方式<select class="binding-trigger-type"><option value="MANUAL">仅手动触发</option><option value="FIXED_TIMES">多个指定时间</option><option value="CRON">Cron 表达式</option><option value="ACTIVITY_START_OFFSET">相对开始时间</option><option value="ACTIVITY_END_OFFSET">相对结束时间</option><option value="INTERVAL_WINDOW">活动期间固定间隔</option></select></label>
+        </div>
+        <div class="trigger-config"></div>
+        <label>参数覆盖 JSON<textarea class="binding-parameters" rows="2" spellcheck="false">{}</textarea></label>
+        <label class="check-field"><input class="binding-enabled" type="checkbox" checked>启用此任务</label>
+    </article>
+</template>
+
+<dialog id="personal-settings-dialog" class="personal-settings-dialog" aria-labelledby="personal-settings-dialog-title">
+    <form method="dialog" class="personal-settings-content"><header class="personal-settings-header"><div><p class="eyebrow">Personal settings</p><h3 id="personal-settings-dialog-title">个人设置</h3></div><button class="dialog-close-button" type="submit" value="close" aria-label="关闭个人设置" title="关闭">×</button></header><section class="theme-settings" aria-labelledby="theme-settings-title"><div><h4 id="theme-settings-title">主题色</h4><p>选择后将保存在当前浏览器。</p></div><div class="theme-options" role="group" aria-label="选择主题色"><button class="theme-option" type="button" data-theme="emerald">青绿</button><button class="theme-option" type="button" data-theme="green">绿色</button><button class="theme-option" type="button" data-theme="orange">橙色</button><button class="theme-option" type="button" data-theme="red">红色</button><button class="theme-option" type="button" data-theme="ocean">深海</button><button class="theme-option" type="button" data-theme="violet">紫罗兰</button></div></section></form>
+</dialog>
+<dialog id="task-confirm-dialog" class="confirm-dialog task-confirm-dialog" aria-labelledby="task-confirm-dialog-title">
+    <form method="dialog" class="confirm-dialog-content"><header class="confirm-dialog-header"><span id="task-confirm-dialog-icon" class="confirm-dialog-icon" aria-hidden="true">✓</span><div><p id="task-confirm-dialog-eyebrow" class="eyebrow">操作确认</p><h3 id="task-confirm-dialog-title">确认操作</h3></div></header><p id="task-confirm-dialog-message" class="confirm-dialog-message"></p><div id="task-confirm-dialog-preview" class="confirm-dialog-preview"></div><footer class="confirm-dialog-actions"><button class="secondary-button" type="submit" value="cancel">取消</button><button id="task-confirm-dialog-confirm" class="primary-button" type="submit" value="confirm">确认操作</button></footer></form>
+</dialog>
+<dialog id="task-manual-trigger-dialog" class="confirm-dialog task-manual-trigger-dialog" aria-labelledby="task-manual-trigger-dialog-title">
+    <form id="task-manual-trigger-form" class="confirm-dialog-content" novalidate><header class="confirm-dialog-header"><span class="confirm-dialog-icon" aria-hidden="true">!</span><div><p class="eyebrow">手动执行</p><h3 id="task-manual-trigger-dialog-title">手动触发任务</h3></div></header><p class="confirm-dialog-message">手动触发会立即创建一条执行记录，不会改变该任务的后续自动调度时间。</p><label>执行说明（可选）<textarea id="task-manual-trigger-reason" rows="3" maxlength="500" placeholder="例如：验证任务处理结果或补发指定批次"></textarea></label><footer class="confirm-dialog-actions"><button id="cancel-task-manual-trigger" class="secondary-button" type="button">取消</button><button class="primary-button" type="submit">进入确认</button></footer></form>
+</dialog>
+</body>
+</html>

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="_csrf" th:content="${_csrf.token}">
     <meta name="_csrf_header" th:content="${_csrf.headerName}">
-    <title>活动配置 | Infra Activity</title>
+    <title th:text="${pageTitle + ' | Infra Activity'}">活动配置 | Infra Activity</title>
     <link rel="stylesheet" th:href="@{/activity/config.css}" href="/activity/config.css">
     <script defer th:src="@{/activity/config.js}" src="/activity/config.js"></script>
 </head>
@@ -32,8 +32,8 @@
 <main class="config-shell">
     <aside class="navigation" aria-label="活动配置导航">
         <p class="eyebrow">Activity studio</p>
-        <h1>活动配置</h1>
-        <p class="navigation-copy">从组件定义到模板编排，再按模板创建具体活动。</p>
+        <h1 th:text="${pageTitle}">活动配置</h1>
+        <p class="navigation-copy" th:text="${pageDescription}">从组件定义到模板编排，再按模板创建具体活动。</p>
         <nav class="navigation-menu" aria-label="配置菜单">
             <section class="navigation-menu-group" aria-labelledby="activity-menu-title">
                 <p id="activity-menu-title" class="navigation-menu-title">活动配置</p>
@@ -41,6 +41,9 @@
                     <a class="tab-button" th:classappend="${activeSection == 'components'} ? ' is-active'" th:href="@{/activity/component}" href="/activity/component">模板组件配置</a>
                     <a class="tab-button" th:classappend="${activeSection == 'templates'} ? ' is-active'" th:href="@{/activity/template}" href="/activity/template">活动模板配置</a>
                     <a class="tab-button" th:classappend="${activeSection == 'activities'} ? ' is-active'" th:href="@{/activity/config}" href="/activity/config">活动配置</a>
+                    <a class="tab-button" th:href="@{/activity/task/definition}" href="/activity/task/definition">任务定义</a>
+                    <a class="tab-button" th:href="@{/activity/task/binding}" href="/activity/task/binding">模板任务绑定</a>
+                    <a class="tab-button" th:href="@{/activity/task/instance}" href="/activity/task/instance">任务实例</a>
                 </div>
             </section>
             <section class="navigation-menu-group" aria-labelledby="reward-menu-title">
