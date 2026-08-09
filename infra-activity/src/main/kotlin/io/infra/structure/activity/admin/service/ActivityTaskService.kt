@@ -16,6 +16,7 @@ import io.infra.structure.activity.admin.dto.ActivityTaskTemplateResponse
 import io.infra.structure.activity.admin.dto.ActivityTemplateTaskBindingRequest
 import io.infra.structure.activity.admin.dto.ActivityTemplateTaskBindingResponse
 import io.infra.structure.activity.admin.dto.CreateActivityTaskTemplateRequest
+import io.infra.structure.activity.persistence.dao.ActivityTaskSchedulingDao
 import io.infra.structure.activity.persistence.entity.ActivityEntity
 import io.infra.structure.activity.persistence.entity.ActivityTaskDefinitionEntity
 import io.infra.structure.activity.persistence.entity.ActivityTaskExecutionLogEntity
@@ -35,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import java.net.InetAddress
 import java.util.Locale
 import java.util.UUID
 
@@ -45,6 +47,7 @@ class ActivityTaskService(
     private val templateTaskBindingMapper: ActivityTemplateTaskBindingMapper,
     private val taskInstanceMapper: ActivityTaskInstanceMapper,
     private val executionLogMapper: ActivityTaskExecutionLogMapper,
+    private val taskSchedulingDao: ActivityTaskSchedulingDao,
     private val activityMapper: ActivityMapper,
     private val activityTemplateMapper: ActivityTemplateMapper,
     private val objectMapper: ObjectMapper,
@@ -53,6 +56,47 @@ class ActivityTaskService(
 
     /** 当前应用实例的分布式任务租约标识。 */
     private val instanceId: String = "activity-${UUID.randomUUID()}"
+    /** 当前调度节点的 IP 地址，无法解析时记录为 unknown。 */
+    private val nodeIp: String = runCatching { InetAddress.getLocalHost().hostAddress }.getOrDefault("unknown")
+
+    /** 刷新当前应用实例的心跳，供其他实例判断过期租约的原持有者是否仍存活。 */
+    fun heartbeatSchedulerInstance() {
+        taskSchedulingDao.heartbeat(instanceId, nodeIp, System.currentTimeMillis())
+    }
+
+    /**
+     * 回收租约已过期且原实例心跳已失效的任务。
+     * 原实例仍存活时跳过本轮扫描，避免长耗时任务被重复执行。
+     */
+    @Transactional
+    open fun recoverOrphanedRunningTasks() {
+        val now = System.currentTimeMillis()
+        taskSchedulingDao.findExpiredRunningTasks(now).forEach { task ->
+            val leaseOwner = task.leaseOwner ?: return@forEach
+            if (taskSchedulingDao.isInstanceAlive(leaseOwner, now - INSTANCE_HEARTBEAT_TIMEOUT_MILLIS)) {
+                return@forEach
+            }
+            val nextRetryCount = task.retryCount + 1
+            val retryable = nextRetryCount <= task.maxRetryCount
+            val status = if (retryable) ActivityTaskStatus.PENDING else ActivityTaskStatus.FAILED
+            if (
+                taskSchedulingDao.recoverExpiredClaim(
+                    task = task,
+                    owner = leaseOwner,
+                    status = status,
+                    nextTriggerTime = if (retryable) now else null,
+                    retryCount = nextRetryCount,
+                    now = now
+                )
+            ) {
+                taskSchedulingDao.failRunningExecutionsByTask(
+                    taskId = requireNotNull(task.id),
+                    errorMessage = "租约实例心跳已失效，任务已由其他实例接管",
+                    endTime = now
+                )
+            }
+        }
+    }
 
     /** 使用与实际调度一致的 Spring Cron 解析器预览未来五次触发时间。 */
     fun previewCronNextTimes(cronValue: String?, timezone: String?): ActivityTaskCronPreviewResponse {
@@ -273,12 +317,10 @@ class ActivityTaskService(
     /** 扫描并抢占到期任务；条件更新保证多实例中仅一个实例获得租约。 */
     fun executeDueTasks() {
         val now = System.currentTimeMillis()
-        val dueTasks = taskInstanceMapper.selectListByQuery(
-            QueryWrapper.create().eq("status", ActivityTaskStatus.PENDING.name).le("next_trigger_time", now).orderBy("next_trigger_time")
-        ).orEmpty()
+        val dueTasks = taskSchedulingDao.findDueTasks(now)
         dueTasks.forEach { candidate ->
             val taskId = candidate.id ?: return@forEach
-            if (taskInstanceMapper.claimDueTask(taskId, instanceId, now + LEASE_MILLIS, now) == 1) {
+            if (taskSchedulingDao.claimDueTask(taskId, instanceId, now + LEASE_MILLIS, now)) {
                 val task = requiredActivityTask(taskId)
                 executeTask(
                     task = task,
@@ -286,7 +328,8 @@ class ActivityTaskService(
                     triggerTime = requireNotNull(task.nextTriggerTime) { "到期任务缺少触发时间" },
                     executionKey = "${task.id}:${task.nextTriggerTime}",
                     reason = null,
-                    updateSchedule = true
+                    updateSchedule = true,
+                    leaseOwner = instanceId
                 )
             }
         }
@@ -299,7 +342,8 @@ class ActivityTaskService(
         triggerTime: Long,
         executionKey: String,
         reason: String?,
-        updateSchedule: Boolean
+        updateSchedule: Boolean,
+        leaseOwner: String? = null
     ): ActivityTaskExecutionResponse {
         val now = System.currentTimeMillis()
         val execution = ActivityTaskExecutionLogEntity(
@@ -332,63 +376,68 @@ class ActivityTaskService(
                     activityTaskId = requireNotNull(task.id),
                     handlerType = handlerType,
                     parameters = readMap(task.parametersJson),
-                    triggerTime = triggerTime
+                    triggerTime = triggerTime,
+                    executionKey = executionKey
                 )
             )
             val endTime = System.currentTimeMillis()
             execution.status = ActivityTaskExecutionStatus.SUCCESS.name
-            execution.resultJson = objectMapper.writeValueAsString(result)
+            val resultJson = objectMapper.writeValueAsString(result)
+            execution.resultJson = resultJson
             execution.endTime = endTime
             execution.updateTime = endTime
-            executionLogMapper.update(execution)
-            if (updateSchedule) {
-                completeScheduledTask(task, triggerTime, endTime)
+            if (
+                taskSchedulingDao.completeRunningExecution(requireNotNull(execution.id), resultJson, endTime)
+                && updateSchedule
+            ) {
+                completeScheduledTask(task, triggerTime, endTime, requireNotNull(leaseOwner))
             }
         } catch (exception: Exception) {
             val endTime = System.currentTimeMillis()
             execution.status = ActivityTaskExecutionStatus.FAILED.name
-            execution.errorMessage = exception.message?.take(1024) ?: exception.javaClass.simpleName
+            val errorMessage = exception.message?.take(1024) ?: exception.javaClass.simpleName
+            execution.errorMessage = errorMessage
             execution.endTime = endTime
             execution.updateTime = endTime
-            executionLogMapper.update(execution)
-            if (updateSchedule) {
-                retryOrFailScheduledTask(task, endTime)
+            if (
+                taskSchedulingDao.failRunningExecution(requireNotNull(execution.id), errorMessage, endTime)
+                && updateSchedule
+            ) {
+                retryOrFailScheduledTask(task, endTime, requireNotNull(leaseOwner))
             }
         }
         return executionResponse(execution)
     }
 
     /** 成功后计算下一次执行时间，或标记任务完成。 */
-    private fun completeScheduledTask(task: ActivityTaskInstanceEntity, triggerTime: Long, now: Long) {
+    private fun completeScheduledTask(task: ActivityTaskInstanceEntity, triggerTime: Long, now: Long, leaseOwner: String) {
         val activity = requiredActivity(task.activityId)
         val triggerType = ActivityTaskTriggerType.valueOf(task.triggerType)
         val triggerConfig = objectMapper.readValue(task.triggerConfigJson, ActivityTaskTriggerConfig::class.java)
         val nextTime = nextTriggerTime(activity, triggerType, triggerConfig, triggerTime + 1)
-        task.lastTriggerTime = triggerTime
-        task.nextTriggerTime = nextTime
-        task.retryCount = 0
-        task.status = if (nextTime == null) ActivityTaskStatus.COMPLETED.name else ActivityTaskStatus.PENDING.name
-        task.leaseOwner = null
-        task.leaseExpireTime = null
-        task.updateTime = now
-        taskInstanceMapper.update(task)
+        taskSchedulingDao.completeClaimedTask(
+            taskId = requireNotNull(task.id),
+            owner = leaseOwner,
+            status = if (nextTime == null) ActivityTaskStatus.COMPLETED else ActivityTaskStatus.PENDING,
+            nextTriggerTime = nextTime,
+            triggerTime = triggerTime,
+            now = now
+        )
     }
 
     /** 失败后按任务快照决定重试或最终失败。 */
-    private fun retryOrFailScheduledTask(task: ActivityTaskInstanceEntity, now: Long) {
-        task.retryCount += 1
-        task.lastTriggerTime = task.nextTriggerTime
-        task.leaseOwner = null
-        task.leaseExpireTime = null
-        if (task.retryCount <= task.maxRetryCount) {
-            task.status = ActivityTaskStatus.PENDING.name
-            task.nextTriggerTime = now + task.retryIntervalMillis
-        } else {
-            task.status = ActivityTaskStatus.FAILED.name
-            task.nextTriggerTime = null
-        }
-        task.updateTime = now
-        taskInstanceMapper.update(task)
+    private fun retryOrFailScheduledTask(task: ActivityTaskInstanceEntity, now: Long, leaseOwner: String) {
+        val retryCount = task.retryCount + 1
+        val retryable = retryCount <= task.maxRetryCount
+        taskSchedulingDao.failClaimedTask(
+            taskId = requireNotNull(task.id),
+            owner = leaseOwner,
+            status = if (retryable) ActivityTaskStatus.PENDING else ActivityTaskStatus.FAILED,
+            nextTriggerTime = if (retryable) now + task.retryIntervalMillis else null,
+            triggerTime = requireNotNull(task.nextTriggerTime),
+            retryCount = retryCount,
+            now = now
+        )
     }
 
     /** 按触发配置计算不早于 afterTime 的下一次执行时间。 */
@@ -568,6 +617,9 @@ class ActivityTaskService(
     private companion object {
         /** 分布式任务租约时长，单位为毫秒。 */
         const val LEASE_MILLIS = 60_000L
+
+        /** 调度应用实例心跳有效期，单位为毫秒。 */
+        const val INSTANCE_HEARTBEAT_TIMEOUT_MILLIS = 15_000L
 
         /** 可复用编码格式。 */
         val CODE_PATTERN = Regex("[a-z][a-z0-9_]{0,63}")

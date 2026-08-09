@@ -1,6 +1,5 @@
 package io.infra.structure.activity.persistence.entity
 
-import com.mybatisflex.annotation.Column
 import com.mybatisflex.annotation.Id
 import com.mybatisflex.annotation.KeyType
 import com.mybatisflex.annotation.Table
@@ -18,14 +17,11 @@ data class ActivityComponentEntity(
     /** 组件用途说明。 */
     var description: String? = null,
     /** 递归字段定义的 JSON 文本。 */
-    @Column("definition_json")
     var definitionJson: String = "{}",
     /** 是否允许被新模板继续引用。 */
     var enabled: Boolean = true,
     /** 创建时间戳，单位为毫秒。 */
-    @Column("create_time")
     var createTime: Long? = null,
     /** 最后更新时间戳，单位为毫秒。 */
-    @Column("update_time")
     var updateTime: Long? = null
 )

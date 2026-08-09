@@ -19,6 +19,7 @@ class DefaultActivityTaskHandler : ActivityTaskHandler {
         "activity_id" to context.activityId,
         "activity_task_id" to context.activityTaskId,
         "trigger_time" to context.triggerTime,
+        "execution_key" to context.executionKey,
         "accepted" to true
     )
 }

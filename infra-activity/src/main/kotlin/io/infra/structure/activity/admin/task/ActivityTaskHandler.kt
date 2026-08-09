@@ -13,7 +13,9 @@ data class ActivityTaskExecutionContext(
     /** 本次合并后的执行参数。 */
     val parameters: Map<String, Any?>,
     /** 本次计划触发时间戳，单位为毫秒。 */
-    val triggerTime: Long
+    val triggerTime: Long,
+    /** 本次业务执行的稳定幂等键，处理器调用外部系统时应透传。 */
+    val executionKey: String
 )
 
 /** 可扩展的活动任务处理器。 */

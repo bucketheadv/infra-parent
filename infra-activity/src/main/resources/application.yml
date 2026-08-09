@@ -10,6 +10,11 @@ server:
         name: INFRA_ACTIVITY_SESSION
 
 spring:
+  task:
+    scheduling:
+      pool:
+        # 心跳和任务扫描使用独立调度线程，长耗时任务不会阻塞实例存活上报。
+        size: 2
   jackson:
     # 全局 Mapper 读取此配置，将接口字段序列化为 snake_case。
     property-naming-strategy: SNAKE_CASE
