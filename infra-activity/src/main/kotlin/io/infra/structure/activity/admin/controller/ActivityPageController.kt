@@ -1,4 +1,4 @@
-package io.infra.structure.activity.web
+package io.infra.structure.activity.admin.controller
 
 import org.springframework.security.core.Authentication
 import org.springframework.security.oauth2.core.oidc.user.OidcUser

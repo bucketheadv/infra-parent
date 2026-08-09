@@ -1,4 +1,4 @@
-package io.infra.structure.activity.domain.model
+package io.infra.structure.activity.admin.domain.model
 
 /**
  * 可复用活动组件的定义。

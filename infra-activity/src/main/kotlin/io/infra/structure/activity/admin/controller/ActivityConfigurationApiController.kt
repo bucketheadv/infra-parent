@@ -1,8 +1,22 @@
-package io.infra.structure.activity.web.configuration
+package io.infra.structure.activity.admin.controller
 
-import io.infra.structure.activity.service.ActivityConfigurationService
-import io.infra.structure.activity.service.PrizeCatalogGateway
-import io.infra.structure.activity.service.RewardConfigurationService
+import io.infra.structure.activity.admin.dto.ActivityComponentResponse
+import io.infra.structure.activity.admin.dto.ActivityFormResponse
+import io.infra.structure.activity.admin.dto.ActivityResponse
+import io.infra.structure.activity.admin.dto.ActivityTemplateResponse
+import io.infra.structure.activity.admin.dto.CreateActivityRequest
+import io.infra.structure.activity.admin.dto.CreateComponentRequest
+import io.infra.structure.activity.admin.dto.CreateRewardComponentRequest
+import io.infra.structure.activity.admin.dto.CreateRewardTemplateRequest
+import io.infra.structure.activity.admin.dto.CreateTemplateRequest
+import io.infra.structure.activity.admin.dto.PrizeLookupResponse
+import io.infra.structure.activity.admin.dto.RewardComponentResponse
+import io.infra.structure.activity.admin.dto.RewardTemplateResponse
+import io.infra.structure.activity.admin.dto.UpdateActivityDebugConfigurationRequest
+import io.infra.structure.activity.admin.dto.UpdateActivityOnlineStatusRequest
+import io.infra.structure.activity.admin.service.ActivityConfigurationService
+import io.infra.structure.activity.admin.service.PrizeCatalogGateway
+import io.infra.structure.activity.admin.service.RewardConfigurationService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping

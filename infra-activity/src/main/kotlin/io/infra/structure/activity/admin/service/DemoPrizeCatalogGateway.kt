@@ -1,6 +1,6 @@
-package io.infra.structure.activity.service
+package io.infra.structure.activity.admin.service
 
-import io.infra.structure.activity.web.configuration.PrizeLookupResponse
+import io.infra.structure.activity.admin.dto.PrizeLookupResponse
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.stereotype.Service
 

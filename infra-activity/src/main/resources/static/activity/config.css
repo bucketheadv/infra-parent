@@ -188,7 +188,13 @@ select:disabled { cursor: not-allowed; color: #7d8986; background: #edf2f0; }
 .template-binding-list { display: grid; gap: .45rem; }
 .template-binding { display: grid; grid-template-columns: auto minmax(0, 1.35fr) minmax(0, .8fr) minmax(0, 1fr) minmax(0, .85fr) auto; align-items: center; gap: .6rem; padding: .6rem; background: #f7faf9; }
 .reward-template-binding, .prize-template-binding { border-left: 3px solid var(--teal); }
-.prize-template-binding { grid-template-columns: auto minmax(0, 1.35fr) minmax(0, .8fr) minmax(0, 1fr) minmax(0, .85fr) minmax(0, .9fr) auto; border-left-color: var(--amber); background: #fffdf8; }
+.prize-template-binding { grid-template-columns: auto minmax(7.4rem, .8fr) minmax(0, 1fr) auto; align-items: center; gap: .75rem; padding: .75rem .85rem; border-left-color: var(--amber); background: #fffdf8; }
+.prize-template-binding .template-binding-order { color: var(--accent-deep); background: #f7eed8; }
+.prize-template-binding .fixed-binding-label { min-width: 0; color: var(--accent-deep); font-size: .8rem; font-weight: 800; white-space: nowrap; }
+.prize-binding-fields { display: grid; min-width: 0; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: .6rem .7rem; }
+.prize-binding-fields .template-binding-key, .prize-binding-fields .template-binding-title, .prize-binding-fields .template-binding-mode, .prize-binding-fields .template-binding-size { grid-column: auto; }
+.prize-binding-fields .template-binding-size { max-width: none; }
+.prize-template-binding .template-binding-actions { align-self: center; }
 .fixed-binding-label { color: var(--accent-deep); font-size: .78rem; font-weight: 780; }
 .template-binding > * { min-width: 0; }
 .template-binding-order { display: grid; width: 1.5rem; height: 1.5rem; place-items: center; border-radius: 50%; color: #166257; background: var(--teal-soft); font-size: .72rem; font-weight: 800; }
@@ -333,6 +339,10 @@ select[multiple]:focus option:checked {
     .template-binding-size { grid-column: 3; }
     .template-binding-actions { grid-column: 3; min-height: 2.7rem; }
     .reward-template-binding .template-binding-actions, .prize-template-binding .template-binding-actions { grid-column: 2 / -1; justify-content: flex-start; }
+    .prize-template-binding { grid-template-columns: auto minmax(6.5rem, .7fr) minmax(0, 1fr) auto; }
+    .prize-binding-fields { grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); }
+    .prize-template-binding .template-binding-order { grid-row: auto; align-self: center; }
+    .prize-template-binding .template-binding-actions { grid-column: auto; justify-content: flex-end; }
 }
 @media (max-width: 860px) {
     .config-shell { grid-template-columns: 1fr; width: min(100% - 2rem, 55rem); }
@@ -351,6 +361,9 @@ select[multiple]:focus option:checked {
     .field-grid, .activity-status-grid, .node-grid, .node-component-fields, .tab-list, .prize-field-grid { grid-template-columns: 1fr; }
     .template-binding { grid-template-columns: auto minmax(0, 1fr); }
     .template-binding-key, .template-binding-title, .template-binding-mode, .template-binding-size, .template-binding-actions { grid-column: 2; }
+    .prize-template-binding { grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; }
+    .prize-binding-fields { grid-template-columns: 1fr; }
+    .prize-template-binding .template-binding-actions { grid-column: auto; justify-content: flex-end; }
     .tab-button { text-align: left; }
     .node-grid { margin-top: .7rem; }
 }

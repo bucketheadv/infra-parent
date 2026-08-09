@@ -2,6 +2,20 @@
 
 活动业务模块，提供基于 SSO 的活动配置管理能力，并演示如何组合 OAuth2 Client 登录跳转与 `infra-sso` JWT 校验。
 
+## 包分层
+
+- `io.infra.structure.activity.admin`：管理后台能力，包含活动组件、奖励组件、模板和活动配置的 Controller、Service、DTO，以及后台工作台页面。现有管理接口地址保持不变，仍为 `/api/activity/**`。
+- `io.infra.structure.activity.frontend`：面向业务前端的活动构建能力。`BaseActivityDto`、`BaseActivityService` 与 `BaseActivityController` 都支持泛型；具体活动只暴露自身需要的类型化 DTO，不复用后台完整活动配置响应，也不将动态配置 `Map` 直接透传给前端。
+- `frontend.type.ActivityType`：每个枚举项的 `templateCode` 必须与后台活动模板编码完全一致，并声明对应的表单数据类。新增枚举项时，必须同时新增对应的 DTO、表单数据类、Service、Controller，并分别继承三个基类。
+
+当前提供 `LUCKY_DRAW("lucky_draw")` 示例实现，前端读取地址为：
+
+```text
+GET /api/activity/luckydraw/{activityId}
+```
+
+该接口只会构建模板编码匹配、模板已启用、活动已启用且上线、处于有效期内的活动；调试模式下还会校验当前 SSO 用户是否在白名单中。
+
 ## 活动配置
 
 登录后可访问以下独立页面：`http://localhost:8081/activity/component`（模板组件配置）、`http://localhost:8081/activity/template`（活动模板配置）和 `http://localhost:8081/activity/config`（活动配置）。配置能力分为三个层级：

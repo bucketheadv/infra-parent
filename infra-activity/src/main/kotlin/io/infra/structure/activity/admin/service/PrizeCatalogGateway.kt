@@ -1,6 +1,6 @@
-package io.infra.structure.activity.service
+package io.infra.structure.activity.admin.service
 
-import io.infra.structure.activity.web.configuration.PrizeLookupResponse
+import io.infra.structure.activity.admin.dto.PrizeLookupResponse
 
 /** 奖品中心查询网关；业务系统可替换此 Bean 对接真实奖品接口。 */
 interface PrizeCatalogGateway {

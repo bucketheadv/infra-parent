@@ -747,10 +747,12 @@
             ? state.rewardComponentPrizeBindings.map((binding, index) => `<div class="template-binding prize-template-binding">
                 <span class="template-binding-order">${index + 1}</span>
                 <span class="fixed-binding-label">固定格式奖品</span>
-                <label class="template-binding-key">挂载键<input class="reward-component-prize-key" data-binding-index="${index}" value="${escapeHtml(binding.mountKey)}" required pattern="[a-z][a-z0-9_]{0,63}" placeholder="main_prize"></label>
-                <label class="template-binding-title">挂载标题<input class="reward-component-prize-title" data-binding-index="${index}" value="${escapeHtml(binding.mountTitle)}" required maxlength="128" placeholder="主奖品"></label>
-                <label class="template-binding-mode">挂载形式<select class="reward-component-prize-mode" data-binding-index="${index}"><option value="SINGLE" ${binding.mountMode === "SINGLE" ? "selected" : ""}>单个奖品</option><option value="ARRAY" ${binding.mountMode === "ARRAY" ? "selected" : ""}>奖品数组</option></select></label>
-                ${binding.mountMode === "ARRAY" ? `<label class="template-binding-size">固定数量（可选）<input class="reward-component-prize-array-size" data-binding-index="${index}" type="number" min="1" max="1000" step="1" value="${binding.arraySize ?? ""}" placeholder="不填可自由增删"></label>` : ""}
+                <div class="prize-binding-fields">
+                    <label class="template-binding-key">挂载键<input class="reward-component-prize-key" data-binding-index="${index}" value="${escapeHtml(binding.mountKey)}" required pattern="[a-z][a-z0-9_]{0,63}" placeholder="main_prize"></label>
+                    <label class="template-binding-title">挂载标题<input class="reward-component-prize-title" data-binding-index="${index}" value="${escapeHtml(binding.mountTitle)}" required maxlength="128" placeholder="主奖品"></label>
+                    <label class="template-binding-mode">挂载形式<select class="reward-component-prize-mode" data-binding-index="${index}"><option value="SINGLE" ${binding.mountMode === "SINGLE" ? "selected" : ""}>单个奖品</option><option value="ARRAY" ${binding.mountMode === "ARRAY" ? "selected" : ""}>奖品数组</option></select></label>
+                    ${binding.mountMode === "ARRAY" ? `<label class="template-binding-size">固定数量（可选）<input class="reward-component-prize-array-size" data-binding-index="${index}" type="number" min="1" max="1000" step="1" value="${binding.arraySize ?? ""}" placeholder="不填可自由增删"></label>` : ""}
+                </div>
                 <span class="template-binding-actions"><label><input class="reward-component-prize-required" type="checkbox" data-binding-index="${index}" ${binding.required ? "checked" : ""}>必填</label><button class="remove-reward-component-prize-binding" type="button" data-binding-index="${index}" title="移除奖品组件" aria-label="移除奖品组件">&#215;</button></span>
             </div>`).join("")
             : '<p class="empty-state">添加奖品组件后，活动配置会自动生成固定奖品字段。</p>';

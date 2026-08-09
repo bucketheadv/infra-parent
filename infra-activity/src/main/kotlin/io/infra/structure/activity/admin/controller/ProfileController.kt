@@ -1,7 +1,7 @@
-package io.infra.structure.activity.web
+package io.infra.structure.activity.admin.controller
 
+import io.infra.structure.activity.admin.dto.ProfileResponse
 import io.infra.structure.sso.core.SsoContext
-import io.infra.structure.activity.web.model.ProfileResponse
 import org.springframework.security.core.Authentication
 import org.springframework.security.oauth2.core.oidc.user.OidcUser
 import org.springframework.web.bind.annotation.GetMapping

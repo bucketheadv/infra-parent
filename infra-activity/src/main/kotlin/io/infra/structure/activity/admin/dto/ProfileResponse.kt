@@ -1,4 +1,4 @@
-package io.infra.structure.activity.web.model
+package io.infra.structure.activity.admin.dto
 
 /**
  * 当前用户资料接口的响应模型。

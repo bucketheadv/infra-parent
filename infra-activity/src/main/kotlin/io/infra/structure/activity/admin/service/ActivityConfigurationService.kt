@@ -1,12 +1,24 @@
-package io.infra.structure.activity.service
+package io.infra.structure.activity.admin.service
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.mybatisflex.core.query.QueryWrapper
-import io.infra.structure.activity.domain.model.ComponentDefinition
-import io.infra.structure.activity.domain.model.ComponentNode
-import io.infra.structure.activity.domain.model.ComponentNodeType
-import io.infra.structure.activity.domain.model.ComponentReferenceMode
+import io.infra.structure.activity.admin.domain.model.ComponentDefinition
+import io.infra.structure.activity.admin.domain.model.ComponentNode
+import io.infra.structure.activity.admin.domain.model.ComponentNodeType
+import io.infra.structure.activity.admin.domain.model.ComponentReferenceMode
+import io.infra.structure.activity.admin.dto.ActivityComponentResponse
+import io.infra.structure.activity.admin.dto.ActivityFormField
+import io.infra.structure.activity.admin.dto.ActivityFormResponse
+import io.infra.structure.activity.admin.dto.ActivityResponse
+import io.infra.structure.activity.admin.dto.ActivityTemplateResponse
+import io.infra.structure.activity.admin.dto.CreateActivityRequest
+import io.infra.structure.activity.admin.dto.CreateComponentRequest
+import io.infra.structure.activity.admin.dto.CreateTemplateRequest
+import io.infra.structure.activity.admin.dto.FrontendActivityResponse
+import io.infra.structure.activity.admin.dto.TemplateComponentResponse
+import io.infra.structure.activity.admin.dto.TemplateRewardTemplateResponse
+import io.infra.structure.activity.admin.dto.UpdateActivityDebugConfigurationRequest
 import io.infra.structure.activity.persistence.entity.ActivityComponentEntity
 import io.infra.structure.activity.persistence.entity.ActivityEntity
 import io.infra.structure.activity.persistence.entity.ActivityTemplateComponentEntity
@@ -17,17 +29,6 @@ import io.infra.structure.activity.persistence.mapper.ActivityMapper
 import io.infra.structure.activity.persistence.mapper.ActivityTemplateComponentMapper
 import io.infra.structure.activity.persistence.mapper.ActivityTemplateMapper
 import io.infra.structure.activity.persistence.mapper.ActivityTemplateRewardTemplateMapper
-import io.infra.structure.activity.web.configuration.ActivityComponentResponse
-import io.infra.structure.activity.web.configuration.ActivityFormField
-import io.infra.structure.activity.web.configuration.ActivityFormResponse
-import io.infra.structure.activity.web.configuration.ActivityResponse
-import io.infra.structure.activity.web.configuration.ActivityTemplateResponse
-import io.infra.structure.activity.web.configuration.CreateActivityRequest
-import io.infra.structure.activity.web.configuration.CreateComponentRequest
-import io.infra.structure.activity.web.configuration.CreateTemplateRequest
-import io.infra.structure.activity.web.configuration.TemplateComponentResponse
-import io.infra.structure.activity.web.configuration.TemplateRewardTemplateResponse
-import io.infra.structure.activity.web.configuration.UpdateActivityDebugConfigurationRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
@@ -271,6 +272,32 @@ class ActivityConfigurationService(
         .orEmpty()
         .map(::activityResponse)
 
+    /**
+     * 读取可面向前端构建的活动配置。
+     *
+     * 该方法统一校验模板类型、模板启用状态、活动状态、上下线状态、有效期与调试白名单，
+     * 避免前端活动类型实现分别遗漏可见性判断。
+     */
+    fun getActivityForFrontend(activityId: Long, templateCode: String, userId: Long): FrontendActivityResponse {
+        val activity = requiredActivity(activityId)
+        val template = requiredTemplate(activity.templateId)
+        require(template.code == templateCode) { "活动类型与活动模板不匹配" }
+        require(template.enabled) { "活动模板已停用" }
+        require(activity.status == "ACTIVE" && activity.onlineStatus == "ONLINE") { "活动当前不可访问" }
+
+        val debugUserIds = objectMapper.readValue(activity.debugUserIdsJson, USER_ID_LIST_TYPE)
+        if (activity.debugMode) {
+            require(userId in debugUserIds) { "当前用户不在活动调试白名单中" }
+        }
+        val effectiveTime = if (activity.debugMode) activity.debugForceTime ?: System.currentTimeMillis() else System.currentTimeMillis()
+        if (!activity.validForever) {
+            val validStartTime = requireNotNull(activity.validStartTime) { "活动开始时间不能为空" }
+            val validEndTime = requireNotNull(activity.validEndTime) { "活动结束时间不能为空" }
+            require(effectiveTime in validStartTime until validEndTime) { "活动不在有效期内" }
+        }
+        return frontendActivityResponse(activity, debugUserIds)
+    }
+
     /** 根据模板动态表单校验并保存活动配置。 */
     @Transactional
     fun createActivity(request: CreateActivityRequest): ActivityResponse {
@@ -453,6 +480,24 @@ class ActivityConfigurationService(
         debugUserIds = objectMapper.readValue(entity.debugUserIdsJson, USER_ID_LIST_TYPE),
         debugForceTime = entity.debugForceTime,
         values = objectMapper.readValue(entity.formDataJson, MAP_TYPE)
+    )
+
+    /** 将通过前端可见性校验的活动实体转换为内部传输模型。 */
+    private fun frontendActivityResponse(entity: ActivityEntity, debugUserIds: List<Long>): FrontendActivityResponse = FrontendActivityResponse(
+        id = requireNotNull(entity.id) { "活动主键不能为空" },
+        name = entity.name,
+        templateId = entity.templateId,
+        status = entity.status,
+        onlineStatus = entity.onlineStatus,
+        validForever = entity.validForever,
+        validStartTime = entity.validStartTime,
+        validEndTime = entity.validEndTime,
+        debugMode = entity.debugMode,
+        debugUserIds = debugUserIds,
+        debugForceTime = entity.debugForceTime,
+        formDataJson = entity.formDataJson,
+        createTime = requireNotNull(entity.createTime) { "活动创建时间不能为空" },
+        updateTime = requireNotNull(entity.updateTime) { "活动更新时间不能为空" }
     )
 
     /** 递归展平组件节点，使前端可按统一表单控件进行渲染。 */

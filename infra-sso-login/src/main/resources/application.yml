@@ -2,7 +2,10 @@ server:
   port: 9000
   servlet:
     session:
+      # 登录中心的服务端会话和浏览器 Cookie 均保留 3 天。
+      timeout: 3d
       cookie:
+        max-age: 3d
         # 仅在同一主机名（如 localhost）部署多个应用时需要；Cookie 不按端口隔离。
         name: INFRA_SSO_LOGIN_SESSION
 

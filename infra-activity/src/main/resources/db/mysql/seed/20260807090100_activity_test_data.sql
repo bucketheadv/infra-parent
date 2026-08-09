@@ -19,8 +19,8 @@ ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description), 
 
 INSERT INTO activity_template (code, name, description, definition_json, enabled, create_time, update_time)
 VALUES (
-    'basic_campaign',
-    '基础活动模板',
+    'lucky_draw',
+    '抽奖活动模板',
     '引用基础信息组件的演示模板',
     JSON_OBJECT('nodes', JSON_ARRAY()),
     1,
@@ -33,5 +33,5 @@ INSERT INTO activity_template_component (template_id, component_id, mount_key, m
 SELECT template.id, component.id, 'basic_info', '基础信息', 'SINGLE', 1, 0
 FROM activity_template template
 JOIN activity_component component ON component.code = 'basic_info'
-WHERE template.code = 'basic_campaign'
+WHERE template.code = 'lucky_draw'
 ON DUPLICATE KEY UPDATE mount_key = VALUES(mount_key), mount_title = VALUES(mount_title), mount_mode = VALUES(mount_mode), sort_no = VALUES(sort_no), required = VALUES(required);

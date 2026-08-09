@@ -1,9 +1,9 @@
-package io.infra.structure.activity.web.configuration
+package io.infra.structure.activity.admin.dto
 
-import io.infra.structure.activity.domain.model.ComponentDefinition
-import io.infra.structure.activity.domain.model.ComponentNodeType
-import io.infra.structure.activity.domain.model.ComponentOption
-import io.infra.structure.activity.domain.model.ComponentReferenceMode
+import io.infra.structure.activity.admin.domain.model.ComponentDefinition
+import io.infra.structure.activity.admin.domain.model.ComponentNodeType
+import io.infra.structure.activity.admin.domain.model.ComponentOption
+import io.infra.structure.activity.admin.domain.model.ComponentReferenceMode
 
 /** 新建活动组件的请求。 */
 data class CreateComponentRequest(
@@ -377,4 +377,36 @@ data class ActivityResponse(
     val debugForceTime: Long?,
     /** 已保存的层级化动态表单值。 */
     val values: Map<String, Any?>
+)
+
+/** 已通过前端可见性校验的活动配置传输模型。 */
+data class FrontendActivityResponse(
+    /** 活动主键。 */
+    val id: Long,
+    /** 活动展示名称。 */
+    val name: String,
+    /** 模板主键。 */
+    val templateId: Long,
+    /** 活动状态。 */
+    val status: String,
+    /** 上下线状态。 */
+    val onlineStatus: String,
+    /** 是否永久有效。 */
+    val validForever: Boolean,
+    /** 非永久活动的开始时间戳，单位为毫秒。 */
+    val validStartTime: Long?,
+    /** 非永久活动的结束时间戳，单位为毫秒。 */
+    val validEndTime: Long?,
+    /** 是否启用仅面向白名单用户的调试模式。 */
+    val debugMode: Boolean,
+    /** 调试模式白名单中的用户主键。 */
+    val debugUserIds: List<Long>,
+    /** 调试模式强制使用的时间戳，单位为毫秒。 */
+    val debugForceTime: Long?,
+    /** 活动表单配置原始 JSON，由前端活动服务解析为具体数据类型。 */
+    val formDataJson: String,
+    /** 创建时间戳，单位为毫秒。 */
+    val createTime: Long,
+    /** 最后更新时间戳，单位为毫秒。 */
+    val updateTime: Long
 )

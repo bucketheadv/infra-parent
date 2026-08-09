@@ -1,4 +1,4 @@
-package io.infra.structure.activity.web.configuration
+package io.infra.structure.activity.admin.controller
 
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
