@@ -388,6 +388,20 @@
         addNode(componentNodes);
     };
 
+    // 根据直接挂载开关隐藏普通输入节点；启用时清空节点，避免保存无效配置。
+    const syncRewardComponentDirectPrizeMount = (clearNodes = false) => {
+        const form = document.getElementById("reward-component-form");
+        const directPrizeMount = form.directPrizeMount.checked;
+        document.getElementById("reward-component-node-builder").hidden = directPrizeMount;
+        document.getElementById("reward-component-direct-prize-hint").hidden = !directPrizeMount;
+        if (directPrizeMount && clearNodes) {
+            rewardComponentNodes.replaceChildren();
+        }
+        if (!directPrizeMount && !rewardComponentNodes.children.length) {
+            addRewardNode(rewardComponentNodes);
+        }
+    };
+
     // 恢复新建奖励组件状态，并重建一项默认输入节点。
     const resetRewardComponentForm = () => {
         const form = document.getElementById("reward-component-form");
@@ -400,6 +414,7 @@
         document.getElementById("cancel-reward-component-edit").hidden = true;
         rewardComponentNodes.replaceChildren();
         addRewardNode(rewardComponentNodes);
+        syncRewardComponentDirectPrizeMount();
         renderRewardComponentPrizeBindings();
     };
 
@@ -439,8 +454,11 @@
         form.name.value = component.name;
         form.description.value = component.description || "";
         form.enabled.checked = component.enabled;
+        form.directPrizeMount.checked = component.directPrizeMount === true;
         rewardComponentNodes.replaceChildren();
-        component.definition.nodes.forEach((node) => populateRewardNode(rewardComponentNodes, node));
+        if (!form.directPrizeMount.checked) {
+            component.definition.nodes.forEach((node) => populateRewardNode(rewardComponentNodes, node));
+        }
         state.rewardComponentPrizeBindings = (component.prizes || []).map((prize) => ({
             prizeComponentId: prize.prizeComponentId || 1,
             mountKey: prize.mountKey,
@@ -452,6 +470,7 @@
         document.getElementById("reward-component-form-title").textContent = "编辑奖励组件";
         setEditorMode("rewardComponent", component.id);
         document.getElementById("cancel-reward-component-edit").hidden = false;
+        syncRewardComponentDirectPrizeMount();
         renderRewardComponentPrizeBindings();
         form.scrollIntoView({ behavior: "smooth", block: "start" });
     };
@@ -763,6 +782,8 @@
         document.getElementById("reward-template-component-binding-count").textContent = `${state.rewardTemplateComponentBindings.length} 项`;
         document.getElementById("reward-template-component-bindings").innerHTML = state.rewardTemplateComponentBindings.length
             ? state.rewardTemplateComponentBindings.map((binding, index) => {
+                const selectedComponent = state.rewardComponents.find((component) => component.id === binding.componentId);
+                const directPrizeMount = selectedComponent?.directPrizeMount === true;
                 const options = state.rewardComponents
                     .filter((component) => component.enabled || component.id === binding.componentId)
                     .map((component) => `<option value="${component.id}" ${component.id === binding.componentId ? "selected" : ""}>${escapeHtml(component.name)} (${escapeHtml(component.code)})</option>`)
@@ -772,7 +793,9 @@
                     <label class="template-binding-component">奖励组件<select class="reward-template-component-id" data-binding-index="${index}" required><option value="">请选择奖励组件</option>${options}</select></label>
                     <label class="template-binding-key">挂载键<input class="reward-template-component-key" data-binding-index="${index}" value="${escapeHtml(binding.mountKey)}" required pattern="[a-z][a-z0-9_]{0,63}" placeholder="delivery_limit"></label>
                     <label class="template-binding-title">挂载标题<input class="reward-template-component-title" data-binding-index="${index}" value="${escapeHtml(binding.mountTitle)}" required maxlength="128" placeholder="发放限制"></label>
-                    <label class="template-binding-mode">挂载形式<select class="reward-template-component-mode" data-binding-index="${index}"><option value="SINGLE" ${binding.mountMode === "SINGLE" ? "selected" : ""}>单个组件</option><option value="ARRAY" ${binding.mountMode === "ARRAY" ? "selected" : ""}>组件数组</option></select></label>
+                    ${directPrizeMount
+                        ? '<label class="template-binding-mode">挂载形式<input value="直接挂载奖品" disabled></label>'
+                        : `<label class="template-binding-mode">挂载形式<select class="reward-template-component-mode" data-binding-index="${index}"><option value="SINGLE" ${binding.mountMode === "SINGLE" ? "selected" : ""}>单个组件</option><option value="ARRAY" ${binding.mountMode === "ARRAY" ? "selected" : ""}>组件数组</option></select></label>`}
                     <span class="template-binding-actions"><label><input class="reward-template-component-required" type="checkbox" data-binding-index="${index}" ${binding.required ? "checked" : ""}>必填</label><button class="remove-reward-template-component-binding" type="button" data-binding-index="${index}" title="移除奖励组件" aria-label="移除奖励组件">&#215;</button></span>
                 </div>`;
             }).join("")
@@ -1349,6 +1372,9 @@
     document.getElementById("cancel-template-edit").addEventListener("click", resetTemplateForm);
     document.getElementById("cancel-reward-template-edit").addEventListener("click", resetRewardTemplateForm);
     document.getElementById("cancel-activity-edit").addEventListener("click", resetActivityForm);
+    document.getElementById("reward-component-direct-prize-mount").addEventListener("change", () => {
+        syncRewardComponentDirectPrizeMount(true);
+    });
     document.getElementById("activity-valid-forever").addEventListener("change", syncValidityFields);
     document.getElementById("activity-form").status.addEventListener("change", syncActivityOnlineStatus);
     document.getElementById("activity-debug-mode").addEventListener("change", syncDebugFields);
@@ -1611,10 +1637,15 @@
         }
         if (event.target.classList.contains("reward-template-component-id")) {
             binding.componentId = Number(event.target.value) || null;
+            if (state.rewardComponents.find((component) => component.id === binding.componentId)?.directPrizeMount) {
+                binding.mountMode = "SINGLE";
+            }
             if (!binding.mountTitle.trim() && binding.componentId) {
                 binding.mountTitle = state.rewardComponents.find((component) => component.id === binding.componentId)?.name || "";
                 event.target.closest(".template-binding").querySelector(".reward-template-component-title").value = binding.mountTitle;
             }
+            renderRewardTemplateBindings();
+            return;
         }
         if (event.target.classList.contains("reward-template-component-required")) {
             binding.required = event.target.checked;
@@ -1787,6 +1818,10 @@
             showNotice("请至少添加一个奖励输入节点、分组或奖品组件。", true);
             return;
         }
+        if (form.directPrizeMount.checked && !prizes.length) {
+            showNotice("直接挂载奖品时至少需要配置一个奖品组件。", true);
+            return;
+        }
         if (prizes.some((prize) => !prize.prizeComponentId)) {
             showNotice("请为每个奖品组件选择奖品类型。", true);
             return;
@@ -1811,7 +1846,7 @@
         const editingId = state.editingRewardComponentId;
         const payload = {
             code: form.code.value.trim(), name: form.name.value.trim(), description: form.description.value.trim() || null,
-            enabled: form.enabled.checked, definition, prizes
+            enabled: form.enabled.checked, directPrizeMount: form.directPrizeMount.checked, definition, prizes
         };
         const save = async () => {
             try {
@@ -2024,6 +2059,7 @@
     addNode(componentNodes);
     addRewardNode(rewardComponentNodes);
     addRewardNode(prizeComponentNodes);
+    syncRewardComponentDirectPrizeMount();
     renderRewardComponentPrizeBindings();
     restoreTheme();
     syncValidityFields();

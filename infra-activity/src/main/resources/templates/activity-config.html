@@ -82,7 +82,9 @@
                     <div class="field-grid"><label>组件编码<input name="code" required pattern="[a-z][a-z0-9_]{0,63}" placeholder="reward_limit"></label><label>组件名称<input name="name" required placeholder="发放限制"></label></div>
                     <label>组件说明<textarea name="description" rows="2" placeholder="说明该组件适用的奖励规则"></textarea></label>
                     <label class="check-field"><input name="enabled" type="checkbox" checked>允许新奖励模板引用此组件</label>
-                    <div class="node-builder"><div class="builder-heading"><h4>输入节点</h4><button class="icon-command" type="button" id="add-reward-root-node" title="添加根节点">+</button></div><div id="reward-component-nodes" class="node-list"></div></div>
+                    <label class="check-field"><input id="reward-component-direct-prize-mount" name="directPrizeMount" type="checkbox">将奖品直接挂载到奖励模板</label>
+                    <p id="reward-component-direct-prize-hint" class="binding-hint" hidden>直接挂载会跳过奖励组件层级，奖品字段直接位于奖励模板下，不能配置普通输入节点。</p>
+                    <div id="reward-component-node-builder" class="node-builder"><div class="builder-heading"><h4>输入节点</h4><button class="icon-command" type="button" id="add-reward-root-node" title="添加根节点">+</button></div><div id="reward-component-nodes" class="node-list"></div></div>
                     <section class="template-bindings prize-bindings" aria-label="奖励组件奖品编排"><div class="builder-heading"><h4>奖品组件</h4><div class="builder-actions"><span id="reward-component-prize-binding-count">0 项</span><button id="add-reward-component-prize-binding" class="icon-command" type="button" title="添加奖品组件" aria-label="添加奖品组件">+</button></div></div><p class="binding-hint">选择固定奖品或已配置的奖品扩展；所有类型都包含类型、ID、名称、图标、价值、展示价值和数量。</p><div id="reward-component-prize-bindings" class="template-binding-list"></div></section>
                     <button class="primary-button" type="submit">保存奖励组件</button>
                 </form>

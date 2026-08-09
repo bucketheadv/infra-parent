@@ -50,6 +50,8 @@ data class CreateRewardComponentRequest(
     val definition: ComponentDefinition,
     /** 奖励组件内挂载的奖品组件。 */
     val prizes: List<RewardComponentPrizeRequest> = emptyList(),
+    /** 是否将奖品直接挂载到奖励模板；启用后不能配置普通输入字段。 */
+    val directPrizeMount: Boolean = false,
     /** 是否允许奖励模板继续引用该组件。 */
     val enabled: Boolean = true
 )
@@ -206,6 +208,8 @@ data class RewardComponentResponse(
     val definition: ComponentDefinition,
     /** 奖品组件编排。 */
     val prizes: List<RewardComponentPrizeResponse>,
+    /** 是否将奖品直接挂载到奖励模板。 */
+    val directPrizeMount: Boolean,
     /** 是否可用。 */
     val enabled: Boolean
 )

@@ -63,6 +63,7 @@ class RewardConfigurationService(
             name = request.name.trim(),
             description = request.description?.trim()?.takeIf(String::isNotBlank),
             definitionJson = objectMapper.writeValueAsString(request.definition),
+            directPrizeMount = request.directPrizeMount,
             enabled = request.enabled,
             createTime = now,
             updateTime = now
@@ -86,6 +87,7 @@ class RewardConfigurationService(
         entity.name = request.name.trim()
         entity.description = request.description?.trim()?.takeIf(String::isNotBlank)
         entity.definitionJson = objectMapper.writeValueAsString(request.definition)
+        entity.directPrizeMount = request.directPrizeMount
         entity.enabled = request.enabled
         entity.updateTime = System.currentTimeMillis()
         require(rewardComponentMapper.update(entity) == 1) { "奖励组件更新失败" }
@@ -195,51 +197,41 @@ class RewardConfigurationService(
         return templateResponse(template)
     }
 
-    /** 将奖励模板展开为一个顶层动态字段，奖品组件跟随其所属奖励组件保留层级。 */
+    /** 将奖励模板展开为一个顶层动态字段；直接挂载奖品的奖励组件会移除中间组件层级。 */
     fun formField(
         template: RewardTemplateResponse,
         mountKey: String,
         mountTitle: String,
         required: Boolean
     ): ActivityFormField {
-        val componentFields = template.components.map { binding ->
+        val componentFields = template.components.flatMap { binding ->
             val componentKey = "$mountKey.${binding.mountKey}"
-            ActivityFormField(
-                key = componentKey,
-                label = binding.mountTitle,
-                type = ComponentNodeType.COMPONENT,
-                required = required || binding.required,
-                placeholder = null,
-                defaultValue = null,
-                options = emptyList(),
-                collection = binding.mountMode == ComponentReferenceMode.ARRAY,
-                children = flattenNodes(
-                    nodes = binding.component.definition.nodes,
-                    parentPath = componentKey,
-                    componentRequired = required || binding.required,
-                    depth = 2
-                ) + binding.component.prizes.map { prize ->
+            val componentRequired = required || binding.required
+            if (binding.component.directPrizeMount) {
+                binding.component.prizes.map { prize ->
+                    prizeFormField(prize, mountKey, componentRequired, 1)
+                }
+            } else {
+                listOf(
                     ActivityFormField(
-                        key = "$componentKey.${prize.mountKey}",
-                        label = prize.mountTitle,
-                        type = ComponentNodeType.PRIZE,
-                        required = required || binding.required || prize.required,
+                        key = componentKey,
+                        label = binding.mountTitle,
+                        type = ComponentNodeType.COMPONENT,
+                        required = componentRequired,
                         placeholder = null,
                         defaultValue = null,
                         options = emptyList(),
-                        collection = prize.mountMode == ComponentReferenceMode.ARRAY,
-                        collectionSize = prize.arraySize,
+                        collection = binding.mountMode == ComponentReferenceMode.ARRAY,
                         children = flattenNodes(
-                            nodes = prize.prizeComponent.definition.nodes,
-                            parentPath = "$componentKey.${prize.mountKey}",
-                            componentRequired = required || binding.required || prize.required,
-                            depth = 3
-                        ),
-                        depth = 2
+                            nodes = binding.component.definition.nodes,
+                            parentPath = componentKey,
+                            componentRequired = componentRequired,
+                            depth = 2
+                        ) + binding.component.prizes.map { prize -> prizeFormField(prize, componentKey, componentRequired, 2) },
+                        depth = 1
                     )
-                },
-                depth = 1
-            )
+                )
+            }
         }
         return ActivityFormField(
             key = mountKey,
@@ -251,6 +243,35 @@ class RewardConfigurationService(
             options = emptyList(),
             children = componentFields,
             depth = 0
+        )
+    }
+
+    /** 按直接父路径构建奖品动态字段，并展开所选奖品类型的扩展字段。 */
+    private fun prizeFormField(
+        prize: RewardComponentPrizeResponse,
+        parentPath: String,
+        componentRequired: Boolean,
+        depth: Int
+    ): ActivityFormField {
+        val prizeRequired = componentRequired || prize.required
+        val prizeKey = "$parentPath.${prize.mountKey}"
+        return ActivityFormField(
+            key = prizeKey,
+            label = prize.mountTitle,
+            type = ComponentNodeType.PRIZE,
+            required = prizeRequired,
+            placeholder = null,
+            defaultValue = null,
+            options = emptyList(),
+            collection = prize.mountMode == ComponentReferenceMode.ARRAY,
+            collectionSize = prize.arraySize,
+            children = flattenNodes(
+                nodes = prize.prizeComponent.definition.nodes,
+                parentPath = prizeKey,
+                componentRequired = prizeRequired,
+                depth = depth + 1
+            ),
+            depth = depth
         )
     }
 
@@ -286,13 +307,21 @@ class RewardConfigurationService(
         require(mountKeys.toSet().size == mountKeys.size) { "同一奖励模板中的挂载键不能重复" }
         val titles = request.components.map { it.mountTitle }
         require(titles.all { it.isNotBlank() && it.trim().length <= 128 }) { "挂载标题不能为空且不能超过 128 个字符" }
-        return request.components.map { binding ->
+        val components = request.components.map { binding ->
             requiredComponent(binding.componentId).also { component ->
                 require(component.enabled || binding.componentId in allowedDisabledComponentIds) {
                     "奖励组件 ${component.code} 已停用，不能用于奖励模板"
                 }
             }
         }
+        components.forEachIndexed { index, component ->
+            if (component.directPrizeMount) {
+                require(request.components[index].mountMode == ComponentReferenceMode.SINGLE) {
+                    "直接挂载奖品的奖励组件不能配置为数组"
+                }
+            }
+        }
+        return components
     }
 
     /** 校验奖励组件的普通输入项和奖品组件编排。 */
@@ -302,6 +331,10 @@ class RewardConfigurationService(
     ) {
         require(request.definition.nodes.isNotEmpty() || request.prizes.isNotEmpty()) {
             "奖励组件至少需要配置一个输入项、分组或奖品组件"
+        }
+        if (request.directPrizeMount) {
+            require(request.definition.nodes.isEmpty()) { "直接挂载奖品时不能配置普通输入节点" }
+            require(request.prizes.isNotEmpty()) { "直接挂载奖品时至少需要配置一个奖品组件" }
         }
         if (request.definition.nodes.isNotEmpty()) {
             validateNodes(request.definition.nodes)
@@ -405,6 +438,7 @@ class RewardConfigurationService(
             description = entity.description,
             definition = objectMapper.readValue(entity.definitionJson, ComponentDefinition::class.java),
             prizes = prizes.map { prize -> prizeResponse(prize, prizeComponents) },
+            directPrizeMount = entity.directPrizeMount,
             enabled = entity.enabled
         )
     }

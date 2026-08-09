@@ -51,6 +51,7 @@ CREATE TABLE reward_component (
     name VARCHAR(128) NOT NULL COMMENT '奖励组件展示名称',
     description VARCHAR(512) NULL COMMENT '奖励组件用途说明',
     definition_json JSON NOT NULL COMMENT '奖励组件输入字段定义 JSON',
+    direct_prize_mount TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否将奖品直接挂载到奖励模板，1是0否',
     enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否允许新奖励模板引用，1是0否',
     create_time BIGINT NOT NULL COMMENT '创建时间戳，单位毫秒',
     update_time BIGINT NOT NULL COMMENT '更新时间戳，单位毫秒',

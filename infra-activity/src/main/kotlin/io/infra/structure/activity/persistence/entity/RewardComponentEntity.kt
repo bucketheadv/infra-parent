@@ -20,6 +20,9 @@ data class RewardComponentEntity(
     /** 奖励组件输入字段定义 JSON。 */
     @Column("definition_json")
     var definitionJson: String = "{}",
+    /** 是否将奖品直接挂载到奖励模板，启用后不允许配置普通输入字段。 */
+    @Column("direct_prize_mount")
+    var directPrizeMount: Boolean = false,
     /** 是否允许被奖励模板继续引用。 */
     var enabled: Boolean = true,
     /** 创建时间戳，单位为毫秒。 */
