@@ -9,13 +9,16 @@ import io.infra.structure.activity.admin.dto.CreateComponentRequest
 import io.infra.structure.activity.admin.dto.CreateRewardComponentRequest
 import io.infra.structure.activity.admin.dto.CreateRewardTemplateRequest
 import io.infra.structure.activity.admin.dto.CreateTemplateRequest
+import io.infra.structure.activity.admin.dto.CreatePrizeComponentRequest
 import io.infra.structure.activity.admin.dto.PrizeLookupResponse
+import io.infra.structure.activity.admin.dto.PrizeComponentResponse
 import io.infra.structure.activity.admin.dto.RewardComponentResponse
 import io.infra.structure.activity.admin.dto.RewardTemplateResponse
 import io.infra.structure.activity.admin.dto.UpdateActivityDebugConfigurationRequest
 import io.infra.structure.activity.admin.dto.UpdateActivityOnlineStatusRequest
 import io.infra.structure.activity.admin.service.ActivityConfigurationService
 import io.infra.structure.activity.admin.service.PrizeCatalogGateway
+import io.infra.structure.activity.admin.service.PrizeComponentConfigurationService
 import io.infra.structure.activity.admin.service.RewardConfigurationService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -41,8 +44,32 @@ import org.springframework.web.bind.annotation.RestController
 class ActivityConfigurationApiController(
     private val activityConfigurationService: ActivityConfigurationService,
     private val rewardConfigurationService: RewardConfigurationService,
+    private val prizeComponentConfigurationService: PrizeComponentConfigurationService,
     private val prizeCatalogGateway: PrizeCatalogGateway
 ) {
+
+    /** 返回固定奖品组件和全部扩展奖品组件。 */
+    @GetMapping("/reward/prizes")
+    fun prizeComponents(): List<PrizeComponentResponse> = prizeComponentConfigurationService.listComponents()
+
+    /** 新建扩展奖品组件。 */
+    @PostMapping("/reward/prizes")
+    fun createPrizeComponent(@RequestBody request: CreatePrizeComponentRequest): PrizeComponentResponse =
+        prizeComponentConfigurationService.createComponent(request)
+
+    /** 更新指定扩展奖品组件；固定奖品组件 ID 1 不允许修改。 */
+    @PutMapping("/reward/prizes/{componentId}")
+    fun updatePrizeComponent(
+        @PathVariable componentId: Long,
+        @RequestBody request: CreatePrizeComponentRequest
+    ): PrizeComponentResponse = prizeComponentConfigurationService.updateComponent(componentId, request)
+
+    /** 删除未被奖励组件挂载的扩展奖品组件；固定奖品组件 ID 1 不允许删除。 */
+    @DeleteMapping("/reward/prizes/{componentId}")
+    fun deletePrizeComponent(@PathVariable componentId: Long): ResponseEntity<Void> {
+        prizeComponentConfigurationService.deleteComponent(componentId)
+        return ResponseEntity.noContent().build()
+    }
 
     /** 返回全部可复用活动组件。 */
     @GetMapping("/components")

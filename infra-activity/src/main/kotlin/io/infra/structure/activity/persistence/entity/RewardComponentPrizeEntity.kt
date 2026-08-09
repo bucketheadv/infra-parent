@@ -5,7 +5,7 @@ import com.mybatisflex.annotation.Id
 import com.mybatisflex.annotation.KeyType
 import com.mybatisflex.annotation.Table
 
-/** 奖励组件内固定奖品组件的关联表映射。 */
+/** 奖励组件内奖品组件的关联表映射。 */
 @Table("reward_component_prize")
 data class RewardComponentPrizeEntity(
     /** 关联记录主键。 */
@@ -14,6 +14,9 @@ data class RewardComponentPrizeEntity(
     /** 所属奖励组件主键。 */
     @Column("component_id")
     var componentId: Long = 0,
+    /** 采用的奖品组件主键，默认使用固定奖品组件 1。 */
+    @Column("prize_component_id")
+    var prizeComponentId: Long = 1,
     /** 奖励组件内唯一奖品挂载键。 */
     @Column("mount_key")
     var mountKey: String = "",

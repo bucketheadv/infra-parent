@@ -16,6 +16,10 @@ class ActivityConfigurationPageController {
     @GetMapping("/activity/reward/component")
     fun rewardComponent(model: Model): String = configurationPage(model, "rewardComponents")
 
+    /** 返回奖品组件配置页面。 */
+    @GetMapping("/activity/reward/prize")
+    fun prizeComponent(model: Model): String = configurationPage(model, "prizeComponents")
+
     /** 返回活动模板配置页面。 */
     @GetMapping("/activity/template")
     fun template(model: Model): String = configurationPage(model, "templates")

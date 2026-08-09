@@ -23,7 +23,11 @@ class DemoPrizeCatalogGateway : PrizeCatalogGateway {
             prizeType = prizeType,
             prizeId = prizeId.trim(),
             prizeName = "$typeName #${prizeId.trim()}",
-            prizeIcon = "https://example.com/prizes/${prizeType.lowercase()}/${prizeId.trim()}.png",
+            prizeIcon = when (prizeType) {
+                "DECORATION" -> "/activity/images/prize_decoration.svg"
+                "GIFT" -> "/activity/images/prize_gift.svg"
+                else -> error("不支持的演示奖品类型：$prizeType")
+            },
             prizeValue = "0",
             prizeDisplayValue = "0",
             prizeQuantity = "1"

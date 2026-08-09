@@ -769,7 +769,7 @@ class ActivityConfigurationService(
         }
     }
 
-    /** 校验固定奖品组件；装扮和礼物必须提供奖品 ID，其他属性均允许运营继续编辑。 */
+    /** 校验奖品组件的固定字段和扩展字段；装扮和礼物必须提供奖品 ID。 */
     private fun validatePrizeFieldValue(
         field: ActivityFormField,
         key: String,
@@ -800,7 +800,10 @@ class ActivityConfigurationService(
         val keys = PRIZE_PROPERTY_KEYS.associateWith { property -> "$key.$property" }
         acceptedKeys += keys.values
         val prizeType = values[keys.getValue("prizeType")]?.toString()?.trim().orEmpty()
-        val hasValue = keys.values.any { candidate -> !isBlank(values[candidate]) }
+        val hasValue = keys.values.any { candidate -> !isBlank(values[candidate]) } || field.children.any { child ->
+            val childKey = nestedFieldKey(child, field.key, key)
+            values.keys.any { candidate -> candidate == childKey || candidate.startsWith("$childKey.") }
+        }
         if (!hasValue && !field.required) {
             return
         }
@@ -815,6 +818,9 @@ class ActivityConfigurationService(
         require(quantity.toLongOrNull()?.let { it > 0 } == true) { "${field.label} 的奖品数量必须是正整数" }
         if (prizeType in PRIZE_TYPES_REQUIRING_ID) {
             require(!isBlank(values[keys.getValue("prizeId")])) { "${field.label} 的装扮或礼物奖品 ID 不能为空" }
+        }
+        field.children.forEach { child ->
+            validateFieldValue(child, nestedFieldKey(child, field.key, key), values, acceptedKeys)
         }
     }
 

@@ -12,6 +12,7 @@ import io.infra.structure.activity.admin.dto.CreateRewardComponentRequest
 import io.infra.structure.activity.admin.dto.CreateRewardTemplateRequest
 import io.infra.structure.activity.admin.dto.RewardComponentPrizeRequest
 import io.infra.structure.activity.admin.dto.RewardComponentResponse
+import io.infra.structure.activity.admin.dto.PrizeComponentResponse
 import io.infra.structure.activity.admin.dto.RewardComponentPrizeResponse
 import io.infra.structure.activity.admin.dto.RewardTemplateComponentResponse
 import io.infra.structure.activity.admin.dto.RewardTemplateResponse
@@ -37,6 +38,7 @@ class RewardConfigurationService(
     private val rewardTemplateMapper: RewardTemplateMapper,
     private val rewardTemplateComponentMapper: RewardTemplateComponentMapper,
     private val activityTemplateRewardTemplateMapper: ActivityTemplateRewardTemplateMapper,
+    private val prizeComponentConfigurationService: PrizeComponentConfigurationService,
     private val objectMapper: ObjectMapper
 ) {
 
@@ -76,7 +78,11 @@ class RewardConfigurationService(
         val entity = requiredComponent(componentId)
         require(request.code.trim() == entity.code) { "奖励组件编码创建后不能修改" }
         require(request.name.isNotBlank()) { "奖励组件名称不能为空" }
-        validateRewardComponentConfiguration(request)
+        val existingPrizeComponentIdsByMountKey = rewardComponentPrizeMapper
+            .selectListByQuery(QueryWrapper.create().eq("component_id", componentId))
+            .orEmpty()
+            .associate { it.mountKey to it.prizeComponentId }
+        validateRewardComponentConfiguration(request, existingPrizeComponentIdsByMountKey)
         entity.name = request.name.trim()
         entity.description = request.description?.trim()?.takeIf(String::isNotBlank)
         entity.definitionJson = objectMapper.writeValueAsString(request.definition)
@@ -99,12 +105,13 @@ class RewardConfigurationService(
         require(rewardComponentMapper.deleteById(componentId) == 1) { "奖励组件删除失败" }
     }
 
-    /** 保存奖励组件内固定奖品组件的挂载记录。 */
+    /** 保存奖励组件内奖品组件的挂载记录。 */
     private fun saveComponentPrizeBindings(componentId: Long, prizes: List<RewardComponentPrizeRequest>) {
         prizes.forEachIndexed { index, prize ->
             rewardComponentPrizeMapper.insert(
                 RewardComponentPrizeEntity(
                     componentId = componentId,
+                    prizeComponentId = prize.prizeComponentId,
                     mountKey = prize.mountKey.trim(),
                     mountTitle = prize.mountTitle.trim(),
                     mountMode = prize.mountMode.name,
@@ -222,6 +229,12 @@ class RewardConfigurationService(
                         options = emptyList(),
                         collection = prize.mountMode == ComponentReferenceMode.ARRAY,
                         collectionSize = prize.arraySize,
+                        children = flattenNodes(
+                            nodes = prize.prizeComponent.definition.nodes,
+                            parentPath = "$componentKey.${prize.mountKey}",
+                            componentRequired = required || binding.required || prize.required,
+                            depth = 3
+                        ),
                         depth = 2
                     )
                 },
@@ -282,8 +295,11 @@ class RewardConfigurationService(
         }
     }
 
-    /** 校验奖励组件的普通输入项和固定奖品组件编排。 */
-    private fun validateRewardComponentConfiguration(request: CreateRewardComponentRequest) {
+    /** 校验奖励组件的普通输入项和奖品组件编排。 */
+    private fun validateRewardComponentConfiguration(
+        request: CreateRewardComponentRequest,
+        existingPrizeComponentIdsByMountKey: Map<String, Long> = emptyMap()
+    ) {
         require(request.definition.nodes.isNotEmpty() || request.prizes.isNotEmpty()) {
             "奖励组件至少需要配置一个输入项、分组或奖品组件"
         }
@@ -297,6 +313,10 @@ class RewardConfigurationService(
             "奖品挂载标题不能为空且不能超过 128 个字符"
         }
         request.prizes.forEach { prize ->
+            prizeComponentConfigurationService.selectableComponent(
+                prize.prizeComponentId,
+                existingPrizeComponentIdsByMountKey[prize.mountKey.trim()] == prize.prizeComponentId
+            )
             if (prize.mountMode == ComponentReferenceMode.SINGLE) {
                 require(prize.arraySize == null) { "单个奖品不能配置数组长度" }
             } else if (prize.arraySize != null) {
@@ -312,7 +332,7 @@ class RewardConfigurationService(
             validateCode(node.key, "字段键")
             require(node.label.isNotBlank()) { "字段标题不能为空" }
             require(node.type != ComponentNodeType.COMPONENT && node.type != ComponentNodeType.PRIZE) {
-                "奖励组件不能引用其他组件，固定奖品组件请使用专用配置区添加"
+                "奖励组件不能引用其他组件，奖品组件请使用专用配置区添加"
             }
             require(node.componentId == null) { "奖励组件不能引用其他组件" }
             if (node.type == ComponentNodeType.SELECT || node.type == ComponentNodeType.MULTI_SELECT) {
@@ -373,27 +393,37 @@ class RewardConfigurationService(
     }
 
     /** 将奖励组件实体转换为接口视图。 */
-    private fun componentResponse(entity: RewardComponentEntity): RewardComponentResponse = RewardComponentResponse(
-        id = requireNotNull(entity.id),
-        code = entity.code,
-        name = entity.name,
-        description = entity.description,
-        definition = objectMapper.readValue(entity.definitionJson, ComponentDefinition::class.java),
-        prizes = rewardComponentPrizeMapper
+    private fun componentResponse(entity: RewardComponentEntity): RewardComponentResponse {
+        val prizes = rewardComponentPrizeMapper
             .selectListByQuery(QueryWrapper.create().eq("component_id", requireNotNull(entity.id)).orderBy("sort_no"))
             .orEmpty()
-            .map { prize ->
-                RewardComponentPrizeResponse(
-                    id = requireNotNull(prize.id),
-                    sortNo = prize.sortNo,
-                    mountKey = prize.mountKey,
-                    mountTitle = prize.mountTitle,
-                    mountMode = ComponentReferenceMode.valueOf(prize.mountMode),
-                    arraySize = prize.arraySize,
-                    required = prize.required
-                )
-            },
-        enabled = entity.enabled
+        val prizeComponents = prizeComponentConfigurationService.componentsByIds(prizes.map { it.prizeComponentId }.toSet())
+        return RewardComponentResponse(
+            id = requireNotNull(entity.id),
+            code = entity.code,
+            name = entity.name,
+            description = entity.description,
+            definition = objectMapper.readValue(entity.definitionJson, ComponentDefinition::class.java),
+            prizes = prizes.map { prize -> prizeResponse(prize, prizeComponents) },
+            enabled = entity.enabled
+        )
+    }
+
+    /** 将奖品组件挂载记录转换为包含具体奖品类型定义的接口视图。 */
+    private fun prizeResponse(
+        prize: RewardComponentPrizeEntity,
+        prizeComponents: Map<Long, PrizeComponentResponse>
+    ): RewardComponentPrizeResponse = RewardComponentPrizeResponse(
+        id = requireNotNull(prize.id),
+        prizeComponentId = prize.prizeComponentId,
+        prizeComponent = prizeComponents[prize.prizeComponentId]
+            ?: throw IllegalArgumentException("奖品组件不存在：${prize.prizeComponentId}"),
+        sortNo = prize.sortNo,
+        mountKey = prize.mountKey,
+        mountTitle = prize.mountTitle,
+        mountMode = ComponentReferenceMode.valueOf(prize.mountMode),
+        arraySize = prize.arraySize,
+        required = prize.required
     )
 
     /** 将奖励模板实体和关联记录转换为接口视图。 */

@@ -4,6 +4,7 @@ import io.infra.structure.activity.admin.domain.model.ComponentDefinition
 import io.infra.structure.activity.admin.domain.model.ComponentNodeType
 import io.infra.structure.activity.admin.domain.model.ComponentOption
 import io.infra.structure.activity.admin.domain.model.ComponentReferenceMode
+import io.infra.structure.activity.admin.domain.model.PrizeComponentType
 
 /** 新建活动组件的请求。 */
 data class CreateComponentRequest(
@@ -47,7 +48,7 @@ data class CreateRewardComponentRequest(
     val description: String? = null,
     /** 奖励组件内的输入字段定义。 */
     val definition: ComponentDefinition,
-    /** 奖励组件内挂载的固定奖品组件。 */
+    /** 奖励组件内挂载的奖品组件。 */
     val prizes: List<RewardComponentPrizeRequest> = emptyList(),
     /** 是否允许奖励模板继续引用该组件。 */
     val enabled: Boolean = true
@@ -81,8 +82,10 @@ data class RewardTemplateComponentRequest(
     val required: Boolean = false
 )
 
-/** 奖励组件内固定奖品组件的配置。 */
+/** 奖励组件内奖品组件的配置。 */
 data class RewardComponentPrizeRequest(
+    /** 采用的奖品组件主键；默认使用 ID 为 1 的固定奖品组件。 */
+    val prizeComponentId: Long = 1,
     /** 奖励组件内唯一奖品挂载键。 */
     val mountKey: String,
     /** 配置页面中展示的奖品标题。 */
@@ -93,6 +96,20 @@ data class RewardComponentPrizeRequest(
     val arraySize: Int? = null,
     /** 是否要求填写该奖品。 */
     val required: Boolean = true
+)
+
+/** 新建扩展奖品组件的请求。 */
+data class CreatePrizeComponentRequest(
+    /** 扩展奖品组件唯一编码。 */
+    val code: String,
+    /** 扩展奖品组件名称。 */
+    val name: String,
+    /** 扩展奖品组件说明。 */
+    val description: String? = null,
+    /** 固定奖品字段以外的扩展字段定义。 */
+    val definition: ComponentDefinition,
+    /** 是否允许被新奖励组件挂载。 */
+    val enabled: Boolean = true
 )
 
 /** 模板内单个组件的引用配置。 */
@@ -187,7 +204,7 @@ data class RewardComponentResponse(
     val description: String?,
     /** 输入字段定义。 */
     val definition: ComponentDefinition,
-    /** 固定奖品组件编排。 */
+    /** 奖品组件编排。 */
     val prizes: List<RewardComponentPrizeResponse>,
     /** 是否可用。 */
     val enabled: Boolean
@@ -211,10 +228,14 @@ data class RewardTemplateComponentResponse(
     val component: RewardComponentResponse
 )
 
-/** 奖励组件内固定奖品组件的详情。 */
+/** 奖励组件内奖品组件的详情。 */
 data class RewardComponentPrizeResponse(
     /** 关联记录主键。 */
     val id: Long,
+    /** 采用的奖品组件主键。 */
+    val prizeComponentId: Long,
+    /** 采用的奖品组件详情。 */
+    val prizeComponent: PrizeComponentResponse,
     /** 展示顺序。 */
     val sortNo: Int,
     /** 奖品挂载键。 */
@@ -227,6 +248,24 @@ data class RewardComponentPrizeResponse(
     val arraySize: Int?,
     /** 是否要求填写。 */
     val required: Boolean
+)
+
+/** 奖品组件的页面和接口视图。 */
+data class PrizeComponentResponse(
+    /** 奖品组件主键；固定奖品组件固定为 1。 */
+    val id: Long,
+    /** 奖品组件类型。 */
+    val type: PrizeComponentType,
+    /** 奖品组件唯一编码。 */
+    val code: String,
+    /** 奖品组件名称。 */
+    val name: String,
+    /** 奖品组件说明。 */
+    val description: String?,
+    /** 固定奖品字段外的扩展字段定义。 */
+    val definition: ComponentDefinition,
+    /** 是否允许新奖励组件挂载。 */
+    val enabled: Boolean
 )
 
 /** 奖励模板的页面和接口视图。 */

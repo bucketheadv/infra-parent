@@ -188,7 +188,7 @@ select:disabled { cursor: not-allowed; color: #7d8986; background: #edf2f0; }
 .template-binding-list { display: grid; gap: .45rem; }
 .template-binding { display: grid; grid-template-columns: auto minmax(0, 1.35fr) minmax(0, .8fr) minmax(0, 1fr) minmax(0, .85fr) auto; align-items: center; gap: .6rem; padding: .6rem; background: #f7faf9; }
 .reward-template-binding, .prize-template-binding { border-left: 3px solid var(--teal); }
-.prize-template-binding { grid-template-columns: auto minmax(7.4rem, .8fr) minmax(0, 1fr) auto; align-items: center; gap: .75rem; padding: .75rem .85rem; border-left-color: var(--amber); background: #fffdf8; }
+.prize-template-binding { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .75rem; padding: .75rem .85rem; border-left-color: var(--amber); background: #fffdf8; }
 .prize-template-binding .template-binding-order { color: var(--accent-deep); background: #f7eed8; }
 .prize-template-binding .fixed-binding-label { min-width: 0; color: var(--accent-deep); font-size: .8rem; font-weight: 800; white-space: nowrap; }
 .prize-binding-fields { display: grid; min-width: 0; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: .6rem .7rem; }
@@ -227,6 +227,7 @@ select:disabled { cursor: not-allowed; color: #7d8986; background: #edf2f0; }
 .record-code { margin: .2rem 0 0; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .73rem; }
 .record-copy { margin: .45rem 0 0; color: var(--muted); font-size: .8rem; line-height: 1.45; }
 .record-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .45rem; margin-top: .65rem; }
+.record-static-hint { align-self: center; color: var(--muted); font-size: .76rem; }
 .record-icon-button { display: grid; width: 2.15rem; height: 2.15rem; padding: 0; place-items: center; border: 1px solid #c7d8d3; border-radius: .3rem; color: var(--teal-text); background: #fff; font-size: 1.05rem; font-weight: 760; line-height: 1; }
 .record-icon-button:hover { border-color: var(--teal); color: var(--teal); background: var(--teal-pale); }
 .online-activity { border-color: var(--success-border); color: var(--success-text); background: var(--success-soft); }
@@ -292,9 +293,15 @@ select:disabled { cursor: not-allowed; color: #7d8986; background: #edf2f0; }
 .prize-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
 .prize-field-grid label { color: var(--accent-deep); }
 .prize-field-grid input, .prize-field-grid select { background: #fff; }
-.prize-icon-preview { display: inline-flex; align-items: center; gap: .45rem; width: fit-content; margin-top: .15rem; padding: .22rem; border: 1px solid var(--accent-border); border-radius: .3rem; background: #fff; }
+.prize-extension-fields { display: grid; gap: .65rem; padding: .75rem; border: 1px dashed var(--accent-border); border-radius: .35rem; background: rgba(255, 255, 255, .6); }
+.prize-extension-title { margin: 0 !important; color: var(--accent-deep) !important; font-size: .78rem !important; font-weight: 800; }
+.prize-extension-fields .dynamic-field { margin-left: 0; }
+.prize-icon-field { position: relative; }
+.prize-icon-input { position: relative; display: block; }
+.prize-icon-input input { padding-right: 2.65rem; }
+.prize-icon-preview { position: absolute; z-index: 1; top: 50%; right: .28rem; display: grid; width: 1.85rem; height: 1.85rem; place-items: center; overflow: hidden; border: 1px solid var(--accent-border); border-radius: .28rem; background: #fff; box-shadow: 0 .08rem .25rem rgba(92, 68, 20, .16); pointer-events: none; transform: translateY(-50%); }
 .prize-icon-preview[hidden] { display: none; }
-.prize-icon-preview img { display: block; width: 2.25rem; height: 2.25rem; border-radius: .22rem; object-fit: cover; }
+.prize-icon-preview img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .dynamic-field { display: grid; gap: .4rem; padding-left: calc(var(--depth) * .8rem); }
 .dynamic-field label { padding-left: .7rem; border-left: 2px solid var(--teal-soft); }
 /* 多选控件采用柔和的候选项高亮，避免浏览器默认的强对比选中底色。 */
@@ -339,7 +346,7 @@ select[multiple]:focus option:checked {
     .template-binding-size { grid-column: 3; }
     .template-binding-actions { grid-column: 3; min-height: 2.7rem; }
     .reward-template-binding .template-binding-actions, .prize-template-binding .template-binding-actions { grid-column: 2 / -1; justify-content: flex-start; }
-    .prize-template-binding { grid-template-columns: auto minmax(6.5rem, .7fr) minmax(0, 1fr) auto; }
+    .prize-template-binding { grid-template-columns: auto minmax(0, 1fr) auto; }
     .prize-binding-fields { grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); }
     .prize-template-binding .template-binding-order { grid-row: auto; align-self: center; }
     .prize-template-binding .template-binding-actions { grid-column: auto; justify-content: flex-end; }
