@@ -19,6 +19,11 @@
     box-sizing: border-box;
 }
 
+/* 登录页采用紧凑字号，避免认证入口的视觉层级过于夸张。 */
+html {
+    font-size: 14px;
+}
+
 body {
     min-height: 100vh;
     margin: 0;
@@ -84,8 +89,8 @@ p {
 h1 {
     max-width: 12em;
     margin-bottom: 1rem;
-    font-size: clamp(2.8rem, 7vw, 5.8rem);
-    line-height: 0.96;
+    font-size: clamp(1.8rem, 3.7vw, 3.2rem);
+    line-height: 1.08;
     letter-spacing: 0;
 }
 
@@ -93,8 +98,8 @@ h1 {
     max-width: 31rem;
     margin-bottom: 2rem;
     color: var(--muted);
-    font-size: clamp(1rem, 1.6vw, 1.18rem);
-    line-height: 1.8;
+    font-size: clamp(.9rem, 1.3vw, 1rem);
+    line-height: 1.7;
 }
 
 .trust-row {
@@ -119,23 +124,23 @@ h1 {
 }
 
 .login-card {
-    width: min(100%, 27rem);
+    width: min(100%, 29rem);
     border: 1px solid rgba(255, 255, 255, 0.74);
     border-radius: 1.25rem;
-    padding: clamp(1.3rem, 4vw, 2.3rem);
+    padding: clamp(1.5rem, 3.5vw, 2rem);
     background: var(--surface);
     box-shadow: 0 28px 80px rgba(31, 49, 54, 0.18);
     backdrop-filter: blur(18px);
 }
 
 .card-heading {
-    margin-bottom: 1.45rem;
+    margin-bottom: 1.4rem;
 }
 
 h2 {
     margin-bottom: 0;
-    font-size: clamp(1.7rem, 3vw, 2.1rem);
-    line-height: 1.12;
+    font-size: clamp(1.25rem, 2vw, 1.55rem);
+    line-height: 1.2;
 }
 
 .notice {
@@ -158,7 +163,7 @@ h2 {
 
 .login-form {
     display: grid;
-    gap: 0.65rem;
+    gap: 0.72rem;
 }
 
 label {
@@ -172,10 +177,10 @@ input {
     min-height: 3.1rem;
     border: 1px solid var(--line);
     border-radius: 0.85rem;
-    padding: 0 0.95rem;
+    padding: 0 1rem;
     color: var(--ink);
     background: var(--surface-strong);
-    font: inherit;
+    font-size: 1rem;
     outline: none;
     transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
@@ -189,12 +194,12 @@ button {
     min-height: 3.15rem;
     border: 0;
     border-radius: 0.85rem;
-    margin-top: 0.8rem;
+    margin-top: 0.85rem;
     color: #ffffff;
     background: linear-gradient(135deg, var(--teal) 0%, #1f655f 58%, #24313a 100%);
     box-shadow: 0 16px 30px rgba(18, 122, 114, 0.26);
     cursor: pointer;
-    font: inherit;
+    font-size: 1rem;
     font-weight: 780;
     transition: transform 150ms ease, box-shadow 150ms ease;
 }
@@ -220,7 +225,7 @@ button:active {
     }
 
     h1 {
-        font-size: clamp(2.25rem, 13vw, 4.1rem);
+        font-size: clamp(1.7rem, 8vw, 2.7rem);
     }
 }
 

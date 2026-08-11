@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="_csrf" th:content="${_csrf.token}">
     <meta name="_csrf_header" th:content="${_csrf.headerName}">
-    <title th:text="${pageTitle + ' | Infra Activity'}">活动配置 | Infra Activity</title>
+    <title th:text="${pageTitle + ' | Infra Activity'}">活动管理 | Infra Activity</title>
     <link rel="icon" type="image/svg+xml" th:href="@{/activity/favicon.svg}" href="/activity/favicon.svg">
     <link rel="stylesheet" th:href="@{/activity/config.css}" href="/activity/config.css">
     <script defer th:src="@{/activity/config.js}" src="/activity/config.js"></script>
@@ -31,17 +31,17 @@
 </header>
 
 <main class="config-shell">
-    <aside class="navigation" aria-label="活动配置导航">
+    <aside class="navigation" aria-label="活动管理导航">
         <p class="eyebrow">Activity studio</p>
-        <h1 th:text="${pageTitle}">活动配置</h1>
+        <h1 th:text="${pageTitle}">活动管理</h1>
         <p class="navigation-copy" th:text="${pageDescription}">从组件定义到模板编排，再按模板创建具体活动。</p>
         <nav class="navigation-menu" aria-label="配置菜单">
             <section class="navigation-menu-group" aria-labelledby="activity-menu-title">
-                <p id="activity-menu-title" class="navigation-menu-title">活动配置</p>
+                <p id="activity-menu-title" class="navigation-menu-title">活动管理</p>
                 <div class="tab-list">
-                    <a class="tab-button" th:classappend="${activeSection == 'components'} ? ' is-active'" th:href="@{/activity/component}" href="/activity/component">模板组件配置</a>
-                    <a class="tab-button" th:classappend="${activeSection == 'templates'} ? ' is-active'" th:href="@{/activity/template}" href="/activity/template">活动模板配置</a>
-                    <a class="tab-button" th:classappend="${activeSection == 'activities'} ? ' is-active'" th:href="@{/activity/config}" href="/activity/config">活动配置</a>
+                    <a class="tab-button" th:classappend="${activeSection == 'components'} ? ' is-active'" th:href="@{/activity/component}" href="/activity/component">模板组件</a>
+                    <a class="tab-button" th:classappend="${activeSection == 'templates'} ? ' is-active'" th:href="@{/activity/template}" href="/activity/template">活动模板</a>
+                    <a class="tab-button" th:classappend="${activeSection == 'activities'} ? ' is-active'" th:href="@{/activity/config}" href="/activity/config">活动管理</a>
                 </div>
             </section>
             <section class="navigation-menu-group" aria-labelledby="task-menu-title">
@@ -55,9 +55,9 @@
             <section class="navigation-menu-group" aria-labelledby="reward-menu-title">
                 <p id="reward-menu-title" class="navigation-menu-title">奖励配置</p>
                 <div class="tab-list">
-                    <a class="tab-button" th:classappend="${activeSection == 'rewardComponents'} ? ' is-active'" th:href="@{/activity/reward/component}" href="/activity/reward/component">奖励组件配置</a>
-                    <a class="tab-button" th:classappend="${activeSection == 'prizeComponents'} ? ' is-active'" th:href="@{/activity/reward/prize}" href="/activity/reward/prize">奖品类型配置</a>
-                    <a class="tab-button" th:classappend="${activeSection == 'rewardTemplates'} ? ' is-active'" th:href="@{/activity/reward/template}" href="/activity/reward/template">奖励模板配置</a>
+                    <a class="tab-button" th:classappend="${activeSection == 'rewardComponents'} ? ' is-active'" th:href="@{/activity/reward/component}" href="/activity/reward/component">奖励组件</a>
+                    <a class="tab-button" th:classappend="${activeSection == 'prizeComponents'} ? ' is-active'" th:href="@{/activity/reward/prize}" href="/activity/reward/prize">奖品扩展</a>
+                    <a class="tab-button" th:classappend="${activeSection == 'rewardTemplates'} ? ' is-active'" th:href="@{/activity/reward/template}" href="/activity/reward/template">奖励模板</a>
                 </div>
             </section>
         </nav>
@@ -67,7 +67,7 @@
         <p id="notice" class="notice" hidden></p>
 
         <section class="tab-panel" th:classappend="${activeSection == 'components'} ? ' is-active'" th:hidden="${activeSection != 'components'}">
-            <header class="panel-header"><div><p class="eyebrow">Component library</p><h2>模板组件配置</h2></div><p>组件可以包含输入节点或已保存的子组件，并可将子组件配置为单个对象或数组。</p></header>
+            <header class="panel-header"><div><p class="eyebrow">Component library</p><h2>模板组件</h2></div><p>组件可以包含输入节点或已保存的子组件，并可将子组件配置为单个对象或数组。</p></header>
             <div class="work-grid">
                 <form id="component-form" class="editor-form" novalidate>
                     <div class="form-heading"><h3 id="component-form-title">新建组件</h3><div class="form-heading-actions"><span id="component-form-mode" class="editor-mode">新建</span><button id="cancel-component-edit" class="secondary-button" type="button" hidden>取消编辑</button><span>字段定义</span></div></div>
@@ -83,7 +83,7 @@
         </section>
 
         <section class="tab-panel" th:classappend="${activeSection == 'rewardComponents'} ? ' is-active'" th:hidden="${activeSection != 'rewardComponents'}">
-            <header class="panel-header"><div><p class="eyebrow">Reward component library</p><h2>奖励组件配置</h2></div><p>奖励组件可配置普通输入项和奖品组件，随后可挂载到奖励模板。</p></header>
+            <header class="panel-header"><div><p class="eyebrow">Reward component library</p><h2>奖励组件</h2></div><p>奖励组件可配置普通输入项和奖品组件，随后可挂载到奖励模板。</p></header>
             <div class="work-grid">
                 <form id="reward-component-form" class="editor-form" novalidate>
                     <div class="form-heading"><h3 id="reward-component-form-title">新建奖励组件</h3><div class="form-heading-actions"><span id="reward-component-form-mode" class="editor-mode">新建</span><button id="cancel-reward-component-edit" class="secondary-button" type="button" hidden>取消编辑</button><span>字段定义</span></div></div>
@@ -102,7 +102,7 @@
         </section>
 
         <section class="tab-panel" th:classappend="${activeSection == 'prizeComponents'} ? ' is-active'" th:hidden="${activeSection != 'prizeComponents'}">
-            <header class="panel-header"><div><p class="eyebrow">Prize type library</p><h2>奖品类型配置</h2></div><p>固定奖品类型由系统预置且不可修改；扩展奖品可在固定字段基础上添加专属输入项。</p></header>
+            <header class="panel-header"><div><p class="eyebrow">Prize extension library</p><h2>奖品扩展</h2></div><p>固定奖品由系统预置且不可修改；奖品扩展可在固定字段基础上添加专属输入项。</p></header>
             <div class="work-grid">
                 <form id="prize-component-form" class="editor-form" novalidate>
                     <div class="form-heading"><h3 id="prize-component-form-title">新建奖品扩展</h3><div class="form-heading-actions"><span id="prize-component-form-mode" class="editor-mode">新建</span><button id="cancel-prize-component-edit" class="secondary-button" type="button" hidden>取消编辑</button><span>扩展字段</span></div></div>
@@ -113,12 +113,12 @@
                     <div class="node-builder"><div class="builder-heading"><h4>新增字段</h4><button class="icon-command" type="button" id="add-prize-component-root-node" title="添加扩展字段" aria-label="添加扩展字段">+</button></div><div id="prize-component-nodes" class="node-list"></div></div>
                     <button class="primary-button" type="submit">保存奖品扩展</button>
                 </form>
-                <section class="inventory" aria-label="已保存奖品类型"><div class="form-heading"><h3>已保存奖品类型</h3><span id="prize-component-count">0</span></div><label class="record-search"><span class="sr-only">搜索已保存奖品类型</span><input id="prize-component-search" type="search" placeholder="搜索名称、编码或说明"></label><div id="prize-component-list" class="record-list"></div><nav id="prize-component-pagination" class="record-pagination" aria-label="奖品类型列表分页"></nav></section>
+                <section class="inventory" aria-label="已保存奖品扩展"><div class="form-heading"><h3>已保存奖品扩展</h3><span id="prize-component-count">0</span></div><label class="record-search"><span class="sr-only">搜索已保存奖品扩展</span><input id="prize-component-search" type="search" placeholder="搜索名称、编码或说明"></label><div id="prize-component-list" class="record-list"></div><nav id="prize-component-pagination" class="record-pagination" aria-label="奖品扩展列表分页"></nav></section>
             </div>
         </section>
 
         <section class="tab-panel" th:classappend="${activeSection == 'templates'} ? ' is-active'" th:hidden="${activeSection != 'templates'}">
-            <header class="panel-header"><div><p class="eyebrow">Template assembly</p><h2>活动模板配置</h2></div><p>选择组件并调整顺序，模板会成为活动配置的动态表单蓝图。</p></header>
+            <header class="panel-header"><div><p class="eyebrow">Template assembly</p><h2>活动模板</h2></div><p>选择组件并调整顺序，模板会成为活动配置的动态表单蓝图。</p></header>
             <div class="work-grid">
                 <form id="template-form" class="editor-form" novalidate>
                     <div class="form-heading"><h3 id="template-form-title">新建模板</h3><div class="form-heading-actions"><span id="template-form-mode" class="editor-mode">新建</span><button id="cancel-template-edit" class="secondary-button" type="button" hidden>取消编辑</button><span>组件编排</span></div></div>
@@ -136,7 +136,7 @@
         </section>
 
         <section class="tab-panel" th:classappend="${activeSection == 'rewardTemplates'} ? ' is-active'" th:hidden="${activeSection != 'rewardTemplates'}">
-            <header class="panel-header"><div><p class="eyebrow">Reward template assembly</p><h2>奖励模板配置</h2></div><p>奖励模板用于组合已配置字段和奖品的奖励组件，并由活动模板统一挂载。</p></header>
+            <header class="panel-header"><div><p class="eyebrow">Reward template assembly</p><h2>奖励模板</h2></div><p>奖励模板用于组合已配置字段和奖品的奖励组件，并由活动模板统一挂载。</p></header>
             <div class="work-grid">
                 <form id="reward-template-form" class="editor-form" novalidate>
                     <div class="form-heading"><h3 id="reward-template-form-title">新建奖励模板</h3><div class="form-heading-actions"><span id="reward-template-form-mode" class="editor-mode">新建</span><button id="cancel-reward-template-edit" class="secondary-button" type="button" hidden>取消编辑</button><span>奖励编排</span></div></div>
@@ -152,7 +152,7 @@
         </section>
 
         <section class="tab-panel" th:classappend="${activeSection == 'activities'} ? ' is-active'" th:hidden="${activeSection != 'activities'}">
-            <header class="panel-header"><div><p class="eyebrow">Activity configuration</p><h2>活动配置</h2></div><p>选择活动模板后，系统会根据其中的组件递归渲染配置字段。</p></header>
+            <header class="panel-header"><div><p class="eyebrow">Activity management</p><h2>活动管理</h2></div><p>选择活动模板后，系统会根据其中的组件递归渲染配置字段。</p></header>
             <div class="work-grid">
                 <form id="activity-form" class="editor-form" novalidate>
                     <div class="form-heading"><h3 id="activity-form-title">创建活动</h3><div class="form-heading-actions"><span id="activity-form-mode" class="editor-mode">新建</span><button id="cancel-activity-edit" class="secondary-button" type="button" hidden>取消编辑</button><span>动态表单</span></div></div>

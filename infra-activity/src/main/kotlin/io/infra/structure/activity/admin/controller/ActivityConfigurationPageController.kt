@@ -59,13 +59,13 @@ class ActivityConfigurationPageController {
 
     /** 根据当前配置区域提供浏览器标题、左侧标题与页面说明。 */
     private fun configurationPageMetadata(activeSection: String): ConfigurationPageMetadata = when (activeSection) {
-        "components" -> ConfigurationPageMetadata("模板组件配置", "创建可复用的输入组件与子组件结构。")
-        "rewardComponents" -> ConfigurationPageMetadata("奖励组件配置", "配置奖励字段、奖品组件与挂载规则。")
-        "prizeComponents" -> ConfigurationPageMetadata("奖品类型配置", "维护固定奖品与可扩展奖品字段。")
-        "templates" -> ConfigurationPageMetadata("活动模板配置", "组合活动组件与奖励模板，形成活动配置蓝图。")
-        "rewardTemplates" -> ConfigurationPageMetadata("奖励模板配置", "编排奖励组件和奖品字段，供活动模板挂载。")
-        "activities" -> ConfigurationPageMetadata("活动配置", "根据活动模板创建并维护具体活动。")
-        else -> ConfigurationPageMetadata("活动配置", "从组件定义到模板编排，再按模板创建具体活动。")
+        "components" -> ConfigurationPageMetadata("模板组件", "创建可复用的输入组件与子组件结构。")
+        "rewardComponents" -> ConfigurationPageMetadata("奖励组件", "配置奖励字段、奖品组件与挂载规则。")
+        "prizeComponents" -> ConfigurationPageMetadata("奖品扩展", "维护固定奖品与可扩展奖品字段。")
+        "templates" -> ConfigurationPageMetadata("活动模板", "组合活动组件与奖励模板，形成活动配置蓝图。")
+        "rewardTemplates" -> ConfigurationPageMetadata("奖励模板", "编排奖励组件和奖品字段，供活动模板挂载。")
+        "activities" -> ConfigurationPageMetadata("活动管理", "根据活动模板创建并维护具体活动。")
+        else -> ConfigurationPageMetadata("活动管理", "从组件定义到模板编排，再按模板创建具体活动。")
     }
 
     /** 活动配置页面展示所需的静态标题信息。 */

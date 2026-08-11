@@ -16,20 +16,20 @@
     <a class="brand" th:href="@{/}" href="/" aria-label="Infra Activity 首页">
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Infra Activity</span>
     </a>
-    <div class="topbar-actions"><a class="back-link" th:href="@{/activity/config}" href="/activity/config">活动配置</a><details class="account-menu"><summary aria-label="打开账户菜单">账户</summary><div class="account-menu-panel"><button id="open-personal-settings" class="account-menu-item" type="button" aria-haspopup="dialog">个人设置</button><form th:action="@{/logout}" action="/logout" method="post"><button class="account-menu-item account-menu-logout" type="submit">退出登录</button></form></div></details></div>
+    <div class="topbar-actions"><a class="back-link" th:href="@{/activity/config}" href="/activity/config">活动管理</a><details class="account-menu"><summary aria-label="打开账户菜单">账户</summary><div class="account-menu-panel"><button id="open-personal-settings" class="account-menu-item" type="button" aria-haspopup="dialog">个人设置</button><form th:action="@{/logout}" action="/logout" method="post"><button class="account-menu-item account-menu-logout" type="submit">退出登录</button></form></div></details></div>
 </header>
 
 <main class="config-shell">
-    <aside class="navigation" aria-label="活动配置导航">
+    <aside class="navigation" aria-label="活动管理导航">
         <p class="eyebrow">Activity studio</p><h1>任务定义</h1>
         <p class="navigation-copy">定义可复用的任务处理器、默认参数与失败重试策略。</p>
         <nav class="navigation-menu" aria-label="配置菜单">
             <section class="navigation-menu-group" aria-labelledby="activity-menu-title">
-                <p id="activity-menu-title" class="navigation-menu-title">活动配置</p>
+                <p id="activity-menu-title" class="navigation-menu-title">活动管理</p>
                 <div class="tab-list">
-                    <a class="tab-button" th:href="@{/activity/component}" href="/activity/component">模板组件配置</a>
-                    <a class="tab-button" th:href="@{/activity/template}" href="/activity/template">活动模板配置</a>
-                    <a class="tab-button" th:href="@{/activity/config}" href="/activity/config">活动配置</a>
+                    <a class="tab-button" th:href="@{/activity/component}" href="/activity/component">模板组件</a>
+                    <a class="tab-button" th:href="@{/activity/template}" href="/activity/template">活动模板</a>
+                    <a class="tab-button" th:href="@{/activity/config}" href="/activity/config">活动管理</a>
                 </div>
             </section>
             <section class="navigation-menu-group" aria-labelledby="task-menu-title">
@@ -43,9 +43,9 @@
             <section class="navigation-menu-group" aria-labelledby="reward-menu-title">
                 <p id="reward-menu-title" class="navigation-menu-title">奖励配置</p>
                 <div class="tab-list">
-                    <a class="tab-button" th:href="@{/activity/reward/component}" href="/activity/reward/component">奖励组件配置</a>
-                    <a class="tab-button" th:href="@{/activity/reward/prize}" href="/activity/reward/prize">奖品类型配置</a>
-                    <a class="tab-button" th:href="@{/activity/reward/template}" href="/activity/reward/template">奖励模板配置</a>
+                    <a class="tab-button" th:href="@{/activity/reward/component}" href="/activity/reward/component">奖励组件</a>
+                    <a class="tab-button" th:href="@{/activity/reward/prize}" href="/activity/reward/prize">奖品扩展</a>
+                    <a class="tab-button" th:href="@{/activity/reward/template}" href="/activity/reward/template">奖励模板</a>
                 </div>
             </section>
         </nav>
