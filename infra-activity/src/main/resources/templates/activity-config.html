@@ -41,6 +41,11 @@
                     <a class="tab-button" th:classappend="${activeSection == 'components'} ? ' is-active'" th:href="@{/activity/component}" href="/activity/component">模板组件配置</a>
                     <a class="tab-button" th:classappend="${activeSection == 'templates'} ? ' is-active'" th:href="@{/activity/template}" href="/activity/template">活动模板配置</a>
                     <a class="tab-button" th:classappend="${activeSection == 'activities'} ? ' is-active'" th:href="@{/activity/config}" href="/activity/config">活动配置</a>
+                </div>
+            </section>
+            <section class="navigation-menu-group" aria-labelledby="task-menu-title">
+                <p id="task-menu-title" class="navigation-menu-title">任务配置</p>
+                <div class="tab-list">
                     <a class="tab-button" th:href="@{/activity/task/definition}" href="/activity/task/definition">任务定义</a>
                     <a class="tab-button" th:href="@{/activity/task/binding}" href="/activity/task/binding">模板任务绑定</a>
                     <a class="tab-button" th:href="@{/activity/task/instance}" href="/activity/task/instance">任务实例</a>
