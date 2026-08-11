@@ -2,6 +2,7 @@ package io.infra.structure.sso.login.authentication
 
 import org.springframework.security.core.GrantedAuthority
 import org.springframework.security.core.userdetails.UserDetails
+import java.io.Serializable
 
 /**
  * 登录中心认证成功后保存到 SecurityContext 的账户主体。
@@ -18,7 +19,12 @@ class SsoLoginUserDetails(
     private val passwordHash: String,
     private val grantedAuthorities: Collection<GrantedAuthority>,
     private val accountEnabled: Boolean
-) : UserDetails {
+) : UserDetails, Serializable {
+
+    companion object {
+        /** 安全上下文写入 JDBC Session 时使用的序列化版本号。 */
+        private const val serialVersionUID = 1L
+    }
 
     /** 返回当前账户已授予的 Spring Security 权限。 */
     override fun getAuthorities(): Collection<GrantedAuthority> = grantedAuthorities

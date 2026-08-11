@@ -6,7 +6,9 @@
 mvn -pl :infra-sso-login spring-boot:run
 ```
 
-登录账号从 MySQL 数据库读取，不再使用固定的 `username/password/roles` 配置。启动前设置数据源环境变量：`SSO_DB_URL`、`SSO_DB_USERNAME`、`SSO_DB_PASSWORD`。建表脚本位于 `src/main/resources/db/mysql/schema.sql`；已有旧表时先执行 `src/main/resources/db/mysql/upgrade-add-email.sql`。`password_hash` 必须使用 Spring Security 委托密码格式，例如 `{bcrypt}$2a$...`。角色写入 `sso_user_role.role_code`，例如 `ORDER_READ`，登录后会以 `ROLE_ORDER_READ` 授权并写入 access token 的 `roles` claim。仅供本地测试的 `demo / demo` 账号 DML 位于 `src/main/resources/db/mysql/test-data.sql`，邮箱为 `demo@example.com`。
+登录账号从 MySQL 数据库读取，不再使用固定的 `username/password/roles` 配置。启动前设置数据源环境变量：`SSO_DB_URL`、`SSO_DB_USERNAME`、`SSO_DB_PASSWORD`。新建数据库时执行 `src/main/resources/db/mysql/schema/20260801090000_sso_login_schema.sql`；既有数据库仅按文件名前缀顺序执行尚未执行的 `src/main/resources/db/mysql/migration/` 脚本。`password_hash` 必须使用 Spring Security 委托密码格式，例如 `{bcrypt}$2a$...`。角色写入 `sso_user_role.role_code`，例如 `ORDER_READ`，登录后会以 `ROLE_ORDER_READ` 授权并写入 access token 的 `roles` claim。仅供本地开发环境使用的 `demo / demo` 账号 DML 已迁入 `20260811131000_insert_demo_user.sql`，邮箱为 `demo@example.com`。
+
+登录会话由 Spring Session JDBC 保存到 MySQL，默认无访问 3 天后过期，因此登录中心重启不会使仍有效的浏览器登录状态失效。会话表由上述迁移脚本维护，应用不会自动执行 DDL。
 
 认证成功后访问 `http://localhost:9000/` 可进入登录中心首页，查看当前账号与角色并退出登录。
 

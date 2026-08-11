@@ -1,3 +1,4 @@
+-- 仅用于本地开发环境的演示账户：demo / demo。
 INSERT INTO sso_user (username, email, password_hash, enabled)
 VALUES (
     'demo',

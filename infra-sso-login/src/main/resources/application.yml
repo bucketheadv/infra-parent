@@ -2,14 +2,18 @@ server:
   port: 9000
   servlet:
     session:
-      # 登录中心的服务端会话和浏览器 Cookie 均保留 3 天。
-      timeout: 3d
       cookie:
+        # Spring Session 使用此 Cookie 名称；同一主机部署多个应用时，Cookie 不按端口隔离。
         max-age: 3d
-        # 仅在同一主机名（如 localhost）部署多个应用时需要；Cookie 不按端口隔离。
         name: INFRA_SSO_LOGIN_SESSION
 
 spring:
+  session:
+    # 服务端登录会话存入 MySQL，3 天无访问后过期；应用重启不会清空仍有效的会话。
+    timeout: 3d
+    jdbc:
+      # 会话表由项目迁移脚本维护，避免应用启动时自动执行 DDL。
+      initialize-schema: never
   datasource:
     url: jdbc:mysql://localhost:3306/infra_sso
     username: root
