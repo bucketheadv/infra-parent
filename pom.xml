@@ -18,6 +18,9 @@
         <module>infra-rocketmq</module>
         <module>infra-core</module>
         <module>infra-job</module>
+        <module>infra-schedule</module>
+        <module>infra-schedule-admin</module>
+        <module>infra-schedule-executor-sample</module>
         <module>infra-doc</module>
         <module>infra-logging</module>
         <module>infra-script</module>

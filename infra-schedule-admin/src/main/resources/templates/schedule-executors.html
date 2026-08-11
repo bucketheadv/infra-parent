@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Infra Schedule 执行器管理">
+    <title>执行器 · Infra Schedule</title>
+    <link rel="stylesheet" th:href="@{/schedule-admin/dashboard.css(v=${#dates.createNow().time})}">
+</head>
+<body data-page="executors">
+<div class="app-shell">
+    <aside class="sidebar">
+        <a class="brand" th:href="@{/}" aria-label="Infra Schedule 首页">
+            <span class="brand-mark">IS</span>
+            <span>Infra Schedule</span>
+        </a>
+        <nav class="navigation" aria-label="主导航">
+            <a class="nav-item" th:href="@{/}">任务管理</a>
+            <a class="nav-item active" th:href="@{/executors}">执行器</a>
+            <a class="nav-item" th:href="@{/logs}">执行日志</a>
+        </nav>
+        <div class="sidebar-footer">
+            <span class="live-dot"></span>
+            调度中心运行中
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="page-header">
+            <div>
+                <p class="eyebrow">调度中心</p>
+                <h1>执行器管理</h1>
+                <p class="subtitle">管理执行器分组、地址与调度可用性</p>
+            </div>
+            <button class="primary-button" type="button" id="create-executor-button">新增执行器</button>
+        </header>
+
+        <section class="metrics metrics-3" aria-label="执行器概览">
+            <article class="metric"><span>全部执行器</span><strong th:text="${executorCount}">0</strong></article>
+            <article class="metric"><span>已启用</span><strong th:text="${enabledExecutorCount}">0</strong></article>
+            <article class="metric"><span>在线</span><strong th:text="${onlineExecutorCount}">0</strong></article>
+        </section>
+
+        <section class="panel executor-panel" id="executor-section" aria-labelledby="executors-heading">
+            <div class="panel-header">
+                <div>
+                    <h2 id="executors-heading">执行器列表</h2>
+                    <p>分组唯一，展示名称可重复</p>
+                </div>
+                <div class="toolbar">
+                    <button class="secondary-button" type="button" id="refresh-executors-button">刷新</button>
+                </div>
+            </div>
+            <div class="executor-list" id="executors-list"><p class="muted">正在加载执行器</p></div>
+        </section>
+    </main>
+</div>
+
+<dialog id="executor-dialog" class="dialog executor-dialog">
+    <form id="executor-form" method="dialog">
+        <div class="dialog-header"><div><p class="eyebrow" id="executor-form-eyebrow">新增</p><h2 id="executor-dialog-title">新增执行器</h2></div><button class="close-button" type="button" data-close-executor-dialog aria-label="关闭">×</button></div>
+        <div class="form-grid">
+            <label>执行器分组<input id="executor-group" name="executorGroup" required maxlength="128" placeholder="例如：infra-schedule-executor"></label>
+            <label>展示名称<input id="executor-name" name="executorName" required maxlength="128" placeholder="例如：订单执行器"></label>
+            <label>地址来源<select id="executor-address-mode" name="addressMode"><option value="AUTO_REGISTER">自动注册</option><option value="MANUAL">手动输入</option></select></label>
+            <label>调度状态<select id="executor-node-status" name="status"><option value="ENABLED">启用</option><option value="DISABLED">禁用</option></select></label>
+            <label class="full-width" id="executor-address-field">访问地址（支持多个）
+                <textarea id="executor-node-address" name="address" rows="3" placeholder="每行一个，或用逗号分隔&#10;例如：&#10;http://10.0.0.1:18081&#10;http://10.0.0.2:18081"></textarea>
+                <span class="field-hint" id="executor-address-hint">手动模式可配置多个地址；自动注册由心跳维护，节点下线或心跳超时会自动剔除。</span>
+            </label>
+        </div>
+        <p class="form-error" id="executor-form-error" role="alert"></p>
+        <div class="dialog-actions"><button class="secondary-button" type="button" data-close-executor-dialog>取消</button><button class="primary-button" type="submit" id="submit-executor-button">创建执行器</button></div>
+    </form>
+</dialog>
+
+<dialog id="confirm-dialog" class="dialog confirm-dialog" aria-labelledby="confirm-title">
+    <div class="confirm-shell">
+        <div class="confirm-icon" id="confirm-icon" aria-hidden="true"></div>
+        <div class="confirm-copy">
+            <p class="eyebrow" id="confirm-eyebrow">请确认</p>
+            <h2 id="confirm-title">确认操作</h2>
+            <p class="confirm-message" id="confirm-message"></p>
+        </div>
+        <div class="dialog-actions confirm-actions">
+            <button class="secondary-button" type="button" id="confirm-cancel">取消</button>
+            <button class="primary-button" type="button" id="confirm-ok">确认</button>
+        </div>
+    </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script th:src="@{/schedule-admin/dashboard.js(v=${#dates.createNow().time})}"></script>
+</body>
+</html>

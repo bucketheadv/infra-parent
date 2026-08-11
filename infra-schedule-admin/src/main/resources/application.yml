@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: infra-schedule-admin
+  datasource:
+    url: ${SCHEDULE_DB_URL:jdbc:mysql://127.0.0.1:3306/infra_schedule?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai}
+    username: ${SCHEDULE_DB_USERNAME:root}
+    password: ${SCHEDULE_DB_PASSWORD:123456}
+
+# 8080 常被其他本地服务占用，调度管理后台固定使用独立端口。
+server:
+  port: ${SCHEDULE_ADMIN_PORT:18080}
+
+infra:
+  schedule:
+    enabled: true
+    scheduler-id: ${SCHEDULE_SCHEDULER_ID:infra-schedule-admin-1}
+    scan-interval-millis: 1000
+    dispatch-batch-size: 100
+    dispatch-max-pages: 10
+    claim-lease-millis: 60000
+    dispatcher-enabled: true
+    executor:
+      enabled: false
+      # 页面联调阶段关闭令牌校验；生产环境应启用 auth-enabled 并从环境变量注入令牌。
+      auth-enabled: false
+      access-token: ${SCHEDULE_ACCESS_TOKEN:}
+    management:
+      enabled: true
+      # 暂不接入 SSO 登录和鉴权，直接开放管理页面及其同源接口。
+      auth-enabled: false
+      access-token: ${SCHEDULE_ADMIN_ACCESS_TOKEN:}

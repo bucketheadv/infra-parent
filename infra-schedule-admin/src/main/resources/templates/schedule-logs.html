@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Infra Schedule 执行日志查询">
+    <title>执行日志 · Infra Schedule</title>
+    <link rel="stylesheet" th:href="@{/schedule-admin/dashboard.css(v=${#dates.createNow().time})}">
+</head>
+<body data-page="logs">
+<div class="app-shell">
+    <aside class="sidebar">
+        <a class="brand" th:href="@{/}" aria-label="Infra Schedule 首页">
+            <span class="brand-mark">IS</span>
+            <span>Infra Schedule</span>
+        </a>
+        <nav class="navigation" aria-label="主导航">
+            <a class="nav-item" th:href="@{/}">任务管理</a>
+            <a class="nav-item" th:href="@{/executors}">执行器</a>
+            <a class="nav-item active" th:href="@{/logs}">执行日志</a>
+        </nav>
+        <div class="sidebar-footer">
+            <span class="live-dot"></span>
+            调度中心运行中
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="page-header">
+            <div>
+                <p class="eyebrow">调度中心</p>
+                <h1>执行日志</h1>
+                <p class="subtitle">按时间范围、任务、执行器与状态检索执行审计记录</p>
+            </div>
+        </header>
+
+        <section class="panel log-query-panel" aria-labelledby="log-filters-heading">
+            <div class="panel-header">
+                <div>
+                    <h2 id="log-filters-heading">查询条件</h2>
+                    <p>支持快捷时间与多条件组合，最多返回 1000 条</p>
+                </div>
+                <div class="toolbar">
+                    <button class="secondary-button" type="button" id="reset-log-filters-button">重置</button>
+                </div>
+            </div>
+            <div class="log-filter-shell">
+                <div class="log-quick-ranges" aria-label="快捷时间">
+                    <button type="button" class="log-chip" data-range="1h">近 1 小时</button>
+                    <button type="button" class="log-chip active" data-range="24h">近 24 小时</button>
+                    <button type="button" class="log-chip" data-range="7d">近 7 天</button>
+                    <button type="button" class="log-chip" data-range="30d">近 30 天</button>
+                </div>
+                <form id="log-query-form" class="log-filter-grid" autocomplete="off">
+                    <label>任务
+                        <select id="log-job-id" name="jobId">
+                            <option value="">全部任务</option>
+                        </select>
+                    </label>
+                    <label>执行器
+                        <select id="log-executor-id" name="executorId">
+                            <option value="">全部执行器</option>
+                        </select>
+                    </label>
+                    <label>状态
+                        <select id="log-status" name="status">
+                            <option value="">全部状态</option>
+                            <option value="SUCCESS">成功</option>
+                            <option value="FAILED">失败</option>
+                            <option value="TIMEOUT">超时</option>
+                            <option value="SKIPPED">跳过</option>
+                            <option value="RUNNING">运行中</option>
+                        </select>
+                    </label>
+                    <label>返回条数
+                        <select id="log-limit" name="limit">
+                            <option value="50">50</option>
+                            <option value="100" selected>100</option>
+                            <option value="200">200</option>
+                            <option value="500">500</option>
+                            <option value="1000">1000</option>
+                        </select>
+                    </label>
+                    <label>开始时间
+                        <input id="log-from" name="from" type="datetime-local" step="1">
+                    </label>
+                    <label>结束时间
+                        <input id="log-to" name="to" type="datetime-local" step="1">
+                    </label>
+                </form>
+                <div class="log-filter-actions">
+                    <button class="secondary-button" type="button" id="reset-log-filters-button-bottom">清空条件</button>
+                    <button class="primary-button" type="button" id="query-logs-button">查询</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" aria-labelledby="log-results-heading">
+            <div class="panel-header">
+                <div>
+                    <h2 id="log-results-heading">查询结果</h2>
+                    <p id="log-result-count">尚未查询</p>
+                </div>
+            </div>
+            <div class="log-summary" id="log-summary" hidden>
+                <article class="log-summary-item"><span>全部</span><strong id="log-stat-total">0</strong></article>
+                <article class="log-summary-item success"><span>成功</span><strong id="log-stat-success">0</strong></article>
+                <article class="log-summary-item failed"><span>失败 / 超时</span><strong id="log-stat-failed">0</strong></article>
+                <article class="log-summary-item other"><span>跳过 / 其他</span><strong id="log-stat-other">0</strong></article>
+            </div>
+            <div class="log-query-results" id="log-query-results">
+                <p class="log-empty">请设置条件后点击查询</p>
+            </div>
+        </section>
+    </main>
+</div>
+
+<dialog id="confirm-dialog" class="dialog confirm-dialog" aria-labelledby="confirm-title">
+    <div class="confirm-shell">
+        <div class="confirm-icon" id="confirm-icon" aria-hidden="true"></div>
+        <div class="confirm-copy">
+            <p class="eyebrow" id="confirm-eyebrow">请确认</p>
+            <h2 id="confirm-title">确认操作</h2>
+            <p class="confirm-message" id="confirm-message"></p>
+        </div>
+        <div class="dialog-actions confirm-actions">
+            <button class="secondary-button" type="button" id="confirm-cancel">取消</button>
+            <button class="primary-button" type="button" id="confirm-ok">确认</button>
+        </div>
+    </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script th:src="@{/schedule-admin/dashboard.js(v=${#dates.createNow().time})}"></script>
+</body>
+</html>

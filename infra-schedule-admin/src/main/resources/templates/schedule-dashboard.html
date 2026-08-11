@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Infra Schedule 调度管理后台">
+    <title>任务管理 · Infra Schedule</title>
+    <link rel="stylesheet" th:href="@{/schedule-admin/dashboard.css(v=${#dates.createNow().time})}">
+</head>
+<body data-page="jobs">
+<div class="app-shell">
+    <aside class="sidebar">
+        <a class="brand" th:href="@{/}" aria-label="Infra Schedule 首页">
+            <span class="brand-mark">IS</span>
+            <span>Infra Schedule</span>
+        </a>
+        <nav class="navigation" aria-label="主导航">
+            <a class="nav-item active" th:href="@{/}">任务管理</a>
+            <a class="nav-item" th:href="@{/executors}">执行器</a>
+            <a class="nav-item" th:href="@{/logs}">执行日志</a>
+        </nav>
+        <div class="sidebar-footer">
+            <span class="live-dot"></span>
+            调度中心运行中
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="page-header">
+            <div>
+                <p class="eyebrow">调度中心</p>
+                <h1>任务管理</h1>
+                <p class="subtitle">创建、调度和审计分布式定时任务</p>
+            </div>
+            <button class="primary-button" type="button" id="create-job-button">新建任务</button>
+        </header>
+
+        <section class="metrics" aria-label="调度概览">
+            <article class="metric"><span>全部任务</span><strong th:text="${jobCount}">0</strong></article>
+            <article class="metric"><span>运行中</span><strong th:text="${enabledJobCount}">0</strong></article>
+            <article class="metric"><span>已暂停</span><strong th:text="${disabledJobCount}">0</strong></article>
+            <article class="metric"><span>在线执行器</span><strong th:text="${executorCount}">0</strong></article>
+        </section>
+
+        <section class="panel task-panel" aria-labelledby="jobs-heading">
+            <div class="panel-header">
+                <div>
+                    <h2 id="jobs-heading">任务列表</h2>
+                    <p id="job-count-label">正在加载任务</p>
+                </div>
+                <div class="toolbar">
+                    <label class="search-field"><span class="sr-only">搜索任务</span><input id="job-search" type="search" placeholder="搜索任务或处理器"></label>
+                    <button class="icon-button" type="button" id="refresh-button" title="刷新任务列表" aria-label="刷新任务列表">↻</button>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>任务</th><th>处理器 / 执行器</th><th>调度配置</th><th>下次执行</th><th>状态</th><th class="actions-heading">操作</th></tr></thead>
+                    <tbody id="jobs-body"></tbody>
+                </table>
+                <div class="empty-state" id="empty-state" hidden>尚未创建任务</div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<dialog id="job-dialog" class="dialog">
+    <form id="job-form" method="dialog">
+        <div class="dialog-header"><div><p class="eyebrow" id="form-eyebrow">新建</p><h2 id="dialog-title">新建任务</h2></div><button class="close-button" type="button" data-close-dialog aria-label="关闭">×</button></div>
+        <input type="hidden" id="job-id">
+        <div class="form-grid">
+            <label>任务名称<input id="name" name="name" required maxlength="100" placeholder="例如：每小时同步库存"></label>
+            <label>处理器名称<input id="handler" name="handler" required maxlength="100" placeholder="例如：sampleEchoHandler"></label>
+            <label>目标执行器<select id="executor-id" name="executorId" required><option value="">请选择执行器</option></select></label>
+            <label>触发方式<select id="schedule-type" name="scheduleType"><option value="CRON">Cron 表达式</option><option value="FIXED_RATE">固定间隔</option></select></label>
+            <label class="schedule-field cron-field" data-schedule="CRON">
+                <span class="field-label-row">
+                    <span>Cron 表达式</span>
+                    <button type="button" class="action-btn action-next" id="preview-cron-next">下次</button>
+                </span>
+                <input id="cron" name="cron" value="0 */5 * * * *" placeholder="0 */5 * * * *">
+            </label>
+            <label class="schedule-field" data-schedule="FIXED_RATE" hidden>
+                <span>间隔（毫秒）</span>
+                <input id="fixed-rate-millis" name="fixedRateMillis" type="number" min="1" value="60000" disabled>
+            </label>
+            <label>路由策略<select id="route-strategy" name="routeStrategy"><option value="FAILOVER" selected>故障转移</option><option value="FIRST">首个节点</option><option value="ROUND_ROBIN">轮询</option><option value="RANDOM">随机</option><option value="CONSISTENT_HASH">一致性哈希</option><option value="BROADCAST">广播</option></select></label>
+            <label>阻塞策略<select id="block-strategy" name="blockStrategy"><option value="SERIAL">串行跳过</option><option value="DISCARD_LATER">丢弃后续</option><option value="COVER_EARLY">覆盖前次</option></select></label>
+            <label>最大重试次数<input id="max-retry-count" name="maxRetryCount" type="number" min="0" value="0"></label>
+            <label>超时（秒，0 不限制）<input id="timeout-seconds" name="timeoutSeconds" type="number" min="0" value="0"></label>
+            <label class="full-width">任务参数<textarea id="parameters" name="parameters" rows="3" placeholder="传递给任务处理器的原始参数"></textarea></label>
+        </div>
+        <p class="form-error" id="form-error" role="alert"></p>
+        <div class="dialog-actions"><button class="secondary-button" type="button" data-close-dialog>取消</button><button class="primary-button" type="submit" id="submit-job-button">创建任务</button></div>
+    </form>
+</dialog>
+
+<dialog id="logs-dialog" class="dialog logs-dialog">
+    <div class="dialog-header"><div><p class="eyebrow">执行审计</p><h2 id="logs-title">任务日志</h2></div><button class="close-button" type="button" data-close-logs aria-label="关闭">×</button></div>
+    <div class="logs-content" id="logs-content"></div>
+</dialog>
+
+<dialog id="next-triggers-dialog" class="dialog next-triggers-dialog">
+    <div class="dialog-header">
+        <div>
+            <p class="eyebrow">调度预览</p>
+            <h2 id="next-triggers-title">下 10 次调度时间</h2>
+        </div>
+        <button class="close-button" type="button" data-close-next-triggers aria-label="关闭">×</button>
+    </div>
+    <p class="next-triggers-subtitle" id="next-triggers-subtitle"></p>
+    <ol class="next-triggers-list" id="next-triggers-list"></ol>
+</dialog>
+
+<dialog id="confirm-dialog" class="dialog confirm-dialog" aria-labelledby="confirm-title">
+    <div class="confirm-shell">
+        <div class="confirm-icon" id="confirm-icon" aria-hidden="true"></div>
+        <div class="confirm-copy">
+            <p class="eyebrow" id="confirm-eyebrow">请确认</p>
+            <h2 id="confirm-title">确认操作</h2>
+            <p class="confirm-message" id="confirm-message"></p>
+        </div>
+        <div class="dialog-actions confirm-actions">
+            <button class="secondary-button" type="button" id="confirm-cancel">取消</button>
+            <button class="primary-button" type="button" id="confirm-ok">确认</button>
+        </div>
+    </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script th:src="@{/schedule-admin/dashboard.js(v=${#dates.createNow().time})}"></script>
+</body>
+</html>
