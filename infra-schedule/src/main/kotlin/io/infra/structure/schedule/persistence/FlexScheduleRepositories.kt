@@ -7,6 +7,7 @@ import com.mybatisflex.kotlin.extensions.kproperty.eq
 import com.mybatisflex.kotlin.extensions.kproperty.ge
 import com.mybatisflex.kotlin.extensions.kproperty.le
 import com.mybatisflex.kotlin.extensions.mapper.query
+import com.mybatisflex.kotlin.scope.queryScope
 import io.infra.structure.schedule.model.BlockStrategy
 import io.infra.structure.schedule.model.ExecutionLogQuery
 import io.infra.structure.schedule.model.ExecutionStatus
@@ -129,7 +130,10 @@ class FlexScheduleExecutionLogRepository(
             ScheduleExecutionLogEntity::durationMillis set log.durationMillis
             where(
                 (ScheduleExecutionLogEntity::id eq log.id) and
-                    (ScheduleExecutionLogEntity::status eq ExecutionStatus.RUNNING.name)
+                    (
+                        (ScheduleExecutionLogEntity::status eq ExecutionStatus.RUNNING.name)
+                            .or(ScheduleExecutionLogEntity::status eq ExecutionStatus.QUEUED.name)
+                        )
             )
         } > 0
     }
@@ -141,9 +145,22 @@ class FlexScheduleExecutionLogRepository(
             ScheduleExecutionLogEntity::finishTime set finishTime
             where(
                 (ScheduleExecutionLogEntity::jobId eq jobId) and
-                    (ScheduleExecutionLogEntity::status eq ExecutionStatus.RUNNING.name)
+                    (
+                        (ScheduleExecutionLogEntity::status eq ExecutionStatus.RUNNING.name)
+                            .or(ScheduleExecutionLogEntity::status eq ExecutionStatus.QUEUED.name)
+                        )
             )
         }
+
+    override fun markRunningIfQueued(logId: Long, message: String): Boolean =
+        update<ScheduleExecutionLogEntity> {
+            ScheduleExecutionLogEntity::status set ExecutionStatus.RUNNING.name
+            ScheduleExecutionLogEntity::message set message
+            where(
+                (ScheduleExecutionLogEntity::id eq logId) and
+                    (ScheduleExecutionLogEntity::status eq ExecutionStatus.QUEUED.name)
+            )
+        } > 0
 
     override fun appendHandleLog(logId: Long, chunk: String): Boolean =
         logMapper.appendHandleLog(logId, chunk) > 0
@@ -151,8 +168,8 @@ class FlexScheduleExecutionLogRepository(
     override fun findStaleRunningCandidates(staleBeforeTriggerTime: Long, limit: Int): List<StaleRunningLogRef> =
         logMapper.findStaleRunningCandidates(staleBeforeTriggerTime, limit.coerceAtLeast(1))
 
-    override fun markLostIfRunning(id: Long, now: Long, message: String): Boolean =
-        logMapper.markLostIfRunning(id, now, message) > 0
+    override fun markLostIfActive(id: Long, now: Long, message: String): Boolean =
+        logMapper.markLostIfActive(id, now, message) > 0
 
     override fun failRunningByJobAndTrigger(
         jobId: Long,
@@ -161,24 +178,53 @@ class FlexScheduleExecutionLogRepository(
         finishTime: Long
     ): Int = logMapper.failRunningByJobAndTrigger(jobId, triggerTime, message, finishTime)
 
+    override fun findActiveByJobId(jobId: Long, limit: Int): List<JobExecutionLog> =
+        logMapper.query {
+            where(
+                (ScheduleExecutionLogEntity::jobId eq jobId) and
+                    (
+                        (ScheduleExecutionLogEntity::status eq ExecutionStatus.QUEUED.name)
+                            .or(ScheduleExecutionLogEntity::status eq ExecutionStatus.RUNNING.name)
+                        )
+            )
+            orderBy(ScheduleExecutionLogEntity::triggerTime.column, false)
+            limit(limit.coerceIn(1, 1_000))
+        }.map(ScheduleExecutionLogEntity::toModel)
+
     override fun findByJobId(jobId: Long, limit: Int): List<JobExecutionLog> =
         query(ExecutionLogQuery(jobId = jobId, limit = limit))
 
     override fun query(query: ExecutionLogQuery): List<JobExecutionLog> {
-        val conditions = buildList {
-            query.jobId?.let { add(ScheduleExecutionLogEntity::jobId eq it) }
-            query.executorId?.let { add(ScheduleExecutionLogEntity::executorId eq it) }
-            query.status?.let { add(ScheduleExecutionLogEntity::status eq it.name) }
-            query.triggerTimeFrom?.let { add(ScheduleExecutionLogEntity::triggerTime ge it) }
-            query.triggerTimeTo?.let { add(ScheduleExecutionLogEntity::triggerTime le it) }
-        }
+        val conditions = buildLogQueryConditions(query)
+        val offset = query.offset.coerceAtLeast(0)
+        val limit = query.limit.coerceIn(1, 1_000)
         return logMapper.query {
             if (conditions.isNotEmpty()) {
                 where(conditions.reduce { left, right -> left and right })
             }
             orderBy(ScheduleExecutionLogEntity::triggerTime.column, false)
-            limit(query.limit.coerceIn(1, 1_000))
+            if (offset > 0) {
+                offset(offset)
+            }
+            limit(limit)
         }.map(ScheduleExecutionLogEntity::toModel)
+    }
+
+    override fun count(query: ExecutionLogQuery): Long {
+        val conditions = buildLogQueryConditions(query)
+        return logMapper.selectCountByQuery(queryScope {
+            if (conditions.isNotEmpty()) {
+                where(conditions.reduce { left, right -> left and right })
+            }
+        })
+    }
+
+    private fun buildLogQueryConditions(query: ExecutionLogQuery) = buildList {
+        query.jobId?.let { add(ScheduleExecutionLogEntity::jobId eq it) }
+        query.executorId?.let { add(ScheduleExecutionLogEntity::executorId eq it) }
+        query.status?.let { add(ScheduleExecutionLogEntity::status eq it.name) }
+        query.triggerTimeFrom?.let { add(ScheduleExecutionLogEntity::triggerTime ge it) }
+        query.triggerTimeTo?.let { add(ScheduleExecutionLogEntity::triggerTime le it) }
     }
 }
 
@@ -194,7 +240,7 @@ private fun ScheduleJob.toEntity() = ScheduleJobEntity(
 private fun ScheduleJobEntity.toModel() = ScheduleJob(
     id = id ?: 0, name = name, executorGroup = "default", executorId = executorId, handler = handler, parameters = parameters,
     scheduleType = ScheduleType.valueOf(scheduleType), cron = cron, fixedRateMillis = fixedRateMillis,
-    status = JobStatus.valueOf(status), routeStrategy = RouteStrategy.valueOf(routeStrategy),
+    status = JobStatus.valueOf(status), routeStrategy = RouteStrategy.parse(routeStrategy),
     blockStrategy = BlockStrategy.valueOf(blockStrategy), resident = resident, maxRetryCount = maxRetryCount,
     retryIntervalMillis = retryIntervalMillis, timeoutSeconds = timeoutSeconds, nextTriggerAt = nextTriggerAt,
     lastTriggerAt = lastTriggerAt, claimOwner = claimOwner, claimUntil = claimUntil,

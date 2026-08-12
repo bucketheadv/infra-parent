@@ -39,7 +39,7 @@
             <div class="panel-header">
                 <div>
                     <h2 id="log-filters-heading">查询条件</h2>
-                    <p>支持快捷时间与多条件组合，最多返回 1000 条</p>
+                    <p>支持快捷时间与多条件组合查询</p>
                 </div>
                 <div class="toolbar">
                     <button class="secondary-button" type="button" id="reset-log-filters-button">重置</button>
@@ -72,16 +72,16 @@
                             <option value="SKIPPED">跳过</option>
                             <option value="CANCELLED">已终止</option>
                             <option value="LOST">已丢失</option>
+                            <option value="QUEUED">排队中</option>
                             <option value="RUNNING">运行中</option>
                         </select>
                     </label>
-                    <label>返回条数
-                        <select id="log-limit" name="limit">
+                    <label>每页条数
+                        <select id="log-page-size" name="pageSize">
+                            <option value="20" selected>20</option>
                             <option value="50">50</option>
-                            <option value="100" selected>100</option>
+                            <option value="100">100</option>
                             <option value="200">200</option>
-                            <option value="500">500</option>
-                            <option value="1000">1000</option>
                         </select>
                     </label>
                     <label>开始时间
@@ -104,15 +104,23 @@
                     <h2 id="log-results-heading">查询结果</h2>
                     <p id="log-result-count">尚未查询</p>
                 </div>
+                <div class="toolbar">
+                    <button class="secondary-button" type="button" id="refresh-logs-button">刷新</button>
+                </div>
             </div>
             <div class="log-summary" id="log-summary" hidden>
-                <article class="log-summary-item"><span>全部</span><strong id="log-stat-total">0</strong></article>
+                <article class="log-summary-item"><span>本页</span><strong id="log-stat-total">0</strong></article>
                 <article class="log-summary-item success"><span>成功</span><strong id="log-stat-success">0</strong></article>
                 <article class="log-summary-item failed"><span>失败 / 超时</span><strong id="log-stat-failed">0</strong></article>
                 <article class="log-summary-item other"><span>跳过 / 其他</span><strong id="log-stat-other">0</strong></article>
             </div>
             <div class="log-query-results" id="log-query-results">
                 <p class="log-empty">请设置条件后点击查询</p>
+            </div>
+            <div class="log-pagination" id="log-pagination" hidden>
+                <button type="button" class="secondary-button" id="log-prev-page">上一页</button>
+                <span class="log-page-label" id="log-page-label">第 1 / 1 页</span>
+                <button type="button" class="secondary-button" id="log-next-page">下一页</button>
             </div>
         </section>
     </main>

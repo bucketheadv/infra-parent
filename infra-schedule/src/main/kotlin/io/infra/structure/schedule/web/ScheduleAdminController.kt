@@ -2,6 +2,8 @@ package io.infra.structure.schedule.web
 
 import io.infra.structure.schedule.core.ExecutorRegistry
 import io.infra.structure.schedule.core.HandleLogAppendRequest
+import io.infra.structure.schedule.core.LogFinishRequest
+import io.infra.structure.schedule.core.LogStartedRequest
 import io.infra.structure.schedule.core.SCHEDULE_ACCESS_TOKEN_HEADER
 import io.infra.structure.schedule.model.BlockStrategy
 import io.infra.structure.schedule.model.ExecutionLogQuery
@@ -78,28 +80,33 @@ class ScheduleAdminController(
         scheduleService.setStatus(id, request.status)
 
     @GetMapping(ScheduleWebPaths.JOB_LOGS)
-    /** 获取指定任务最近的执行审计记录。 */
-    fun logs(@PathVariable id: Long, @RequestParam(defaultValue = "100") @Min(1) limit: Int) =
-        scheduleService.executionLogs(id, limit)
+    /** 分页获取指定任务的执行审计记录。 */
+    fun logs(
+        @PathVariable id: Long,
+        @RequestParam(defaultValue = "1") @Min(1) page: Int,
+        @RequestParam(defaultValue = "20") @Min(1) pageSize: Int
+    ) = scheduleService.executionLogs(id, page, pageSize)
 
     @GetMapping(ScheduleWebPaths.LOGS)
-    /** 按任务、执行器、状态与触发时间范围查询执行日志。 */
+    /** 按任务、执行器、状态与触发时间范围分页查询执行日志。 */
     fun queryLogs(
         @RequestParam(required = false) jobId: Long?,
         @RequestParam(required = false) executorId: Long?,
         @RequestParam(required = false) status: ExecutionStatus?,
         @RequestParam(required = false) from: Long?,
         @RequestParam(required = false) to: Long?,
-        @RequestParam(defaultValue = "100") @Min(1) limit: Int
+        @RequestParam(defaultValue = "1") @Min(1) page: Int,
+        @RequestParam(defaultValue = "20") @Min(1) pageSize: Int
     ) = scheduleService.queryExecutionLogs(
         ExecutionLogQuery(
             jobId = jobId,
             executorId = executorId,
             status = status,
             triggerTimeFrom = from,
-            triggerTimeTo = to,
-            limit = limit
-        )
+            triggerTimeTo = to
+        ),
+        page = page,
+        pageSize = pageSize
     )
 
     @GetMapping(ScheduleWebPaths.LOG_BY_ID)
@@ -111,7 +118,7 @@ class ScheduleAdminController(
     }
 
     @PostMapping(ScheduleWebPaths.LOG_CANCEL)
-    /** 终止运行中日志对应的执行进程，并将日志标记为已取消。 */
+    /** 终止指定日志对应的单次排队/执行，不影响同任务其他触发。 */
     fun cancelLog(@PathVariable id: Long): CancelExecutionResponse {
         val cancelled = try {
             scheduleService.cancelRunningLog(id)
@@ -119,9 +126,40 @@ class ScheduleAdminController(
             throw ResponseStatusException(HttpStatus.NOT_FOUND, exception.message)
         }
         if (!cancelled) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "该日志当前不在运行中")
+            throw ResponseStatusException(HttpStatus.CONFLICT, "该日志当前不在排队或运行中")
         }
         return CancelExecutionResponse(cancelled = true)
+    }
+
+    @PostMapping(ScheduleWebPaths.LOG_STARTED)
+    /** 执行器通知：日志离开队列、开始执行 handler（QUEUED → RUNNING）。 */
+    fun markLogStarted(
+        @PathVariable id: Long,
+        @RequestHeader(value = SCHEDULE_ACCESS_TOKEN_HEADER, required = false) accessToken: String?,
+        @RequestBody(required = false) request: LogStartedRequest?
+    ): ResponseEntity<Unit> {
+        requireExecutorToken(accessToken)
+        scheduleService.markExecutionStarted(id, request?.message ?: "执行中")
+        return ResponseEntity.noContent().build()
+    }
+
+    @PostMapping(ScheduleWebPaths.LOG_FINISH)
+    /** 执行器在串行放行前同步回写终态，避免多条 RUNNING 并存。 */
+    fun finishLogFromExecutor(
+        @PathVariable id: Long,
+        @RequestHeader(value = SCHEDULE_ACCESS_TOKEN_HEADER, required = false) accessToken: String?,
+        @RequestBody request: LogFinishRequest
+    ): ResponseEntity<Unit> {
+        requireExecutorToken(accessToken)
+        scheduleService.completeExecutionFromExecutor(
+            logId = id,
+            success = request.success,
+            message = request.message,
+            discarded = request.discarded,
+            cancelled = request.cancelled,
+            durationMillis = request.durationMillis
+        )
+        return ResponseEntity.noContent().build()
     }
 
     @PostMapping(ScheduleWebPaths.LOG_HANDLE_APPEND)

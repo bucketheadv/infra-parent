@@ -8,6 +8,7 @@ import io.infra.structure.schedule.model.RouteStrategy
 import io.infra.structure.schedule.model.ScheduleExecutorDraft
 import io.infra.structure.schedule.repository.ExecutorHeartbeatRepository
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.random.Random
 
@@ -17,7 +18,10 @@ data class RoutedExecutor(
     val executor: ScheduleExecutor,
     /** 执行器访问地址，本地执行时可能为空。 */
     val address: String? = null
-)
+) {
+    /** LFU/LRU 统计用的稳定节点键。 */
+    val routeNodeKey: String = address?.takeIf { it.isNotBlank() } ?: "local:$dbId"
+}
 
 /** 管理执行器实例、自动心跳注册、多地址路由和后台 CRUD 配置。 */
 class ExecutorRegistry(
@@ -27,6 +31,11 @@ class ExecutorRegistry(
 ) {
     private val executors = ConcurrentHashMap<String, ScheduleExecutor>()
     private val cursorByGroup = ConcurrentHashMap<String, AtomicLong>()
+    /** 最不经常使用：节点键 -> 选用次数 */
+    private val lfuCounts = ConcurrentHashMap<String, AtomicInteger>()
+    /** 最近最久未使用：按访问顺序排列的节点键（头部最久未用） */
+    private val lruOrder = LinkedHashSet<String>()
+    private val lruLock = Any()
 
     /** 注册本地执行器并刷新以分组为唯一标识的心跳。 */
     fun register(executor: ScheduleExecutor) {
@@ -159,7 +168,11 @@ class ExecutorRegistry(
     fun selectRouted(executorGroup: String, strategy: RouteStrategy, routeKey: String): List<RoutedExecutor> =
         applyRoute(activeRouted(executorGroup), strategy, routeKey, executorGroup)
 
-    /** 在候选地址节点上应用路由策略。 */
+    /**
+     * 在候选地址节点上应用路由策略（对齐 xxl-job）。
+     * [FAILOVER] / [BUSYOVER] 返回全部有序候选，由调度侧按 beat / idleBeat 挑选第一个可用节点。
+     * [SHARDING_BROADCAST] 返回全部候选。
+     */
     fun applyRoute(
         candidates: List<RoutedExecutor>,
         strategy: RouteStrategy,
@@ -167,16 +180,59 @@ class ExecutorRegistry(
         cursorKey: String
     ): List<RoutedExecutor> {
         if (candidates.isEmpty()) return emptyList()
-        if (strategy == RouteStrategy.BROADCAST || strategy == RouteStrategy.FAILOVER) return candidates
+        when (strategy) {
+            RouteStrategy.SHARDING_BROADCAST,
+            RouteStrategy.FAILOVER,
+            RouteStrategy.BUSYOVER -> return candidates
+            else -> Unit
+        }
         val selected = when (strategy) {
             RouteStrategy.FIRST -> candidates.first()
-            RouteStrategy.FAILOVER -> error("故障转移已提前返回全部候选节点")
-            RouteStrategy.ROUND_ROBIN -> candidates[(cursorByGroup.computeIfAbsent(cursorKey) { AtomicLong() }.getAndIncrement() % candidates.size).toInt()]
+            RouteStrategy.LAST -> candidates.last()
+            RouteStrategy.ROUND -> {
+                val index = (cursorByGroup.computeIfAbsent(cursorKey) { AtomicLong() }
+                    .getAndIncrement() % candidates.size).toInt()
+                candidates[index]
+            }
             RouteStrategy.RANDOM -> candidates[Random.nextInt(candidates.size)]
-            RouteStrategy.CONSISTENT_HASH -> candidates[(routeKey.hashCode().toUInt().toLong() % candidates.size).toInt()]
-            RouteStrategy.BROADCAST -> error("已提前处理广播路由")
+            RouteStrategy.CONSISTENT_HASH ->
+                candidates[(routeKey.hashCode().toUInt().toLong() % candidates.size).toInt()]
+            RouteStrategy.LEAST_FREQUENTLY_USED -> selectLfu(candidates)
+            RouteStrategy.LEAST_RECENTLY_USED -> selectLru(candidates)
+            RouteStrategy.FAILOVER,
+            RouteStrategy.BUSYOVER,
+            RouteStrategy.SHARDING_BROADCAST -> error("已提前处理的路由策略: $strategy")
         }
+        recordUse(selected)
         return listOf(selected)
+    }
+
+    private fun selectLfu(candidates: List<RoutedExecutor>): RoutedExecutor =
+        candidates.minWith(
+            compareBy<RoutedExecutor> { lfuCounts[it.routeNodeKey]?.get() ?: 0 }
+                .thenBy { it.dbId }
+                .thenBy { it.address ?: "" }
+        )
+
+    private fun selectLru(candidates: List<RoutedExecutor>): RoutedExecutor {
+        synchronized(lruLock) {
+            val keys = candidates.map { it.routeNodeKey }
+            val oldest = keys
+                .filter { lruOrder.contains(it) }
+                .minByOrNull { lruOrder.indexOf(it) }
+            if (oldest != null) {
+                return candidates.first { it.routeNodeKey == oldest }
+            }
+            return candidates.first()
+        }
+    }
+
+    private fun recordUse(selected: RoutedExecutor) {
+        lfuCounts.computeIfAbsent(selected.routeNodeKey) { AtomicInteger() }.incrementAndGet()
+        synchronized(lruLock) {
+            lruOrder.remove(selected.routeNodeKey)
+            lruOrder.add(selected.routeNodeKey)
+        }
     }
 
     private fun expandAddresses(heartbeat: ExecutorHeartbeat, now: Long): List<RoutedExecutor> {

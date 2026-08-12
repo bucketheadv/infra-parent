@@ -57,33 +57,13 @@ class InfraScheduleAutoConfiguration {
 
     @Bean(destroyMethod = "shutdown")
     @ConditionalOnMissingBean(name = ["infraScheduleWorkerExecutor"])
-    fun infraScheduleWorkerExecutor(properties: InfraScheduleProperties): ExecutorService =
-        Executors.newFixedThreadPool(properties.workerThreads.coerceAtLeast(1))
+    fun infraScheduleWorkerExecutor(): ExecutorService =
+        // 重叠触发时调度侧会并发等待执行器（SERIAL 排队 / COVER 覆盖），用虚拟线程避免池打满。
+        Executors.newVirtualThreadPerTaskExecutor()
 
     @Bean(destroyMethod = "shutdown")
     @ConditionalOnMissingBean(name = ["infraScheduleAttemptExecutor"])
     fun infraScheduleAttemptExecutor(): ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
-
-    @Bean(destroyMethod = "shutdown")
-    @ConditionalOnMissingBean(name = ["infraScheduleHandlerExecutor"])
-    fun infraScheduleHandlerExecutor(): ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
-
-    @Bean
-    @ConditionalOnMissingBean
-    fun executorTaskTracker(
-        handlerRegistry: HandlerRegistry,
-        @Qualifier("infraScheduleHandlerExecutor") handlerExecutor: ExecutorService
-    ) = ExecutorTaskTracker(handlerRegistry, handlerExecutor)
-
-    @Bean
-    @ConditionalOnMissingBean
-    fun httpScheduleCancelClient(properties: InfraScheduleProperties) = HttpScheduleCancelClient(
-        properties.executor.accessToken,
-        properties.executor.authEnabled,
-        properties.executor.connectTimeoutMillis,
-        // 终止请求应快速返回，避免管理端长时间卡住。
-        minOf(properties.executor.readTimeoutMillis, 5_000L)
-    )
 
     @Bean
     @ConditionalOnMissingBean
@@ -95,6 +75,33 @@ class InfraScheduleAutoConfiguration {
         ScheduleLogHelper.install(reporter)
         return reporter
     }
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun executorTaskTracker(
+        handlerRegistry: HandlerRegistry,
+        scheduleLogReporter: ScheduleLogReporter
+    ) = ExecutorTaskTracker(
+        handlerRegistry = handlerRegistry,
+        onExecutionStarted = { context ->
+            val logId = context.logId ?: return@ExecutorTaskTracker
+            scheduleLogReporter.markStarted(logId, "${context.handler} 执行中")
+        },
+        onExecutionFinished = { context, result, durationMillis ->
+            val logId = context.logId ?: return@ExecutorTaskTracker
+            scheduleLogReporter.markFinished(logId, result, durationMillis)
+        }
+    )
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun httpScheduleCancelClient(properties: InfraScheduleProperties) = HttpScheduleCancelClient(
+        properties.executor.accessToken,
+        properties.executor.authEnabled,
+        properties.executor.connectTimeoutMillis,
+        // 终止请求应快速返回，避免管理端长时间卡住。
+        minOf(properties.executor.readTimeoutMillis, 5_000L)
+    )
 
     @Bean
     @ConditionalOnMissingBean

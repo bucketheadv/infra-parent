@@ -37,7 +37,9 @@ class ScheduleAdminWebConfigurer(
             .excludePathPatterns(
                 ScheduleWebPaths.EXECUTOR_HEARTBEAT,
                 ScheduleWebPaths.EXECUTOR_OFFLINE,
-                ScheduleWebPaths.EXECUTOR_LOG_HANDLE_APPEND_PATTERN
+                ScheduleWebPaths.EXECUTOR_LOG_HANDLE_APPEND_PATTERN,
+                ScheduleWebPaths.EXECUTOR_LOG_STARTED_PATTERN,
+                ScheduleWebPaths.EXECUTOR_LOG_FINISH_PATTERN
             )
     }
 }

@@ -1,7 +1,10 @@
 package io.infra.structure.schedule.web
 
+import io.infra.structure.schedule.core.ExecutorBeatResponse
 import io.infra.structure.schedule.core.ExecutorCancelRequest
 import io.infra.structure.schedule.core.ExecutorCancelResponse
+import io.infra.structure.schedule.core.ExecutorIdleBeatRequest
+import io.infra.structure.schedule.core.ExecutorIdleBeatResponse
 import io.infra.structure.schedule.core.ExecutorRunningRequest
 import io.infra.structure.schedule.core.ExecutorRunningResponse
 import io.infra.structure.schedule.core.ExecutorTaskTracker
@@ -10,6 +13,7 @@ import io.infra.structure.schedule.model.JobExecutionContext
 import io.infra.structure.schedule.model.JobExecutionResult
 import io.infra.structure.schedule.properties.InfraScheduleProperties
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
@@ -24,8 +28,12 @@ class ScheduleExecutorController(
     private val taskTracker: ExecutorTaskTracker,
     private val properties: InfraScheduleProperties
 ) {
-    /** 校验共享令牌后在本进程执行已注册处理器，并按 logId 跟踪以便终止。 */
-    @PostMapping(ScheduleWebPaths.RUN)
+    /** 校验共享令牌后按阻塞策略入队/执行已注册处理器。 */
+    @PostMapping(
+        ScheduleWebPaths.RUN,
+        consumes = [MediaType.APPLICATION_JSON_VALUE],
+        produces = [MediaType.APPLICATION_JSON_VALUE]
+    )
     fun run(
         @RequestHeader(value = SCHEDULE_ACCESS_TOKEN_HEADER, required = false) accessToken: String?,
         @RequestBody context: JobExecutionContext
@@ -34,8 +42,12 @@ class ScheduleExecutorController(
         return taskTracker.run(context)
     }
 
-    /** 按执行日志 ID 中断本进程内对应的 handler 线程。 */
-    @PostMapping(ScheduleWebPaths.CANCEL)
+    /** 按执行日志 ID 中断本进程内对应的 handler 线程或队列项。 */
+    @PostMapping(
+        ScheduleWebPaths.CANCEL,
+        consumes = [MediaType.APPLICATION_JSON_VALUE],
+        produces = [MediaType.APPLICATION_JSON_VALUE]
+    )
     fun cancel(
         @RequestHeader(value = SCHEDULE_ACCESS_TOKEN_HEADER, required = false) accessToken: String?,
         @RequestBody request: ExecutorCancelRequest
@@ -44,14 +56,41 @@ class ScheduleExecutorController(
         return ExecutorCancelResponse(cancelled = taskTracker.cancel(request.logId))
     }
 
-    /** 查询本进程内指定日志 ID 的 handler 是否仍在执行。 */
-    @PostMapping(ScheduleWebPaths.RUNNING)
+    /** 查询本进程内指定日志 ID 的 handler 是否仍在执行或排队。 */
+    @PostMapping(
+        ScheduleWebPaths.RUNNING,
+        consumes = [MediaType.APPLICATION_JSON_VALUE],
+        produces = [MediaType.APPLICATION_JSON_VALUE]
+    )
     fun running(
         @RequestHeader(value = SCHEDULE_ACCESS_TOKEN_HEADER, required = false) accessToken: String?,
         @RequestBody request: ExecutorRunningRequest
     ): ExecutorRunningResponse {
         requireAuthorized(accessToken)
         return ExecutorRunningResponse(running = taskTracker.isRunning(request.logId))
+    }
+
+    /** 执行器进程探活（对齐 xxl-job beat）。 */
+    @PostMapping(ScheduleWebPaths.BEAT, produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun beat(
+        @RequestHeader(value = SCHEDULE_ACCESS_TOKEN_HEADER, required = false) accessToken: String?
+    ): ExecutorBeatResponse {
+        requireAuthorized(accessToken)
+        return ExecutorBeatResponse(alive = true)
+    }
+
+    /** 指定 job 是否空闲（对齐 xxl-job idleBeat）。 */
+    @PostMapping(
+        ScheduleWebPaths.IDLE_BEAT,
+        consumes = [MediaType.APPLICATION_JSON_VALUE],
+        produces = [MediaType.APPLICATION_JSON_VALUE]
+    )
+    fun idleBeat(
+        @RequestHeader(value = SCHEDULE_ACCESS_TOKEN_HEADER, required = false) accessToken: String?,
+        @RequestBody request: ExecutorIdleBeatRequest
+    ): ExecutorIdleBeatResponse {
+        requireAuthorized(accessToken)
+        return ExecutorIdleBeatResponse(idle = taskTracker.isJobIdle(request.jobId))
     }
 
     private fun requireAuthorized(accessToken: String?) {

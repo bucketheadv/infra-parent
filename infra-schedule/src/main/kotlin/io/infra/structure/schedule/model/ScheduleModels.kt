@@ -1,5 +1,7 @@
 package io.infra.structure.schedule.model
 
+import com.fasterxml.jackson.annotation.JsonCreator
+
 /** 任务触发方式。Cron 表达式采用 Spring 六段格式，首段为秒。 */
 enum class ScheduleType {
     /** 由 Cron 表达式决定执行时间。 */
@@ -16,35 +18,62 @@ enum class JobStatus {
     DISABLED
 }
 
-/** 与 XXL-JOB 的阻塞处理语义保持一致。 */
+/**
+ * 阻塞处理策略（对齐 xxl-job `ExecutorBlockStrategyEnum`）。
+ * 生效点在**执行器**按 jobId 的 JobThread，而非调度中心。
+ */
 enum class BlockStrategy {
-    /** 当前任务运行时跳过后续触发，保证同一任务串行。 */
+    /** 单机串行：新触发进入该 job 的执行队列，按序执行。 */
     SERIAL,
-    /** 当前任务运行时直接丢弃本次触发。 */
+    /** 丢弃后续调度：若该 job 正在执行或队列非空，则丢弃本次触发。 */
     DISCARD_LATER,
-    /** 中断当前任务并立即执行新触发。处理器应正确响应线程中断。 */
+    /** 覆盖之前调度：若该 job 忙碌，则终止旧线程/清空队列，再执行本次触发。 */
     COVER_EARLY
 }
 
-/** 在同一执行器分组中选择目标执行器的策略。 */
+/**
+ * 路由策略（对齐 xxl-job `ExecutorRouteStrategyEnum`）。
+ * 旧库值 `ROUND_ROBIN` / `BROADCAST` 读取时兼容映射为 [ROUND] / [SHARDING_BROADCAST]。
+ */
 enum class RouteStrategy {
-    /** 始终选择按执行器 ID 排序后的第一个节点。 */
+    /** 第一个 */
     FIRST,
-    /** 按节点顺序尝试，某个节点不可用或执行失败时转移到下一个，对应 xxl-job 故障转移。 */
-    FAILOVER,
-    /** 在健康节点间轮询。 */
-    ROUND_ROBIN,
-    /** 在健康节点间随机选择。 */
+    /** 最后一个 */
+    LAST,
+    /** 轮询 */
+    ROUND,
+    /** 随机 */
     RANDOM,
-    /** 根据任务 ID 稳定映射到一个健康节点。 */
+    /** 一致性 HASH */
     CONSISTENT_HASH,
-    /** 向分组内所有健康节点广播，并携带分片参数。 */
-    BROADCAST
+    /** 最不经常使用 */
+    LEAST_FREQUENTLY_USED,
+    /** 最近最久未使用 */
+    LEAST_RECENTLY_USED,
+    /** 故障转移：按序探活，选第一个心跳成功的节点 */
+    FAILOVER,
+    /** 忙碌转移：按序空闲检测，选第一个空闲节点 */
+    BUSYOVER,
+    /** 分片广播 */
+    SHARDING_BROADCAST;
+
+    companion object {
+        /** 解析路由策略，兼容历史枚举名。 */
+        @JvmStatic
+        @JsonCreator
+        fun parse(raw: String): RouteStrategy = when (raw) {
+            "ROUND_ROBIN" -> ROUND
+            "BROADCAST" -> SHARDING_BROADCAST
+            else -> valueOf(raw)
+        }
+    }
 }
 
 /** 单次执行记录的最终或中间状态。 */
 enum class ExecutionStatus {
-    /** 已创建但尚未完成。 */
+    /** 已调度，在执行器 JobThread 队列中等待（串行常见）。 */
+    QUEUED,
+    /** 处理器正在执行。 */
     RUNNING,
     /** 处理器成功返回。 */
     SUCCESS,
@@ -57,7 +86,10 @@ enum class ExecutionStatus {
     /** 管理员主动终止执行。 */
     CANCELLED,
     /** 长时间停留在运行中被调度中心回收（节点崩溃或执行丢失）。 */
-    LOST
+    LOST;
+
+    /** 排队或执行中，尚未到终态。 */
+    fun isActive(): Boolean = this == QUEUED || this == RUNNING
 }
 
 /** 执行器在调度中心中的可用状态。 */
@@ -104,7 +136,7 @@ data class ScheduleJob(
     val blockStrategy: BlockStrategy = BlockStrategy.SERIAL,
     /**
      * 是否常驻任务。
-     * 常驻任务在串行跳过 / 丢弃后续策略下因重叠未实际执行时，不写入调度日志。
+     * 常驻任务在丢弃后续策略下被执行器丢弃时，不保留跳过日志。
      */
     val resident: Boolean = false,
     /** 一次触发失败后的最大额外重试次数。 */
@@ -151,7 +183,7 @@ data class ScheduleJobDraft(
     val routeStrategy: RouteStrategy = RouteStrategy.FAILOVER,
     /** 重叠触发处理策略。 */
     val blockStrategy: BlockStrategy = BlockStrategy.SERIAL,
-    /** 是否常驻任务；常驻时串行跳过 / 丢弃后续不写调度日志。 */
+    /** 是否常驻任务；常驻时丢弃后续不保留跳过日志。 */
     val resident: Boolean = false,
     /** 一次触发的最大额外重试次数。 */
     val maxRetryCount: Int = 0,
@@ -178,7 +210,9 @@ data class JobExecutionContext(
     /** 广播执行时的总分片数。 */
     val shardTotal: Int = 1,
     /** 对应执行日志主键；执行器按此 ID 跟踪并支持远程终止。 */
-    val logId: Long? = null
+    val logId: Long? = null,
+    /** 阻塞策略；由执行器 JobThread 解释，默认单机串行。 */
+    val blockStrategy: BlockStrategy = BlockStrategy.SERIAL
 )
 
 /** 任务处理器返回给调度器的执行结果。 */
@@ -186,13 +220,21 @@ data class JobExecutionResult(
     /** 是否执行成功。 */
     val success: Boolean,
     /** 可记录到执行日志的简短结果信息。 */
-    val message: String? = null
+    val message: String? = null,
+    /** 被阻塞策略丢弃（DISCARD_LATER）时为 true。 */
+    val discarded: Boolean = false,
+    /** 被覆盖或主动终止时为 true。 */
+    val cancelled: Boolean = false
 ) {
     companion object {
         /** 构造成功结果；[message] 为可选返回值，由调度侧拼进日志。 */
         fun success(message: String? = null) = JobExecutionResult(true, message)
         /** 构造失败结果。 */
         fun failure(message: String) = JobExecutionResult(false, message)
+        /** 构造被阻塞策略丢弃的结果。 */
+        fun discarded(message: String) = JobExecutionResult(false, message, discarded = true)
+        /** 构造被取消 / 覆盖的结果。 */
+        fun cancelled(message: String) = JobExecutionResult(false, message, cancelled = true)
     }
 }
 
@@ -208,9 +250,27 @@ data class ExecutionLogQuery(
     val triggerTimeFrom: Long? = null,
     /** 触发时间上限（含），毫秒时间戳。 */
     val triggerTimeTo: Long? = null,
-    /** 返回条数上限，服务端会限制在 1..1000。 */
-    val limit: Int = 100
+    /** 分页偏移量，从 0 开始。 */
+    val offset: Int = 0,
+    /** 每页条数，服务端会限制在 1..1000。 */
+    val limit: Int = 20
 )
+
+/** 执行日志分页结果。 */
+data class ExecutionLogPage(
+    /** 当前页记录。 */
+    val items: List<JobExecutionLog>,
+    /** 符合条件的总条数。 */
+    val total: Long,
+    /** 当前页码，从 1 开始。 */
+    val page: Int,
+    /** 每页条数。 */
+    val pageSize: Int
+) {
+    /** 总页数。 */
+    val totalPages: Int
+        get() = if (pageSize <= 0 || total <= 0) 0 else ((total + pageSize - 1) / pageSize).toInt()
+}
 
 /** 一次任务触发在指定执行器上的执行审计记录。 */
 data class JobExecutionLog(

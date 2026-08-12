@@ -1,11 +1,12 @@
 package io.infra.structure.schedule.core
 
 import io.infra.structure.schedule.web.ScheduleWebPaths
+import org.springframework.http.MediaType
 import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.web.client.RestClient
 import java.time.Duration
 
-/** 调度中心向远程执行器发起按日志 ID 终止执行的 HTTP 客户端。 */
+/** 调度中心向远程执行器发起终止 / 探活 / 空闲检测的 HTTP 客户端。 */
 class HttpScheduleCancelClient(
     private val accessToken: String?,
     private val authenticationEnabled: Boolean,
@@ -40,12 +41,39 @@ class HttpScheduleCancelClient(
         null
     }
 
+    /** 执行器进程探活；成功返回 true，不可达返回 false。 */
+    fun beat(baseUrl: String): Boolean = try {
+        val response = post(baseUrl, ScheduleWebPaths.EXECUTOR_BEAT, emptyMap<String, Any>(), ExecutorBeatResponse::class.java)
+        response?.alive == true
+    } catch (_: Exception) {
+        false
+    }
+
+    /**
+     * 空闲检测：目标 job 在该执行器上是否空闲。
+     * @return true 空闲；false 忙碌；null 不可达
+     */
+    fun idleBeat(baseUrl: String, jobId: Long): Boolean? = try {
+        val response = post(
+            baseUrl,
+            ScheduleWebPaths.EXECUTOR_IDLE_BEAT,
+            ExecutorIdleBeatRequest(jobId),
+            ExecutorIdleBeatResponse::class.java
+        ) ?: return null
+        response.idle
+    } catch (_: Exception) {
+        null
+    }
+
     private fun <T : Any> post(baseUrl: String, path: String, body: Any, responseType: Class<T>): T? {
         val client = RestClient.builder()
             .baseUrl(baseUrl.removeSuffix("/"))
             .requestFactory(requestFactory)
             .build()
-        val request = client.post().uri(path)
+        val request = client.post()
+            .uri(path)
+            .contentType(MediaType.APPLICATION_JSON)
+            .accept(MediaType.APPLICATION_JSON)
         if (authenticationEnabled && !accessToken.isNullOrBlank()) {
             request.header(SCHEDULE_ACCESS_TOKEN_HEADER, accessToken)
         }
@@ -71,4 +99,19 @@ data class ExecutorRunningRequest(
 /** 执行器任务存活查询响应体。 */
 data class ExecutorRunningResponse(
     val running: Boolean
+)
+
+/** 执行器存活探活响应。 */
+data class ExecutorBeatResponse(
+    val alive: Boolean = true
+)
+
+/** 执行器空闲检测请求。 */
+data class ExecutorIdleBeatRequest(
+    val jobId: Long
+)
+
+/** 执行器空闲检测响应。 */
+data class ExecutorIdleBeatResponse(
+    val idle: Boolean
 )

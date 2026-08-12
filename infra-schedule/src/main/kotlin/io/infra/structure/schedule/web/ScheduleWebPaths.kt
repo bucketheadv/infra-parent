@@ -28,6 +28,18 @@ object ScheduleWebPaths {
     const val EXECUTOR_LOG_HANDLE_APPEND = "$API_ROOT$LOG_HANDLE_APPEND"
     /** 拦截器排除用的 Ant 路径（匹配任意日志 ID）。 */
     const val EXECUTOR_LOG_HANDLE_APPEND_PATTERN = "$API_ROOT/logs/*/handle-log"
+    /** 执行器通知日志已开始真正执行（QUEUED → RUNNING）。 */
+    const val LOG_STARTED = "/logs/{id}/started"
+    /** 执行器通知开始执行的完整路径模板。 */
+    const val EXECUTOR_LOG_STARTED = "$API_ROOT$LOG_STARTED"
+    /** 拦截器排除用的 Ant 路径。 */
+    const val EXECUTOR_LOG_STARTED_PATTERN = "$API_ROOT/logs/*/started"
+    /** 执行器在放行下一票前同步回写终态（避免串行时多条 RUNNING）。 */
+    const val LOG_FINISH = "/logs/{id}/finish"
+    /** 执行器回写终态的完整路径模板。 */
+    const val EXECUTOR_LOG_FINISH = "$API_ROOT$LOG_FINISH"
+    /** 拦截器排除用的 Ant 路径。 */
+    const val EXECUTOR_LOG_FINISH_PATTERN = "$API_ROOT/logs/*/finish"
     /** 预览任务接下来若干次调度时间的相对路径模板。 */
     const val JOB_NEXT_TRIGGERS = "/jobs/{id}/next-triggers"
     /** 按当前表单中的调度配置预览接下来若干次调度时间。 */
@@ -64,4 +76,12 @@ object ScheduleWebPaths {
     const val RUNNING = "/running"
     /** 调度中心查询执行器任务存活的完整路径。 */
     const val EXECUTOR_RUNNING = "$EXECUTOR_ROOT$RUNNING"
+    /** 执行器存活探活（故障转移）相对路径。 */
+    const val BEAT = "/beat"
+    /** 调度中心探活执行器的完整路径。 */
+    const val EXECUTOR_BEAT = "$EXECUTOR_ROOT$BEAT"
+    /** 执行器按 jobId 空闲检测（忙碌转移）相对路径。 */
+    const val IDLE_BEAT = "/idle-beat"
+    /** 调度中心空闲检测的完整路径。 */
+    const val EXECUTOR_IDLE_BEAT = "$EXECUTOR_ROOT$IDLE_BEAT"
 }

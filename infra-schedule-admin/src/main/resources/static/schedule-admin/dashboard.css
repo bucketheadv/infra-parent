@@ -377,7 +377,23 @@ tbody tr:hover { background: #f7faff; }
 .dialog-actions { justify-content: flex-end; gap: 9px; margin-top: 12px; }
 
 .logs-dialog { width: min(860px, calc(100vw - 28px)); }
+.logs-toolbar,
+.log-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 14px 18px 4px;
+    border-top: 1px solid var(--line);
+}
+.logs-toolbar { margin-top: 0; }
+.log-pagination { margin-top: 8px; }
 .logs-content { overflow: auto; max-height: min(560px, calc(100vh - 160px)); border-top: 1px solid var(--line); padding-top: 4px; }
+.log-page-label { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.log-pagination .secondary-button:disabled,
+.logs-toolbar .secondary-button:disabled { opacity: .45; cursor: not-allowed; }
 .next-triggers-dialog { width: min(460px, calc(100vw - 28px)); padding: 24px; }
 .next-triggers-subtitle { margin: -8px 0 14px; color: var(--muted); font-size: 12px; }
 .next-triggers-list {
@@ -438,6 +454,7 @@ tbody tr:hover { background: #f7faff; }
 .log-status.FAILED, .log-status.TIMEOUT, .log-status.CANCELLED, .log-status.LOST { color: var(--danger); background: #fff1f0; border: 1px solid #f3c1bc; }
 .log-status.SKIPPED { color: #9a6a18; background: #fff7e8; border: 1px solid #f0d3a0; }
 .log-status.RUNNING { color: #1f66d3; background: #ebf2ff; border: 1px solid #bfd2f7; }
+.log-status.QUEUED { color: #5b4bb7; background: #f2efff; border: 1px solid #d4cbf5; }
 .log-message { margin: 0 0 8px; color: #2c3a4f; font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; font-weight: 550; }
 .log-handle {
     margin: 0;

@@ -85,9 +85,20 @@
                 <span>间隔（毫秒）</span>
                 <input id="fixed-rate-millis" name="fixedRateMillis" type="number" min="1" value="60000" disabled>
             </label>
-            <label>路由策略<select id="route-strategy" name="routeStrategy"><option value="FAILOVER" selected>故障转移</option><option value="FIRST">首个节点</option><option value="ROUND_ROBIN">轮询</option><option value="RANDOM">随机</option><option value="CONSISTENT_HASH">一致性哈希</option><option value="BROADCAST">广播</option></select></label>
-            <label>阻塞策略<select id="block-strategy" name="blockStrategy"><option value="SERIAL">串行跳过</option><option value="DISCARD_LATER">丢弃后续</option><option value="COVER_EARLY">覆盖前次</option></select></label>
-            <label title="常驻任务在串行跳过/丢弃后续时不写跳过日志">常驻任务<select id="resident" name="resident"><option value="false" selected>否</option><option value="true">是</option></select></label>
+            <label>路由策略<select id="route-strategy" name="routeStrategy">
+                <option value="FAILOVER" selected>故障转移</option>
+                <option value="BUSYOVER">忙碌转移</option>
+                <option value="FIRST">第一个</option>
+                <option value="LAST">最后一个</option>
+                <option value="ROUND">轮询</option>
+                <option value="RANDOM">随机</option>
+                <option value="CONSISTENT_HASH">一致性HASH</option>
+                <option value="LEAST_FREQUENTLY_USED">最不经常使用</option>
+                <option value="LEAST_RECENTLY_USED">最近最久未使用</option>
+                <option value="SHARDING_BROADCAST">分片广播</option>
+            </select></label>
+            <label>阻塞策略<select id="block-strategy" name="blockStrategy"><option value="SERIAL">单机串行</option><option value="DISCARD_LATER">丢弃后续</option><option value="COVER_EARLY">覆盖之前</option></select></label>
+            <label title="常驻任务被丢弃后续策略丢弃时减少跳过噪音">常驻任务<select id="resident" name="resident"><option value="false" selected>否</option><option value="true">是</option></select></label>
             <label>最大重试次数<input id="max-retry-count" name="maxRetryCount" type="number" min="0" value="0"></label>
             <label>超时（秒，0 不限制）<input id="timeout-seconds" name="timeoutSeconds" type="number" min="0" value="0"></label>
             <label class="full-width">任务参数<textarea id="parameters" name="parameters" rows="3" placeholder="传递给任务处理器的原始参数"></textarea></label>
@@ -98,7 +109,18 @@
 </dialog>
 
 <dialog id="logs-dialog" class="dialog logs-dialog">
-    <div class="dialog-header"><div><p class="eyebrow">执行审计</p><h2 id="logs-title">任务日志</h2></div><button class="close-button" type="button" data-close-logs aria-label="关闭">×</button></div>
+    <div class="dialog-header">
+        <div><p class="eyebrow">执行审计</p><h2 id="logs-title">任务日志</h2></div>
+        <div class="toolbar">
+            <button class="secondary-button" type="button" id="refresh-job-logs-button">刷新</button>
+            <button class="close-button" type="button" data-close-logs aria-label="关闭">×</button>
+        </div>
+    </div>
+    <div class="logs-toolbar log-pagination" id="job-logs-toolbar" hidden>
+        <button type="button" class="secondary-button" id="job-logs-prev">上一页</button>
+        <span class="log-page-label" id="job-logs-page-info"></span>
+        <button type="button" class="secondary-button" id="job-logs-next">下一页</button>
+    </div>
     <div class="logs-content" id="logs-content"></div>
 </dialog>
 

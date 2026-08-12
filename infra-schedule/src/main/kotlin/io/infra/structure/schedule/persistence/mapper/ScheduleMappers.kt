@@ -76,12 +76,12 @@ interface ScheduleExecutionLogMapper : BaseMapper<ScheduleExecutionLogEntity> {
     )
     fun appendHandleLog(@Param("id") id: Long, @Param("chunk") chunk: String): Int
 
-    /** 查询待回收的僵尸运行中日志（按触发时间升序）。 */
+    /** 查询待回收的僵尸排队/运行中日志（按触发时间升序）。 */
     @Select(
         """
         SELECT id, job_id, target_address
         FROM infra_schedule_execution_log
-        WHERE status = 'RUNNING'
+        WHERE status IN ('QUEUED', 'RUNNING')
           AND trigger_time <= #{staleBeforeTriggerTime}
         ORDER BY trigger_time ASC, id ASC
         LIMIT #{limit}
@@ -99,7 +99,7 @@ interface ScheduleExecutionLogMapper : BaseMapper<ScheduleExecutionLogEntity> {
         @Param("limit") limit: Int
     ): List<StaleRunningLogRef>
 
-    /** 将指定 ID 且仍为 RUNNING 的日志回收为 LOST。 */
+    /** 将指定 ID 且仍为 QUEUED/RUNNING 的日志回收为 LOST。 */
     @Update(
         """
         UPDATE infra_schedule_execution_log
@@ -108,16 +108,16 @@ interface ScheduleExecutionLogMapper : BaseMapper<ScheduleExecutionLogEntity> {
             message = #{message},
             duration_millis = #{now} - trigger_time
         WHERE id = #{id}
-          AND status = 'RUNNING'
+          AND status IN ('QUEUED', 'RUNNING')
         """
     )
-    fun markLostIfRunning(
+    fun markLostIfActive(
         @Param("id") id: Long,
         @Param("now") now: Long,
         @Param("message") message: String
     ): Int
 
-    /** 将指定任务触发批次下仍 RUNNING 的日志标记为 FAILED。 */
+    /** 将指定任务触发批次下仍 QUEUED/RUNNING 的日志标记为 FAILED。 */
     @Update(
         """
         UPDATE infra_schedule_execution_log
@@ -127,7 +127,7 @@ interface ScheduleExecutionLogMapper : BaseMapper<ScheduleExecutionLogEntity> {
             duration_millis = #{finishTime} - trigger_time
         WHERE job_id = #{jobId}
           AND trigger_time = #{triggerTime}
-          AND status = 'RUNNING'
+          AND status IN ('QUEUED', 'RUNNING')
         """
     )
     fun failRunningByJobAndTrigger(

@@ -1,11 +1,14 @@
 package io.infra.structure.schedule.core
 
 import io.infra.structure.schedule.api.ScheduleLogAppender
+import io.infra.structure.schedule.model.ExecutionStatus
+import io.infra.structure.schedule.model.JobExecutionResult
 import io.infra.structure.schedule.properties.InfraScheduleProperties
 import io.infra.structure.schedule.repository.ScheduleExecutionLogRepository
 import io.infra.structure.schedule.web.ScheduleWebPaths
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.DisposableBean
+import org.springframework.http.MediaType
 import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.web.client.RestClient
@@ -57,8 +60,108 @@ class ScheduleLogReporter(
         buffers.keys.toList().forEach { flush(it) }
     }
 
+    /** 通知调度中心：该日志已离开队列、开始执行 handler（QUEUED → RUNNING）。 */
+    fun markStarted(logId: Long, message: String = "执行中") {
+        if (logId <= 0) return
+        val remote = client
+        if (remote != null) {
+            runCatching {
+                postJson(
+                    remote,
+                    ScheduleWebPaths.EXECUTOR_LOG_STARTED.replace("{id}", logId.toString()),
+                    LogStartedRequest(message = message)
+                )
+            }.onFailure { exception ->
+                logger.warn("上报执行开始失败: logId={}, error={}", logId, exception.message)
+            }
+            return
+        }
+        runCatching {
+            localRepository.markRunningIfQueued(logId, message)
+        }.onFailure { exception ->
+            logger.warn("本地标记执行开始失败: logId={}, error={}", logId, exception.message)
+        }
+    }
+
+    /**
+     * 在放行下一票前同步回写终态，避免串行队列里下一条已 markStarted、上一条 finishLog 未完成时出现多条 RUNNING。
+     */
+    fun markFinished(logId: Long, result: JobExecutionResult, durationMillis: Long?) {
+        if (logId <= 0) return
+        flush(logId)
+        val request = LogFinishRequest(
+            success = result.success,
+            message = result.message,
+            discarded = result.discarded,
+            cancelled = result.cancelled,
+            durationMillis = durationMillis
+        )
+        val remote = client
+        if (remote != null) {
+            runCatching {
+                postJson(remote, ScheduleWebPaths.EXECUTOR_LOG_FINISH.replace("{id}", logId.toString()), request)
+            }.onFailure { exception ->
+                logger.warn("上报执行结束失败: logId={}, error={}", logId, exception.message)
+            }
+            return
+        }
+        runCatching {
+            applyLocalFinish(logId, request)
+        }.onFailure { exception ->
+            logger.warn("本地标记执行结束失败: logId={}, error={}", logId, exception.message)
+        }
+    }
+
+    private fun applyLocalFinish(logId: Long, request: LogFinishRequest) {
+        val current = localRepository.findById(logId) ?: return
+        if (!current.status.isActive()) return
+        val status = finishStatus(request)
+        localRepository.updateIfRunning(
+            current.copy(
+                finishTime = System.currentTimeMillis(),
+                status = status,
+                message = finishMessage(request),
+                durationMillis = request.durationMillis
+            )
+        )
+    }
+
+    private fun postJson(remote: RestClient, path: String, body: Any) {
+        val token = properties.executor.accessToken?.takeIf { it.isNotBlank() }
+        val request = remote.post()
+            .uri(path)
+            .contentType(MediaType.APPLICATION_JSON)
+            .accept(MediaType.APPLICATION_JSON)
+            .body(body)
+        if (properties.executor.authEnabled) {
+            request.header(SCHEDULE_ACCESS_TOKEN_HEADER, token ?: "")
+        }
+        request.retrieve().toBodilessEntity()
+    }
+
     override fun destroy() {
         flushAll()
+    }
+
+    companion object {
+        private const val BATCH_SIZE = 32
+
+        fun finishStatus(request: LogFinishRequest): ExecutionStatus = when {
+            request.discarded -> ExecutionStatus.SKIPPED
+            request.cancelled -> ExecutionStatus.CANCELLED
+            request.success -> ExecutionStatus.SUCCESS
+            else -> ExecutionStatus.FAILED
+        }
+
+        fun finishMessage(request: LogFinishRequest): String = when {
+            request.discarded -> request.message ?: "丢弃后续调度"
+            request.cancelled -> request.message ?: "任务执行被取消"
+            request.success -> {
+                val value = request.message?.takeIf { it.isNotBlank() }
+                if (value == null) "执行成功" else "执行成功：$value"
+            }
+            else -> request.message ?: "任务处理器返回失败"
+        }
     }
 
     private fun drain(logId: Long): List<String> {
@@ -100,13 +203,23 @@ class ScheduleLogReporter(
             logger.warn("本地写入业务执行日志失败: logId={}, error={}", logId, exception.message)
         }
     }
-
-    private companion object {
-        const val BATCH_SIZE = 32
-    }
 }
 
 /** 执行器向调度中心追加业务日志的请求体。 */
 data class HandleLogAppendRequest(
     val lines: List<String>
+)
+
+/** 执行器通知调度中心日志开始真正执行。 */
+data class LogStartedRequest(
+    val message: String = "执行中"
+)
+
+/** 执行器在串行放行前同步回写终态。 */
+data class LogFinishRequest(
+    val success: Boolean,
+    val message: String? = null,
+    val discarded: Boolean = false,
+    val cancelled: Boolean = false,
+    val durationMillis: Long? = null
 )

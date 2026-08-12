@@ -36,12 +36,12 @@ class HandlerRegistry(handlers: List<ScheduleJobHandler>) {
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
             logCancelled(context, "InterruptedException")
-            JobExecutionResult.failure("任务已被终止")
+            JobExecutionResult.cancelled("任务已被终止")
         } catch (exception: Exception) {
             if (exception.cause is InterruptedException || Thread.currentThread().isInterrupted) {
                 Thread.currentThread().interrupt()
                 logCancelled(context, exception.javaClass.simpleName)
-                return JobExecutionResult.failure("任务已被终止")
+                return JobExecutionResult.cancelled("任务已被终止")
             }
             JobExecutionResult.failure(exception.message ?: exception.javaClass.simpleName)
         }

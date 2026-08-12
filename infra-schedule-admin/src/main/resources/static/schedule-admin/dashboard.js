@@ -98,6 +98,7 @@
         FAILED: "失败",
         TIMEOUT: "超时",
         SKIPPED: "跳过",
+        QUEUED: "排队中",
         RUNNING: "运行中",
         CANCELLED: "已终止",
         LOST: "已丢失"
@@ -117,7 +118,7 @@
         metaParts.push(`<span class="log-meta">结束：${formatTime(log.finishTime)}</span>`);
         metaParts.push(`<span class="log-meta">目标：${escapeHtml(formatTargetAddress(log.targetAddress) || "—")}</span>`);
         metaParts.push(`<span class="log-meta">耗时：${formatDuration(log.durationMillis)}</span>`);
-        const cancelButton = log.status === "RUNNING"
+        const cancelButton = (log.status === "RUNNING" || log.status === "QUEUED")
             ? `<div class="log-actions"><button type="button" class="action-btn action-delete log-cancel-btn" data-cancel-log="${escapeHtml(log.id)}">终止</button></div>`
             : "";
         return `
@@ -263,18 +264,26 @@
         const jobForm = document.querySelector("#job-form");
         let jobs = [];
         let executors = [];
+        let jobLogsPage = 1;
+        const jobLogsPageSize = 20;
         const routeStrategyLabels = {
-            FIRST: "首个节点",
-            FAILOVER: "故障转移",
+            FIRST: "第一个",
+            LAST: "最后一个",
+            ROUND: "轮询",
             ROUND_ROBIN: "轮询",
             RANDOM: "随机",
-            CONSISTENT_HASH: "一致性哈希",
-            BROADCAST: "广播"
+            CONSISTENT_HASH: "一致性HASH",
+            LEAST_FREQUENTLY_USED: "最不经常使用",
+            LEAST_RECENTLY_USED: "最近最久未使用",
+            FAILOVER: "故障转移",
+            BUSYOVER: "忙碌转移",
+            SHARDING_BROADCAST: "分片广播",
+            BROADCAST: "分片广播"
         };
         const blockStrategyLabels = {
-            SERIAL: "串行跳过",
+            SERIAL: "单机串行",
             DISCARD_LATER: "丢弃后续",
-            COVER_EARLY: "覆盖前次"
+            COVER_EARLY: "覆盖之前"
         };
 
         function scheduleDescription(job) {
@@ -408,6 +417,7 @@
             const content = document.querySelector("#logs-content");
             content.innerHTML = "<p class=\"muted\">正在加载日志…</p>";
             content.dataset.jobId = String(job.id);
+            jobLogsPage = 1;
             logsDialog.showModal();
             try {
                 await reloadJobLogs(job.id);
@@ -416,11 +426,38 @@
             }
         }
 
-        async function reloadJobLogs(jobId) {
+        async function reloadJobLogs(jobId, page = jobLogsPage) {
+            jobLogsPage = Math.max(1, page);
+            const params = new URLSearchParams({
+                page: String(jobLogsPage),
+                pageSize: String(jobLogsPageSize)
+            });
+            const data = await request(`${SchedulePaths.logs(jobId)}?${params.toString()}`);
             const content = document.querySelector("#logs-content");
-            const logs = await request(`${SchedulePaths.logs(jobId)}?limit=100`);
-            content.innerHTML = logs.length
-                ? logs.map(log => renderLogArticle(log)).join("")
+            const toolbar = document.querySelector("#job-logs-toolbar");
+            const pageInfo = document.querySelector("#job-logs-page-info");
+            const prevBtn = document.querySelector("#job-logs-prev");
+            const nextBtn = document.querySelector("#job-logs-next");
+            const items = data.items || [];
+            const total = data.total ?? items.length;
+            const totalPages = data.totalPages ?? Math.max(1, Math.ceil(total / jobLogsPageSize));
+            jobLogsPage = data.page ?? jobLogsPage;
+            if (pageInfo) {
+                pageInfo.textContent = total
+                    ? `共 ${total} 条 · 第 ${jobLogsPage} / ${totalPages} 页`
+                    : "暂无记录";
+            }
+            if (toolbar) {
+                toolbar.hidden = total <= 0;
+            }
+            if (prevBtn) {
+                prevBtn.disabled = jobLogsPage <= 1;
+            }
+            if (nextBtn) {
+                nextBtn.disabled = jobLogsPage >= totalPages;
+            }
+            content.innerHTML = items.length
+                ? items.map(log => renderLogArticle(log)).join("")
                 : "<p class=\"log-empty\">暂无执行日志</p>";
         }
 
@@ -538,6 +575,34 @@
         document.querySelector("#preview-cron-next").addEventListener("click", () => previewCronNextTriggers());
         document.querySelectorAll("[data-close-dialog]").forEach(button => button.addEventListener("click", () => jobDialog.close()));
         document.querySelector("[data-close-logs]").addEventListener("click", () => logsDialog.close());
+        document.querySelector("#refresh-job-logs-button")?.addEventListener("click", async () => {
+            const jobId = document.querySelector("#logs-content").dataset.jobId;
+            if (!jobId) return;
+            try {
+                await reloadJobLogs(jobId);
+                showToast("执行日志已刷新");
+            } catch (error) {
+                showToast(error.message, true);
+            }
+        });
+        document.querySelector("#job-logs-prev")?.addEventListener("click", async () => {
+            const jobId = document.querySelector("#logs-content").dataset.jobId;
+            if (!jobId || jobLogsPage <= 1) return;
+            try {
+                await reloadJobLogs(jobId, jobLogsPage - 1);
+            } catch (error) {
+                showToast(error.message, true);
+            }
+        });
+        document.querySelector("#job-logs-next")?.addEventListener("click", async () => {
+            const jobId = document.querySelector("#logs-content").dataset.jobId;
+            if (!jobId) return;
+            try {
+                await reloadJobLogs(jobId, jobLogsPage + 1);
+            } catch (error) {
+                showToast(error.message, true);
+            }
+        });
         document.querySelector("[data-close-next-triggers]").addEventListener("click", () => nextTriggersDialog.close());
         bindLogListActions(document.querySelector("#logs-content"), async () => {
             const jobId = document.querySelector("#logs-content").dataset.jobId;
@@ -716,8 +781,33 @@
         const resultBox = document.querySelector("#log-query-results");
         const resultCount = document.querySelector("#log-result-count");
         const summary = document.querySelector("#log-summary");
+        const pagination = document.querySelector("#log-pagination");
+        const pageLabel = document.querySelector("#log-page-label");
+        const prevPageBtn = document.querySelector("#log-prev-page");
+        const nextPageBtn = document.querySelector("#log-next-page");
         let jobs = [];
         let executors = [];
+        let logPage = 1;
+
+        function currentPageSize() {
+            return document.querySelector("#log-page-size").value || "20";
+        }
+
+        function updatePagination(total, totalPages) {
+            if (!pagination) return;
+            pagination.hidden = total <= 0;
+            if (pageLabel) {
+                pageLabel.textContent = total
+                    ? `第 ${logPage} / ${totalPages} 页`
+                    : "第 0 / 0 页";
+            }
+            if (prevPageBtn) {
+                prevPageBtn.disabled = logPage <= 1;
+            }
+            if (nextPageBtn) {
+                nextPageBtn.disabled = logPage >= totalPages;
+            }
+        }
 
         function setActiveChip(range) {
             document.querySelectorAll(".log-chip").forEach(chip => {
@@ -744,7 +834,8 @@
             document.querySelector("#log-job-id").value = "";
             document.querySelector("#log-executor-id").value = "";
             document.querySelector("#log-status").value = "";
-            document.querySelector("#log-limit").value = "100";
+            document.querySelector("#log-page-size").value = "20";
+            logPage = 1;
         }
 
         function populateFilters() {
@@ -773,20 +864,21 @@
             return executor.executorName || `#${executor.id}`;
         }
 
-        function buildQueryPath() {
+        function buildQueryPath(page = logPage) {
             const params = new URLSearchParams();
             const jobId = document.querySelector("#log-job-id").value;
             const executorId = document.querySelector("#log-executor-id").value;
             const status = document.querySelector("#log-status").value;
             const from = fromDateTimeLocalValue(document.querySelector("#log-from").value);
             const to = fromDateTimeLocalValue(document.querySelector("#log-to").value);
-            const limit = document.querySelector("#log-limit").value || "100";
+            const pageSize = currentPageSize();
             if (jobId) params.set("jobId", jobId);
             if (executorId) params.set("executorId", executorId);
             if (status) params.set("status", status);
             if (from != null) params.set("from", String(from));
             if (to != null) params.set("to", String(to));
-            params.set("limit", limit);
+            params.set("page", String(page));
+            params.set("pageSize", pageSize);
             return `${SchedulePaths.queryLogs}?${params.toString()}`;
         }
 
@@ -800,14 +892,21 @@
             document.querySelector("#log-stat-success").textContent = String(success);
             document.querySelector("#log-stat-failed").textContent = String(failed);
             document.querySelector("#log-stat-other").textContent = String(Math.max(other, 0));
-            summary.hidden = false;
+            summary.hidden = logs.length === 0;
         }
 
-        function renderLogs(logs) {
-            resultCount.textContent = logs.length ? `共 ${logs.length} 条结果` : "无匹配日志";
-            renderSummary(logs);
-            resultBox.innerHTML = logs.length
-                ? logs.map(log => renderLogArticle(log, {
+        function renderLogs(data) {
+            const items = data.items || [];
+            const total = data.total ?? items.length;
+            const totalPages = data.totalPages ?? Math.max(1, Math.ceil(total / Number(currentPageSize())));
+            logPage = data.page ?? logPage;
+            resultCount.textContent = total
+                ? `共 ${total} 条结果 · 第 ${logPage} / ${totalPages} 页`
+                : "无匹配日志";
+            renderSummary(items);
+            updatePagination(total, totalPages);
+            resultBox.innerHTML = items.length
+                ? items.map(log => renderLogArticle(log, {
                     showJob: true,
                     jobLabel,
                     executorLabel
@@ -815,22 +914,25 @@
                 : "<p class=\"log-empty\">没有符合条件的执行日志</p>";
         }
 
-        async function queryLogs() {
+        async function queryLogs(page = logPage) {
             const from = fromDateTimeLocalValue(document.querySelector("#log-from").value);
             const to = fromDateTimeLocalValue(document.querySelector("#log-to").value);
             if (from != null && to != null && from > to) {
                 showToast("开始时间不能晚于结束时间", true);
                 return;
             }
+            logPage = Math.max(1, page);
             resultBox.innerHTML = "<p class=\"log-empty\">正在查询…</p>";
             resultCount.textContent = "查询中";
             summary.hidden = true;
+            if (pagination) pagination.hidden = true;
             try {
-                const logs = await request(buildQueryPath());
-                renderLogs(logs);
+                const data = await request(buildQueryPath(logPage));
+                renderLogs(data);
             } catch (error) {
                 resultCount.textContent = "查询失败";
                 resultBox.innerHTML = `<p class="log-empty">${escapeHtml(error.message)}</p>`;
+                if (pagination) pagination.hidden = true;
                 showToast(error.message, true);
             }
         }
@@ -847,29 +949,35 @@
             await queryLogs();
         }
 
-        const runQuery = () => queryLogs();
+        const runQuery = () => queryLogs(1);
         const resetFilters = () => {
             applyDefaultTimeRange();
             populateFilters();
-            queryLogs();
+            queryLogs(1);
         };
         document.querySelector("#query-logs-button").addEventListener("click", runQuery);
         document.querySelector("#reset-log-filters-button").addEventListener("click", resetFilters);
         document.querySelector("#reset-log-filters-button-bottom").addEventListener("click", resetFilters);
+        document.querySelector("#refresh-logs-button")?.addEventListener("click", () => queryLogs(logPage).then(() => showToast("执行日志已刷新")).catch(error => showToast(error.message, true)));
+        document.querySelector("#log-prev-page")?.addEventListener("click", () => {
+            if (logPage > 1) queryLogs(logPage - 1);
+        });
+        document.querySelector("#log-next-page")?.addEventListener("click", () => queryLogs(logPage + 1));
+        document.querySelector("#log-page-size")?.addEventListener("change", () => queryLogs(1));
         document.querySelector("#log-query-form").addEventListener("submit", event => {
             event.preventDefault();
-            queryLogs();
+            queryLogs(1);
         });
         document.querySelector(".log-quick-ranges").addEventListener("click", event => {
             const chip = event.target.closest(".log-chip");
             if (!chip) return;
             applyTimeRange(chip.dataset.range);
-            queryLogs();
+            queryLogs(1);
         });
         ["#log-from", "#log-to"].forEach(selector => {
             document.querySelector(selector).addEventListener("change", () => setActiveChip(null));
         });
-        bindLogListActions(resultBox, () => queryLogs());
+        bindLogListActions(resultBox, () => queryLogs(logPage));
 
         bootstrap().catch(error => showToast(error.message, true));
     }

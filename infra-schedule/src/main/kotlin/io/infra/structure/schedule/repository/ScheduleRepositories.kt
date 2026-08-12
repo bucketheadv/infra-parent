@@ -54,27 +54,33 @@ interface ScheduleExecutionLogRepository {
     fun findById(id: Long): JobExecutionLog?
     /** 按主键更新执行审计记录（用于运行中 → 终态）。 */
     fun update(log: JobExecutionLog)
-    /** 仅当日志仍为运行中时回写终态，避免覆盖管理员终止结果。 */
+    /** 仅当日志仍为排队/运行中时回写终态，避免覆盖管理员终止结果。 */
     fun updateIfRunning(log: JobExecutionLog): Boolean
-    /** 将指定任务下所有运行中日志标记为已取消，返回更新条数。 */
+    /** 将指定任务下所有排队/运行中日志标记为已取消，返回更新条数。 */
     fun cancelRunningByJobId(jobId: Long, message: String, finishTime: Long): Int
+    /** QUEUED → RUNNING；仅当仍为排队时成功。 */
+    fun markRunningIfQueued(logId: Long, message: String): Boolean
     /** 追加业务执行过程日志文本块；返回是否命中记录。 */
     fun appendHandleLog(logId: Long, chunk: String): Boolean
-    /** 查询过期仍处于运行中的日志候选（含目标地址，供节点探活）。 */
+    /** 查询过期仍处于排队/运行中的日志候选（含目标地址，供节点探活）。 */
     fun findStaleRunningCandidates(staleBeforeTriggerTime: Long, limit: Int): List<StaleRunningLogRef>
-    /** 将指定 ID 且仍为 RUNNING 的日志标记为 LOST。 */
-    fun markLostIfRunning(id: Long, now: Long, message: String): Boolean
-    /** 将指定任务、触发时间下仍运行中的日志标记为失败（外层异常兜底）。 */
+    /** 将指定 ID 且仍为 QUEUED/RUNNING 的日志标记为 LOST。 */
+    fun markLostIfActive(id: Long, now: Long, message: String): Boolean
+    /** 将指定任务、触发时间下仍排队/运行中的日志标记为失败（外层异常兜底）。 */
     fun failRunningByJobAndTrigger(
         jobId: Long,
         triggerTime: Long,
         message: String,
         finishTime: Long
     ): Int
+    /** 查询指定任务下排队或运行中的日志。 */
+    fun findActiveByJobId(jobId: Long, limit: Int = 100): List<JobExecutionLog>
     /** 按触发时间倒序查询指定任务的近期执行记录。 */
     fun findByJobId(jobId: Long, limit: Int = 100): List<JobExecutionLog>
     /** 按任务、执行器、状态与触发时间范围查询执行日志。 */
     fun query(query: ExecutionLogQuery): List<JobExecutionLog>
+    /** 统计符合过滤条件的执行日志总数（不含分页）。 */
+    fun count(query: ExecutionLogQuery): Long
 }
 
 interface ExecutorHeartbeatRepository {
@@ -206,13 +212,13 @@ class InMemoryScheduleExecutionLogRepository : ScheduleExecutionLogRepository {
     override fun updateIfRunning(log: JobExecutionLog): Boolean {
         require(log.id > 0) { "更新执行日志需要有效主键" }
         val current = findById(log.id) ?: return false
-        if (current.status != ExecutionStatus.RUNNING) return false
+        if (!current.status.isActive()) return false
         replace(log)
         return true
     }
 
     override fun cancelRunningByJobId(jobId: Long, message: String, finishTime: Long): Int {
-        val targets = logs.filter { it.jobId == jobId && it.status == ExecutionStatus.RUNNING }
+        val targets = logs.filter { it.jobId == jobId && it.status.isActive() }
         targets.forEach { current ->
             replace(
                 current.copy(
@@ -225,6 +231,13 @@ class InMemoryScheduleExecutionLogRepository : ScheduleExecutionLogRepository {
         return targets.size
     }
 
+    override fun markRunningIfQueued(logId: Long, message: String): Boolean {
+        val current = findById(logId) ?: return false
+        if (current.status != ExecutionStatus.QUEUED) return false
+        replace(current.copy(status = ExecutionStatus.RUNNING, message = message))
+        return true
+    }
+
     override fun appendHandleLog(logId: Long, chunk: String): Boolean {
         val current = findById(logId) ?: return false
         val merged = ((current.handleLog ?: "") + chunk).take(MAX_HANDLE_LOG_CHARS)
@@ -234,15 +247,15 @@ class InMemoryScheduleExecutionLogRepository : ScheduleExecutionLogRepository {
 
     override fun findStaleRunningCandidates(staleBeforeTriggerTime: Long, limit: Int): List<StaleRunningLogRef> =
         logs.asSequence()
-            .filter { it.status == ExecutionStatus.RUNNING && it.triggerTime <= staleBeforeTriggerTime }
+            .filter { it.status.isActive() && it.triggerTime <= staleBeforeTriggerTime }
             .sortedBy { it.triggerTime }
             .take(limit.coerceAtLeast(1))
             .map { StaleRunningLogRef(id = it.id, jobId = it.jobId, targetAddress = it.targetAddress) }
             .toList()
 
-    override fun markLostIfRunning(id: Long, now: Long, message: String): Boolean {
+    override fun markLostIfActive(id: Long, now: Long, message: String): Boolean {
         val current = findById(id) ?: return false
-        if (current.status != ExecutionStatus.RUNNING) return false
+        if (!current.status.isActive()) return false
         replace(
             current.copy(
                 status = ExecutionStatus.LOST,
@@ -261,7 +274,7 @@ class InMemoryScheduleExecutionLogRepository : ScheduleExecutionLogRepository {
         finishTime: Long
     ): Int {
         val targets = logs.filter {
-            it.jobId == jobId && it.triggerTime == triggerTime && it.status == ExecutionStatus.RUNNING
+            it.jobId == jobId && it.triggerTime == triggerTime && it.status.isActive()
         }
         targets.forEach { current ->
             replace(
@@ -275,6 +288,11 @@ class InMemoryScheduleExecutionLogRepository : ScheduleExecutionLogRepository {
         }
         return targets.size
     }
+
+    override fun findActiveByJobId(jobId: Long, limit: Int): List<JobExecutionLog> =
+        logs.filter { it.jobId == jobId && it.status.isActive() }
+            .sortedByDescending { it.triggerTime }
+            .take(limit.coerceAtLeast(1))
 
     private fun replace(log: JobExecutionLog) {
         val iterator = logs.iterator()
@@ -298,8 +316,19 @@ class InMemoryScheduleExecutionLogRepository : ScheduleExecutionLogRepository {
             .filter { query.triggerTimeFrom == null || it.triggerTime >= query.triggerTimeFrom }
             .filter { query.triggerTimeTo == null || it.triggerTime <= query.triggerTimeTo }
             .sortedByDescending { it.triggerTime }
+            .drop(query.offset.coerceAtLeast(0))
             .take(query.limit.coerceIn(1, 1_000))
             .toList()
+
+    override fun count(query: ExecutionLogQuery): Long =
+        logs.asSequence()
+            .filter { query.jobId == null || it.jobId == query.jobId }
+            .filter { query.executorId == null || it.executorId == query.executorId }
+            .filter { query.status == null || it.status == query.status }
+            .filter { query.triggerTimeFrom == null || it.triggerTime >= query.triggerTimeFrom }
+            .filter { query.triggerTimeTo == null || it.triggerTime <= query.triggerTimeTo }
+            .count()
+            .toLong()
 
     private companion object {
         const val MAX_LOGS = 10_000

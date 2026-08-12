@@ -3,9 +3,11 @@ package io.infra.structure.schedule.service
 import io.infra.structure.schedule.core.ExecutorRegistry
 import io.infra.structure.schedule.core.ExecutorTaskTracker
 import io.infra.structure.schedule.core.HttpScheduleCancelClient
+import io.infra.structure.schedule.core.LogFinishRequest
 import io.infra.structure.schedule.core.RoutedExecutor
 import io.infra.structure.schedule.core.ScheduleCalculator
-import io.infra.structure.schedule.model.BlockStrategy
+import io.infra.structure.schedule.core.ScheduleLogReporter
+import io.infra.structure.schedule.model.ExecutionLogPage
 import io.infra.structure.schedule.model.ExecutionLogQuery
 import io.infra.structure.schedule.model.ExecutionStatus
 import io.infra.structure.schedule.model.JobExecutionContext
@@ -22,7 +24,6 @@ import java.util.concurrent.CancellationException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Future
-import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
@@ -39,8 +40,6 @@ class ScheduleService(
     private val schedulerId: String
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
-    private val running = mutableMapOf<Long, FutureTask<Unit>>()
-    private val runningLock = Any()
     /** 调度侧等待执行器返回的 Future，按日志 ID 可中断。 */
     private val attemptFutures = ConcurrentHashMap<Long, Future<*>>()
 
@@ -62,7 +61,6 @@ class ScheduleService(
             lastTriggerAt = existing.lastTriggerAt
         )
         ScheduleCalculator.validate(updated)
-        // 按新 cron/间隔立刻重算下次触发，并清租约，避免仍按旧计划扫描或被进行中的 complete 覆盖定义。
         val saved = jobRepository.save(
             updated.copy(
                 nextTriggerAt = initialTriggerAt(updated, now),
@@ -94,11 +92,8 @@ class ScheduleService(
         return saved
     }
 
-    /** 取消当前进程中正在执行的任务，并删除持久化任务定义。 */
-    fun delete(id: Long): Boolean {
-        synchronized(runningLock) { running.remove(id)?.cancel(true) }
-        return jobRepository.delete(id)
-    }
+    /** 删除持久化任务定义。 */
+    fun delete(id: Long): Boolean = jobRepository.delete(id)
 
     /** 返回管理端可见的全部任务。 */
     fun jobs(): List<ScheduleJob> = jobRepository.findAll()
@@ -106,20 +101,35 @@ class ScheduleService(
     /** 获取一个任务；不存在时抛出受控业务错误。 */
     fun job(id: Long): ScheduleJob = requireJob(id)
 
-    /** 查询指定任务近期的执行审计记录。 */
-    fun executionLogs(jobId: Long, limit: Int): List<JobExecutionLog> = logRepository.findByJobId(jobId, limit)
+    /** 分页查询指定任务的执行审计记录。 */
+    fun executionLogs(jobId: Long, page: Int = 1, pageSize: Int = 20): ExecutionLogPage =
+        queryExecutionLogs(ExecutionLogQuery(jobId = jobId), page, pageSize)
+
+    /** 按任务、执行器、状态与触发时间范围分页查询执行日志。 */
+    fun queryExecutionLogs(
+        query: ExecutionLogQuery,
+        page: Int = 1,
+        pageSize: Int = query.limit
+    ): ExecutionLogPage {
+        require(query.triggerTimeFrom == null || query.triggerTimeTo == null || query.triggerTimeFrom <= query.triggerTimeTo) {
+            "触发时间范围无效：开始时间不能晚于结束时间"
+        }
+        val size = pageSize.coerceIn(1, 1_000)
+        val currentPage = page.coerceAtLeast(1)
+        val offset = (currentPage - 1) * size
+        val filter = query.copy(offset = 0, limit = size)
+        val total = logRepository.count(filter)
+        val items = if (total == 0L) {
+            emptyList()
+        } else {
+            logRepository.query(filter.copy(offset = offset))
+        }
+        return ExecutionLogPage(items = items, total = total, page = currentPage, pageSize = size)
+    }
 
     /** 按日志主键查询单条执行记录。 */
     fun executionLog(logId: Long): JobExecutionLog =
         logRepository.findById(logId) ?: error("执行日志不存在: $logId")
-
-    /** 按任务、执行器、状态与触发时间范围查询执行日志。 */
-    fun queryExecutionLogs(query: ExecutionLogQuery): List<JobExecutionLog> {
-        require(query.triggerTimeFrom == null || query.triggerTimeTo == null || query.triggerTimeFrom <= query.triggerTimeTo) {
-            "触发时间范围无效：开始时间不能晚于结束时间"
-        }
-        return logRepository.query(query.copy(limit = query.limit.coerceIn(1, 1_000)))
-    }
 
     /** 追加业务执行过程日志（执行器异步上报）。 */
     fun appendHandleLog(logId: Long, lines: List<String>): Boolean {
@@ -144,44 +154,77 @@ class ScheduleService(
         return ScheduleCalculator.nextTriggerTimes(job, System.currentTimeMillis(), count.coerceIn(1, 100))
     }
 
-    /** 忽略任务的定时计划，立即异步提交一次手动执行。 */
+    /** 忽略任务的定时计划，立即异步提交一次手动执行（不推进 cron）。 */
     fun triggerNow(id: Long): Boolean {
         val job = requireJob(id)
-        return submit(job, System.currentTimeMillis(), scheduled = false)
+        reconcileActiveLogs(job.id)
+        submit(job, System.currentTimeMillis())
+        return true
     }
 
     /**
-     * 真正终止运行中任务：中断调度侧等待线程，并通知执行器按 logId kill handler 线程，最后回写日志。
-     * @return false 表示日志不存在于运行中状态
+     * 终止指定日志对应的一次触发（排队或运行中），不影响同任务其他日志。
+     * 先落库再中断调度侧 Future / 通知执行器，避免回写竞态。
+     * @return false 表示该日志当前不在排队/运行中
      */
     fun cancelRunningLog(logId: Long): Boolean {
         val log = logRepository.findById(logId) ?: error("执行日志不存在: $logId")
-        if (log.status != ExecutionStatus.RUNNING) return false
+        if (!log.status.isActive()) return false
         logger.warn(
-            "管理员中止任务: jobId={}, logId={}, target={}",
+            "管理员中止单次执行: jobId={}, logId={}, status={}, target={}",
             log.jobId,
             log.id,
+            log.status,
             log.targetAddress
         )
-        // 先落库 CANCELLED，避免中断后执行回写抢先改成 SUCCESS/FAILED 导致此处更新 0 行并误报 409。
-        val targets = logRepository.query(
-            ExecutionLogQuery(jobId = log.jobId, status = ExecutionStatus.RUNNING, limit = 100)
+        val finishTime = System.currentTimeMillis()
+        val updated = logRepository.updateIfRunning(
+            log.copy(
+                status = ExecutionStatus.CANCELLED,
+                message = "管理员终止执行",
+                finishTime = finishTime
+            )
         )
-        val updated = logRepository.cancelRunningByJobId(
-            jobId = log.jobId,
-            message = "管理员终止执行",
-            finishTime = System.currentTimeMillis()
-        )
-        synchronized(runningLock) {
-            running[log.jobId]?.cancel(true)
-        }
-        targets.forEach { active ->
-            attemptFutures.remove(active.id)?.cancel(true)
-            killExecutorTask(active)
-        }
-        if (updated > 0) return true
+        attemptFutures.remove(logId)?.cancel(true)
+        killExecutorTask(log)
+        if (updated) return true
         val current = logRepository.findById(logId)
-        return current != null && current.status != ExecutionStatus.RUNNING
+        return current != null && !current.status.isActive()
+    }
+
+    /** 执行器回调：排队日志进入真正执行。 */
+    fun markExecutionStarted(logId: Long, message: String): Boolean =
+        logRepository.markRunningIfQueued(logId, message.ifBlank { "执行中" })
+
+    /**
+     * 执行器在串行放行下一票前同步回写终态。
+     * 调度侧随后的 finishLog 若已非 active 则自然跳过。
+     */
+    fun completeExecutionFromExecutor(
+        logId: Long,
+        success: Boolean,
+        message: String?,
+        discarded: Boolean,
+        cancelled: Boolean,
+        durationMillis: Long?
+    ): Boolean {
+        val current = logRepository.findById(logId) ?: return false
+        if (!current.status.isActive()) return false
+        val request = LogFinishRequest(
+            success = success,
+            message = message,
+            discarded = discarded,
+            cancelled = cancelled,
+            durationMillis = durationMillis
+        )
+        return logRepository.updateIfRunning(
+            current.copy(
+                finishTime = System.currentTimeMillis(),
+                status = ScheduleLogReporter.finishStatus(request),
+                message = ScheduleLogReporter.finishMessage(request),
+                durationMillis = durationMillis
+            )
+        )
     }
 
     /** 远程地址走 HTTP cancel；本地执行走同进程 [ExecutorTaskTracker]。 */
@@ -203,23 +246,31 @@ class ScheduleService(
     /**
      * 由调度线程周期性调用，按页领取并异步提交到期任务。
      *
-     * 每页在独立短事务内完成行锁领取，执行过程不持有数据库锁；达到 [maxPages] 后留待下一轮，
-     * 让新到期任务也有机会被及时扫描。
+     * 对齐 xxl-job：领取后**立即推进**下次触发时间，执行中仍可产生重叠触发，
+     * 由执行器侧阻塞策略（SERIAL / DISCARD_LATER / COVER_EARLY）处理。
      */
     fun dispatchDueJobs(pageSize: Int, maxPages: Int) {
         val now = System.currentTimeMillis()
         repeat(maxPages.coerceAtLeast(1)) {
             val claimed = jobRepository.claimDueJobs(now, pageSize.coerceAtLeast(1), claimLeaseMillis, schedulerId)
-            claimed.forEach { job -> submit(job, now, scheduled = true) }
+            claimed.forEach { job ->
+                val triggerTime = job.nextTriggerAt ?: now
+                if (!completeSchedule(job, triggerTime)) {
+                    logger.warn("推进调度进度失败（租约可能已丢失）: jobId={}", job.id)
+                    return@forEach
+                }
+                reconcileActiveLogs(job.id)
+                submit(job, triggerTime)
+            }
             if (claimed.size < pageSize) return
         }
     }
 
     /**
-     * 回收长时间停留在 RUNNING 的僵尸执行日志。
+     * 回收长时间停留在 QUEUED/RUNNING 的僵尸执行日志。
      *
      * 无论是否常驻，都会先向目标节点按 logId 探活：
-     * - 仍在跑：跳过
+     * - 仍在跑或排队：跳过
      * - 明确不在跑 / 节点不可达：标记 LOST
      *
      * 回收只改日志状态，不会 kill 执行进程。
@@ -236,27 +287,54 @@ class ScheduleService(
         val message = "执行日志超时回收（目标进程已不存在或节点不可达，阈值 ${threshold}ms）"
         var reaped = 0
         for (candidate in candidates) {
-            if (isExecutionStillAlive(candidate)) {
+            if (isLogStillAlive(candidate.id, candidate.targetAddress)) {
                 continue
             }
-            if (logRepository.markLostIfRunning(candidate.id, now, message)) {
+            if (logRepository.markLostIfActive(candidate.id, now, message)) {
                 reaped++
             }
         }
         if (reaped > 0) {
-            logger.warn("已回收僵尸运行中日志 {} 条（trigger_time <= {}）", reaped, staleBefore)
+            logger.warn("已回收僵尸活跃日志 {} 条（trigger_time <= {}）", reaped, staleBefore)
         }
         return reaped
     }
 
     /**
-     * 查询目标节点上该 logId 是否仍在执行。
+     * 每次调度前对该任务全部 QUEUED/RUNNING 日志探活，回收不可观测的僵尸记录。
+     */
+    private fun reconcileActiveLogs(jobId: Long): Int {
+        val actives = logRepository.findActiveByJobId(jobId, 100)
+        if (actives.isEmpty()) return 0
+        val now = System.currentTimeMillis()
+        val message = "调度前探活回收（目标进程已不存在或节点不可达）"
+        var reaped = 0
+        for (log in actives) {
+            if (isLogStillAlive(log.id, log.targetAddress)) {
+                continue
+            }
+            attemptFutures.remove(log.id)?.cancel(true)
+            if (logRepository.markLostIfActive(log.id, now, message)) {
+                reaped++
+                logger.warn(
+                    "调度前回收僵尸日志: jobId={}, logId={}, status={}, target={}",
+                    jobId,
+                    log.id,
+                    log.status,
+                    log.targetAddress
+                )
+            }
+        }
+        return reaped
+    }
+
+    /**
+     * 查询目标节点上该 logId 是否仍在执行或排队。
      * 远程走执行器 `/running`；本地查 [ExecutorTaskTracker] 与调度侧 attempt Future。
      */
-    private fun isExecutionStillAlive(candidate: StaleRunningLogRef): Boolean {
-        val logId = candidate.id
+    private fun isLogStillAlive(logId: Long, targetAddress: String?): Boolean {
         if (attemptFutures[logId]?.isDone == false) return true
-        val probeUrl = resolveExecutorProbeUrl(candidate.targetAddress)
+        val probeUrl = resolveExecutorProbeUrl(targetAddress)
         if (probeUrl == null) {
             return taskTracker.isRunning(logId)
         }
@@ -264,8 +342,7 @@ class ScheduleService(
             true -> true
             false -> false
             null -> {
-                // 节点不可达：视为进程已不可观测，允许回收。
-                logger.warn("探活执行器不可达，将回收日志: logId={}, target={}", logId, probeUrl)
+                logger.warn("探活执行器不可达，视为日志不可观测: logId={}, target={}", logId, probeUrl)
                 false
             }
         }
@@ -278,64 +355,37 @@ class ScheduleService(
         return "http://$target"
     }
 
-    /**
-     * 依据阻塞策略提交执行任务。
-     * 对定时任务，未执行的触发也必须推进下一次时间，避免反复领取相同到期记录。
-     */
-    private fun submit(job: ScheduleJob, triggerTime: Long, scheduled: Boolean): Boolean {
-        synchronized(runningLock) {
-            val previous = running[job.id]
-            if (previous != null && !previous.isDone) {
-                if (job.blockStrategy == BlockStrategy.COVER_EARLY) {
-                    previous.cancel(true)
-                } else {
-                    // 常驻任务在串行跳过 / 丢弃后续时不写跳过日志，避免长驻运行刷屏。
-                    if (!job.resident) {
-                        appendSkipped(job, triggerTime, "任务正在执行，按 ${job.blockStrategy} 策略跳过本次触发")
-                    }
-                    if (scheduled) completeSchedule(job, triggerTime)
-                    return false
+    /** 异步提交一次触发；阻塞策略由执行器 JobThread 解释。 */
+    private fun submit(job: ScheduleJob, triggerTime: Long) {
+        workerExecutor.execute {
+            try {
+                execute(job, triggerTime)
+            } catch (exception: Exception) {
+                val message = exception.cause?.message ?: exception.message ?: exception.javaClass.simpleName
+                val closed = logRepository.failRunningByJobAndTrigger(
+                    jobId = job.id,
+                    triggerTime = triggerTime,
+                    message = "任务执行异常: $message",
+                    finishTime = System.currentTimeMillis()
+                )
+                if (closed == 0) {
+                    appendFailed(job, null, triggerTime, "任务执行异常: $message")
                 }
             }
-            lateinit var task: FutureTask<Unit>
-            task = FutureTask {
-                try {
-                    execute(job, triggerTime)
-                } catch (exception: Exception) {
-                    val message = exception.cause?.message ?: exception.message ?: exception.javaClass.simpleName
-                    // 优先收口本批次 RUNNING，避免只追加 FAILED 留下僵尸运行中日志。
-                    val closed = logRepository.failRunningByJobAndTrigger(
-                        jobId = job.id,
-                        triggerTime = triggerTime,
-                        message = "任务执行异常: $message",
-                        finishTime = System.currentTimeMillis()
-                    )
-                    if (closed == 0) {
-                        appendFailed(job, null, triggerTime, "任务执行异常: $message")
-                    }
-                } finally {
-                    if (scheduled) completeSchedule(job, triggerTime)
-                    synchronized(runningLock) {
-                        if (running[job.id] === task) running.remove(job.id)
-                    }
-                }
-            }
-            running[job.id] = task
-            workerExecutor.execute(task)
-            return true
         }
     }
 
-    /** 选择执行器并为广播 / 故障转移路由构造对应的执行上下文。 */
+    /** 选择执行器并构造对应的执行上下文。 */
     private fun execute(job: ScheduleJob, triggerTime: Long) {
         val executors = resolveExecutors(job)
         if (executors.isEmpty()) {
             val target = job.executorId?.let { "执行器: $it" } ?: "分组: ${job.executorGroup}"
-            appendFailed(job, null, triggerTime, "没有可用执行器，$target")
-            return
-        }
-        if (job.routeStrategy == RouteStrategy.FAILOVER) {
-            executeWithFailover(job, executors, triggerTime)
+            val reason = when (job.routeStrategy) {
+                RouteStrategy.FAILOVER -> "故障转移未找到心跳成功的执行器，$target"
+                RouteStrategy.BUSYOVER -> "忙碌转移未找到空闲执行器，$target"
+                else -> "没有可用执行器，$target"
+            }
+            appendFailed(job, null, triggerTime, reason)
             return
         }
         executors.forEachIndexed { index, routed ->
@@ -345,7 +395,7 @@ class ScheduleService(
 
     /**
      * 解析本次触发应调用的执行器地址节点列表。
-     * 任务指定执行器时在其多地址上按路由策略选择；未指定时按分组选择。
+     * FAILOVER / BUSYOVER 在有序候选上探活后只返回首个可用节点。
      */
     private fun resolveExecutors(job: ScheduleJob): List<RoutedExecutor> {
         val candidates = if (job.executorId != null) {
@@ -354,31 +404,24 @@ class ScheduleService(
             executorRegistry.activeRouted(job.executorGroup)
         }
         val cursorKey = job.executorId?.let { "executor:$it" } ?: job.executorGroup
-        return executorRegistry.applyRoute(candidates, job.routeStrategy, job.id.toString(), cursorKey)
+        val routed = executorRegistry.applyRoute(candidates, job.routeStrategy, job.id.toString(), cursorKey)
+        return when (job.routeStrategy) {
+            RouteStrategy.FAILOVER -> routed.firstOrNull { beatExecutor(it) }?.let { listOf(it) } ?: emptyList()
+            RouteStrategy.BUSYOVER -> routed.firstOrNull { idleBeatExecutor(it, job.id) }?.let { listOf(it) } ?: emptyList()
+            else -> routed
+        }
     }
 
-    /** 按候选节点顺序转移，任一节点成功即结束；全部失败才记最终失败。 */
-    private fun executeWithFailover(
-        job: ScheduleJob,
-        executors: List<RoutedExecutor>,
-        triggerTime: Long
-    ) {
-        var lastMessage = "没有可用执行器"
-        var lastExecutorId: Long? = null
-        for ((index, routed) in executors.withIndex()) {
-            when (
-                val outcome = executeWithRetry(
-                    job, routed, triggerTime, shardIndex = index, shardTotal = executors.size
-                )
-            ) {
-                AttemptOutcome.Success, AttemptOutcome.Cancelled -> return
-                is AttemptOutcome.Failed -> {
-                    lastExecutorId = routed.dbId
-                    lastMessage = outcome.message
-                }
-            }
-        }
-        appendFailed(job, lastExecutorId, triggerTime, "故障转移耗尽全部候选节点：$lastMessage", job.maxRetryCount)
+    private fun beatExecutor(routed: RoutedExecutor): Boolean {
+        val probeUrl = resolveExecutorProbeUrl(routed.address)
+        if (probeUrl == null) return true // 本地执行器视为存活
+        return cancelClient.beat(probeUrl)
+    }
+
+    private fun idleBeatExecutor(routed: RoutedExecutor, jobId: Long): Boolean {
+        val probeUrl = resolveExecutorProbeUrl(routed.address)
+        if (probeUrl == null) return taskTracker.isJobIdle(jobId)
+        return cancelClient.idleBeat(probeUrl, jobId) == true
     }
 
     /** 在同一执行器上完成一次任务调用及其配置的重试次数；开始即记运行中，结束回写终态。 */
@@ -389,15 +432,14 @@ class ScheduleService(
         shardIndex: Int = 0,
         shardTotal: Int = 1
     ): AttemptOutcome {
-        // 保留完整地址供远程终止；本地显示为「本地」。
         val storageTarget = routed.address?.takeIf { it.isNotBlank() } ?: "本地"
         val runningLog = logRepository.append(
             JobExecutionLog(
                 jobId = job.id,
                 executorId = routed.dbId,
                 triggerTime = triggerTime,
-                status = ExecutionStatus.RUNNING,
-                message = "${job.handler} 执行中",
+                status = ExecutionStatus.QUEUED,
+                message = "${job.handler} 排队等待执行",
                 targetAddress = storageTarget
             )
         )
@@ -418,7 +460,8 @@ class ScheduleService(
                             triggerTime = triggerTime,
                             shardIndex = shardIndex,
                             shardTotal = shardTotal,
-                            logId = runningLog.id
+                            logId = runningLog.id,
+                            blockStrategy = job.blockStrategy
                         )
                     )
                 }
@@ -444,6 +487,32 @@ class ScheduleService(
                     )
                     return AttemptOutcome.Success
                 }
+                if (result.discarded) {
+                    finishLog(
+                        runningLog,
+                        status = ExecutionStatus.SKIPPED,
+                        retryCount = attempt,
+                        message = result.message ?: if (job.resident) "常驻任务丢弃后续触发" else "丢弃后续调度",
+                        targetAddress = storageTarget,
+                        durationMillis = durationMs
+                    )
+                    return AttemptOutcome.Cancelled
+                }
+                if (result.cancelled || isAbortMessage(result.message)) {
+                    finishLog(
+                        runningLog,
+                        status = ExecutionStatus.CANCELLED,
+                        retryCount = attempt,
+                        message = result.message ?: "任务执行被取消",
+                        targetAddress = storageTarget,
+                        durationMillis = durationMs
+                    )
+                    return AttemptOutcome.Cancelled
+                }
+                // 管理员终止等已把日志收口为非 RUNNING 时，禁止再重试。
+                if (isLogNoLongerRunning(runningLog.id)) {
+                    return AttemptOutcome.Cancelled
+                }
                 lastMessage = result.message ?: "任务处理器返回失败"
                 lastTarget = storageTarget
                 lastDurationMs = durationMs
@@ -468,14 +537,13 @@ class ScheduleService(
                 killExecutorTask(runningLog)
                 finishLog(
                     runningLog,
-                    status = ExecutionStatus.SKIPPED,
+                    status = ExecutionStatus.CANCELLED,
                     retryCount = attempt,
                     message = "任务执行被取消",
                     targetAddress = lastTarget
                 )
                 return AttemptOutcome.Cancelled
             } catch (_: CancellationException) {
-                // Future.cancel 后 get() 抛 CancellationException，不可再走重试/故障转移。
                 killExecutorTask(runningLog)
                 finishLog(
                     runningLog,
@@ -486,11 +554,31 @@ class ScheduleService(
                 )
                 return AttemptOutcome.Cancelled
             } catch (exception: Exception) {
+                if (Thread.currentThread().isInterrupted || isLogNoLongerRunning(runningLog.id)) {
+                    Thread.interrupted()
+                    finishLog(
+                        runningLog,
+                        status = ExecutionStatus.CANCELLED,
+                        retryCount = attempt,
+                        message = "任务执行被取消",
+                        targetAddress = lastTarget
+                    )
+                    return AttemptOutcome.Cancelled
+                }
                 lastMessage = exception.cause?.message ?: exception.message ?: exception.javaClass.simpleName
                 lastTarget = storageTarget
                 lastDurationMs = System.currentTimeMillis() - startedAt
             }
-            if (attempt < job.maxRetryCount && job.retryIntervalMillis > 0) Thread.sleep(job.retryIntervalMillis)
+            if (attempt < job.maxRetryCount) {
+                if (isLogNoLongerRunning(runningLog.id)) {
+                    return AttemptOutcome.Cancelled
+                }
+                if (job.retryIntervalMillis > 0) Thread.sleep(job.retryIntervalMillis)
+                if (isLogNoLongerRunning(runningLog.id) || Thread.currentThread().isInterrupted) {
+                    Thread.interrupted()
+                    return AttemptOutcome.Cancelled
+                }
+            }
         }
         finishLog(
             runningLog,
@@ -501,6 +589,21 @@ class ScheduleService(
             durationMillis = lastDurationMs
         )
         return AttemptOutcome.Failed(lastMessage)
+    }
+
+    /** 日志已被终止/收口为非排队且非运行中，后续不应再重试。 */
+    private fun isLogNoLongerRunning(logId: Long): Boolean {
+        val status = logRepository.findById(logId)?.status ?: return true
+        return !status.isActive()
+    }
+
+    /** 兼容未带 cancelled 标记的中止类失败文案。 */
+    private fun isAbortMessage(message: String?): Boolean {
+        val text = message?.trim().orEmpty()
+        if (text.isEmpty()) return false
+        return text.contains("任务已被终止") ||
+            text.contains("任务执行被取消") ||
+            text.contains("block strategy effect：覆盖之前调度")
     }
 
     /** 将运行中日志回写为终态；若已被管理员终止则不再覆盖。 */
@@ -541,25 +644,17 @@ class ScheduleService(
      * 仅由持有租约的节点推进下一次计划，防止租约过期的旧节点覆盖新节点状态。
      * 只更新调度进度字段，避免全量 save 把并发修改的 cron 等定义写回旧值。
      */
-    private fun completeSchedule(job: ScheduleJob, triggerTime: Long) {
-        val current = jobRepository.findById(job.id) ?: return
+    private fun completeSchedule(job: ScheduleJob, triggerTime: Long): Boolean {
+        val current = jobRepository.findById(job.id) ?: return false
         if (current.status == JobStatus.DISABLED) {
             jobRepository.releaseClaim(job.id, schedulerId)
-            return
+            return false
         }
-        if (current.claimOwner != schedulerId) return
+        if (current.claimOwner != schedulerId) return false
         val now = System.currentTimeMillis()
         val base = current.nextTriggerAt ?: triggerTime
         val next = ScheduleCalculator.nextFutureTriggerAt(current, base, now)
-        jobRepository.completeSchedule(job.id, schedulerId, triggerTime, next, now)
-    }
-
-    private fun appendSkipped(job: ScheduleJob, triggerTime: Long, message: String) {
-        logRepository.append(JobExecutionLog(
-            jobId = job.id, executorId = null,
-            triggerTime = triggerTime, finishTime = System.currentTimeMillis(),
-            status = ExecutionStatus.SKIPPED, message = message
-        ))
+        return jobRepository.completeSchedule(job.id, schedulerId, triggerTime, next, now)
     }
 
     private fun appendFailed(

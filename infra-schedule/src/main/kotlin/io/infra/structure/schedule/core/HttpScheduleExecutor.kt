@@ -5,8 +5,11 @@ import io.infra.structure.schedule.model.ExecutorHeartbeat
 import io.infra.structure.schedule.model.JobExecutionContext
 import io.infra.structure.schedule.model.JobExecutionResult
 import io.infra.structure.schedule.web.ScheduleWebPaths
+import org.springframework.http.MediaType
 import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.web.client.RestClient
+import org.springframework.web.client.RestClientException
+import org.springframework.web.client.RestClientResponseException
 import java.time.Duration
 
 /** 为已注册的远程执行器创建 HTTP 调用适配器。 */
@@ -36,6 +39,8 @@ class HttpScheduleExecutor(
     override fun execute(context: JobExecutionContext): JobExecutionResult = try {
         val request = client.post()
             .uri(ScheduleWebPaths.EXECUTOR_RUN)
+            .contentType(MediaType.APPLICATION_JSON)
+            .accept(MediaType.APPLICATION_JSON)
         if (!accessToken.isNullOrBlank()) request.header(SCHEDULE_ACCESS_TOKEN_HEADER, accessToken)
         request
             .body(context)
@@ -43,7 +48,29 @@ class HttpScheduleExecutor(
             .body(JobExecutionResult::class.java)
             ?: JobExecutionResult.failure("执行器未返回执行结果: $address")
     } catch (exception: Exception) {
-        JobExecutionResult.failure("调用执行器 $id 失败: ${exception.message ?: exception.javaClass.simpleName}")
+        if (exception is InterruptedException ||
+            exception.cause is InterruptedException ||
+            Thread.currentThread().isInterrupted
+        ) {
+            Thread.currentThread().interrupt()
+            return JobExecutionResult.cancelled("任务已被终止")
+        }
+        JobExecutionResult.failure("调用执行器 $id 失败: ${describeHttpError(exception)}")
+    }
+
+    private fun describeHttpError(exception: Exception): String {
+        val responseException = generateSequence(exception as Throwable) { it.cause }
+            .filterIsInstance<RestClientResponseException>()
+            .firstOrNull()
+        if (responseException != null) {
+            val body = responseException.responseBodyAsString.take(500)
+            return "HTTP ${responseException.statusCode.value()} ${responseException.statusText}" +
+                if (body.isNotBlank()) " body=$body" else ""
+        }
+        if (exception is RestClientException) {
+            return exception.message ?: exception.javaClass.simpleName
+        }
+        return exception.message ?: exception.javaClass.simpleName
     }
 }
 
@@ -58,6 +85,13 @@ class HttpScheduleExecutorClientFactory(
         val address = heartbeat.address?.takeIf { it.startsWith("http://") || it.startsWith("https://") } ?: return null
         val token = accessToken?.takeIf { it.isNotBlank() }
         if (authenticationEnabled && token == null) return null
-        return HttpScheduleExecutor(heartbeat.executorGroup, heartbeat.executorGroup, address, token, connectTimeoutMillis, readTimeoutMillis)
+        return HttpScheduleExecutor(
+            heartbeat.executorGroup,
+            heartbeat.executorGroup,
+            address,
+            token,
+            connectTimeoutMillis,
+            readTimeoutMillis
+        )
     }
 }
