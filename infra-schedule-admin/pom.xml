@@ -19,6 +19,15 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>io.infra.structure</groupId>
+            <artifactId>infra-db</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-thymeleaf</artifactId>
         </dependency>

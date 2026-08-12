@@ -1,17 +1,25 @@
 # infra-schedule
 
-Kotlin 实现的可嵌入式分布式任务调度中心，提供 Cron/固定间隔调度、MyBatis-Flex 持久化租约抢占、执行器路由、分片广播、阻塞策略、超时与重试、执行日志及可选管理 REST 接口。
+Kotlin 实现的分布式任务调度**执行器 starter**（无数据库依赖）：Handler 执行、HTTP 执行端点、心跳与日志上报。
 
-## 启用
+**调度中心**（MySQL 持久化、任务扫描、管理 REST、页面）在 **`infra-schedule-admin`** 中单独部署。
 
-新建库执行 `src/main/resources/db/mysql/schema/20260812010000_schedule_schema.sql`；已有库按 `src/main/resources/db/migration/` 增量升级后启用：
+## 纯执行器
 
 ```yaml
 infra:
   schedule:
     enabled: true
-    management:
-      enabled: false
+    executor:
+      enabled: true
+      address: http://10.0.0.12:18081      # 调度中心可达地址
+      admin-address: http://10.0.0.10:18080
+      access-token: ${SCHEDULE_ACCESS_TOKEN}
+      auth-enabled: true
 ```
 
-管理端点为 `/infra/schedule/**`，默认关闭；开启后必须由接入应用配置 Spring Security 或网关鉴权。任务处理器实现 `ScheduleJobHandler` 并标记 `@ScheduleHandler("handlerName")`。
+无需配置 `spring.datasource`。任务处理器实现 `ScheduleJobHandler` 并标记 `@ScheduleHandler("handlerName")`。
+
+## 调度中心
+
+见 `infra-schedule-admin` 模块。

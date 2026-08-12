@@ -1,22 +1,20 @@
-package io.infra.structure.schedule.core
+package io.infra.structure.schedule.admin.core
 
 import io.infra.structure.schedule.api.ScheduleExecutor
+import io.infra.structure.schedule.core.ExecutorAddresses
+import io.infra.structure.schedule.core.ScheduleExecutorClientFactory
+import io.infra.structure.schedule.core.SCHEDULE_ACCESS_TOKEN_HEADER
 import io.infra.structure.schedule.model.ExecutorHeartbeat
 import io.infra.structure.schedule.model.JobExecutionContext
 import io.infra.structure.schedule.model.JobExecutionResult
 import io.infra.structure.schedule.web.ScheduleWebPaths
+import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
 import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.RestClientException
 import org.springframework.web.client.RestClientResponseException
 import java.time.Duration
-
-/** 为已注册的远程执行器创建 HTTP 调用适配器。 */
-fun interface ScheduleExecutorClientFactory {
-    /** 根据心跳记录创建可调用执行器；没有有效地址时返回 null。 */
-    fun create(heartbeat: ExecutorHeartbeat): ScheduleExecutor?
-}
 
 /** 通过执行器 HTTP 协议执行任务的客户端实现。 */
 class HttpScheduleExecutor(
@@ -35,7 +33,6 @@ class HttpScheduleExecutor(
         })
         .build()
 
-    /** 将执行上下文发送到执行器；通信异常会转换为可审计的失败结果。 */
     override fun execute(context: JobExecutionContext): JobExecutionResult = try {
         val request = client.post()
             .uri(ScheduleWebPaths.EXECUTOR_RUN)
@@ -81,10 +78,28 @@ class HttpScheduleExecutorClientFactory(
     private val connectTimeoutMillis: Long,
     private val readTimeoutMillis: Long
 ) : ScheduleExecutorClientFactory {
+    private val logger = LoggerFactory.getLogger(javaClass)
+
     override fun create(heartbeat: ExecutorHeartbeat): ScheduleExecutor? {
-        val address = heartbeat.address?.takeIf { it.startsWith("http://") || it.startsWith("https://") } ?: return null
+        val address = ExecutorAddresses.normalizeHttpBaseUrl(heartbeat.address)
+        if (address == null) {
+            logger.warn(
+                "跳过无效执行器地址: executorId={}, group={}, raw={}",
+                heartbeat.id,
+                heartbeat.executorGroup,
+                heartbeat.address
+            )
+            return null
+        }
         val token = accessToken?.takeIf { it.isNotBlank() }
-        if (authenticationEnabled && token == null) return null
+        if (authenticationEnabled && token == null) {
+            logger.warn(
+                "已启用执行器令牌校验但未配置 infra.schedule.executor.access-token，无法路由远程节点: executorId={}, address={}",
+                heartbeat.id,
+                address
+            )
+            return null
+        }
         return HttpScheduleExecutor(
             heartbeat.executorGroup,
             heartbeat.executorGroup,

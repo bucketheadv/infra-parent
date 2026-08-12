@@ -1,0 +1,2 @@
+io.infra.structure.schedule.admin.autoconfigure.InfraScheduleAdminPersistenceAutoConfiguration
+io.infra.structure.schedule.admin.autoconfigure.InfraScheduleAdminAutoConfiguration

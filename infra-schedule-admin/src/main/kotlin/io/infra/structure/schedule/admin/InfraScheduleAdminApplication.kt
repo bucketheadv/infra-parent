@@ -4,10 +4,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 
 /**
- * 独立部署的调度管理后台。
+ * 独立部署的调度中心与管理后台。
  *
- * 任务管理接口由 infra-schedule 自动配置提供，根路径为 /infra/schedule；本应用仅负责
- * 持有 MySQL 调度表、分页领取到期任务和将任务路由至已注册的执行器。
+ * 调度扫描与管理 REST 由 infra-schedule-admin 自动配置提供（/infra/schedule）；
+ * 领域模型与持久化来自 infra-schedule starter。
  */
 @SpringBootApplication
 class InfraScheduleAdminApplication

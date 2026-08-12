@@ -31,8 +31,14 @@
 
     /** 发送同源 JSON 请求，并将后端可读错误转换为异常。 */
     async function request(path, options = {}) {
+        const adminAuthEnabled = document.body.dataset.adminAuthEnabled === "true";
+        const adminAccessToken = document.body.dataset.adminAccessToken || "";
+        const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+        if (adminAuthEnabled && adminAccessToken) {
+            headers["X-Infra-Schedule-Admin-Token"] = adminAccessToken;
+        }
         const response = await fetch(`${SchedulePaths.apiRoot}${path}`, {
-            headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+            headers,
             ...options
         });
         if (!response.ok) {

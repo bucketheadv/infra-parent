@@ -1,4 +1,4 @@
-package io.infra.structure.schedule.persistence
+package io.infra.structure.schedule.admin.persistence
 
 import com.mybatisflex.kotlin.extensions.condition.and
 import com.mybatisflex.kotlin.extensions.db.deleteWith
@@ -12,10 +12,10 @@ import io.infra.structure.schedule.core.ExecutorAddresses
 import io.infra.structure.schedule.model.ExecutorAddressMode
 import io.infra.structure.schedule.model.ExecutorHeartbeat
 import io.infra.structure.schedule.model.ExecutorStatus
-import io.infra.structure.schedule.persistence.entity.ScheduleExecutorEntity
-import io.infra.structure.schedule.persistence.entity.ScheduleExecutorRegistryEntity
-import io.infra.structure.schedule.persistence.mapper.ScheduleExecutorMapper
-import io.infra.structure.schedule.persistence.mapper.ScheduleExecutorRegistryMapper
+import io.infra.structure.schedule.admin.persistence.entity.ScheduleExecutorEntity
+import io.infra.structure.schedule.admin.persistence.entity.ScheduleExecutorRegistryEntity
+import io.infra.structure.schedule.admin.persistence.mapper.ScheduleExecutorMapper
+import io.infra.structure.schedule.admin.persistence.mapper.ScheduleExecutorRegistryMapper
 import io.infra.structure.schedule.repository.ExecutorHeartbeatRepository
 
 /** 基于 MyBatis-Flex 的执行器心跳与多地址注册仓储。 */

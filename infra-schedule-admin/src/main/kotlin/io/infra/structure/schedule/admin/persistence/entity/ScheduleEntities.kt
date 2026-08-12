@@ -1,4 +1,4 @@
-package io.infra.structure.schedule.persistence.entity
+package io.infra.structure.schedule.admin.persistence.entity
 
 import com.mybatisflex.annotation.Id
 import com.mybatisflex.annotation.KeyType
@@ -115,5 +115,29 @@ open class ScheduleExecutorRegistryEntity(
     /** 该地址最近心跳时间。 */
     open var lastHeartbeatTime: Long = 0,
     open var createTime: Long = 0,
+    open var updateTime: Long = 0
+)
+
+/** 路由 LFU/LRU 统计（多调度节点共享）。 */
+@Table("infra_schedule_route_stat")
+open class ScheduleRouteStatEntity(
+    /** 节点键：`address` 或 `local:{executorId}`。 */
+    @Id
+    open var nodeKey: String = "",
+    /** 累计被路由选中次数。 */
+    open var useCount: Int = 0,
+    /** 最近一次被路由选中时间（毫秒）。 */
+    open var lastRouteTime: Long = 0,
+    open var updateTime: Long = 0
+)
+
+/** 路由 ROUND 轮询游标（多调度节点共享）。 */
+@Table("infra_schedule_route_cursor")
+open class ScheduleRouteCursorEntity(
+    /** 轮询键：`executor:{id}` 或执行器分组名。 */
+    @Id
+    open var cursorKey: String = "",
+    /** 累计轮询次数。 */
+    open var cursorValue: Long = 0,
     open var updateTime: Long = 0
 )

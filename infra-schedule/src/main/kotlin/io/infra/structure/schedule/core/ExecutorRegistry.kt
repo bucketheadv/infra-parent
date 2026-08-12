@@ -7,9 +7,10 @@ import io.infra.structure.schedule.model.ExecutorStatus
 import io.infra.structure.schedule.model.RouteStrategy
 import io.infra.structure.schedule.model.ScheduleExecutorDraft
 import io.infra.structure.schedule.repository.ExecutorHeartbeatRepository
+import io.infra.structure.schedule.repository.RouteCursorRepository
+import io.infra.structure.schedule.repository.RouteNodeStatRepository
+import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.random.Random
 
 /** 带数据库主键的可调度执行器，供执行日志关联执行器 ID 与目标地址。 */
@@ -17,25 +18,24 @@ data class RoutedExecutor(
     val dbId: Long,
     val executor: ScheduleExecutor,
     /** 执行器访问地址，本地执行时可能为空。 */
-    val address: String? = null
+    val address: String? = null,
+    /** 一致性 HASH 环上使用的原始地址（对齐 xxl-job，不做 normalize）。 */
+    val hashRingKey: String? = address?.trim()?.takeIf { it.isNotBlank() }
 ) {
     /** LFU/LRU 统计用的稳定节点键。 */
-    val routeNodeKey: String = address?.takeIf { it.isNotBlank() } ?: "local:$dbId"
+    val routeNodeKey: String = RouteHash.addressKey(this)
 }
 
 /** 管理执行器实例、自动心跳注册、多地址路由和后台 CRUD 配置。 */
 class ExecutorRegistry(
     private val heartbeatRepository: ExecutorHeartbeatRepository,
     private val heartbeatTimeoutMillis: Long,
-    private val clientFactory: ScheduleExecutorClientFactory? = null
+    private val clientFactory: ScheduleExecutorClientFactory? = null,
+    private val routeStatRepository: RouteNodeStatRepository,
+    private val routeCursorRepository: RouteCursorRepository
 ) {
+    private val logger = LoggerFactory.getLogger(javaClass)
     private val executors = ConcurrentHashMap<String, ScheduleExecutor>()
-    private val cursorByGroup = ConcurrentHashMap<String, AtomicLong>()
-    /** 最不经常使用：节点键 -> 选用次数 */
-    private val lfuCounts = ConcurrentHashMap<String, AtomicInteger>()
-    /** 最近最久未使用：按访问顺序排列的节点键（头部最久未用） */
-    private val lruOrder = LinkedHashSet<String>()
-    private val lruLock = Any()
 
     /** 注册本地执行器并刷新以分组为唯一标识的心跳。 */
     fun register(executor: ScheduleExecutor) {
@@ -190,13 +190,11 @@ class ExecutorRegistry(
             RouteStrategy.FIRST -> candidates.first()
             RouteStrategy.LAST -> candidates.last()
             RouteStrategy.ROUND -> {
-                val index = (cursorByGroup.computeIfAbsent(cursorKey) { AtomicLong() }
-                    .getAndIncrement() % candidates.size).toInt()
+                val index = routeCursorRepository.nextRoundIndex(cursorKey, candidates.size)
                 candidates[index]
             }
             RouteStrategy.RANDOM -> candidates[Random.nextInt(candidates.size)]
-            RouteStrategy.CONSISTENT_HASH ->
-                candidates[(routeKey.hashCode().toUInt().toLong() % candidates.size).toInt()]
+            RouteStrategy.CONSISTENT_HASH -> selectConsistentHash(candidates, routeKey)
             RouteStrategy.LEAST_FREQUENTLY_USED -> selectLfu(candidates)
             RouteStrategy.LEAST_RECENTLY_USED -> selectLru(candidates)
             RouteStrategy.FAILOVER,
@@ -207,32 +205,33 @@ class ExecutorRegistry(
         return listOf(selected)
     }
 
-    private fun selectLfu(candidates: List<RoutedExecutor>): RoutedExecutor =
-        candidates.minWith(
-            compareBy<RoutedExecutor> { lfuCounts[it.routeNodeKey]?.get() ?: 0 }
+    private fun selectConsistentHash(candidates: List<RoutedExecutor>, routeKey: String): RoutedExecutor {
+        val byAddress = candidates.groupBy { RouteHash.hashRingKey(it) }
+        val selectedAddress = RouteHash.selectConsistentAddress(routeKey, byAddress.keys.sorted())
+            ?: return candidates.first()
+        return byAddress[selectedAddress]?.firstOrNull() ?: candidates.first()
+    }
+
+    private fun selectLfu(candidates: List<RoutedExecutor>): RoutedExecutor {
+        val stats = routeStatRepository.stats(candidates.map { it.routeNodeKey })
+        return candidates.minWith(
+            compareBy<RoutedExecutor> { stats[it.routeNodeKey]?.useCount ?: 0 }
                 .thenBy { it.dbId }
                 .thenBy { it.address ?: "" }
         )
+    }
 
     private fun selectLru(candidates: List<RoutedExecutor>): RoutedExecutor {
-        synchronized(lruLock) {
-            val keys = candidates.map { it.routeNodeKey }
-            val oldest = keys
-                .filter { lruOrder.contains(it) }
-                .minByOrNull { lruOrder.indexOf(it) }
-            if (oldest != null) {
-                return candidates.first { it.routeNodeKey == oldest }
-            }
-            return candidates.first()
-        }
+        val stats = routeStatRepository.stats(candidates.map { it.routeNodeKey })
+        return candidates.minWith(
+            compareBy<RoutedExecutor> { stats[it.routeNodeKey]?.lastRouteTime ?: 0L }
+                .thenBy { it.dbId }
+                .thenBy { it.address ?: "" }
+        )
     }
 
     private fun recordUse(selected: RoutedExecutor) {
-        lfuCounts.computeIfAbsent(selected.routeNodeKey) { AtomicInteger() }.incrementAndGet()
-        synchronized(lruLock) {
-            lruOrder.remove(selected.routeNodeKey)
-            lruOrder.add(selected.routeNodeKey)
-        }
+        routeStatRepository.recordUse(selected.routeNodeKey)
     }
 
     private fun expandAddresses(heartbeat: ExecutorHeartbeat, now: Long): List<RoutedExecutor> {
@@ -241,11 +240,48 @@ class ExecutorRegistry(
             val local = executors[heartbeat.executorGroup] ?: return emptyList()
             return listOf(RoutedExecutor(heartbeat.id, local, null))
         }
-        return addresses.mapNotNull { address ->
-            val executor = executors[heartbeat.executorGroup]
-                ?: clientFactory?.create(heartbeat.copy(address = address))
-                ?: return@mapNotNull null
-            RoutedExecutor(heartbeat.id, executor, address)
+        return addresses.mapNotNull { rawAddress -> resolveRoutedNode(heartbeat, rawAddress) }
+    }
+
+    /**
+     * 解析单个可路由节点：
+     * - 有效 HTTP 地址走远程客户端（调度中心单独部署时的常态路径）；
+     * - 无地址时使用本进程 in-process 执行器（仅嵌入执行器场景）。
+     */
+    private fun resolveRoutedNode(heartbeat: ExecutorHeartbeat, rawAddress: String): RoutedExecutor? {
+        val trimmed = rawAddress.trim()
+        if (trimmed.isBlank()) {
+            val local = executors[heartbeat.executorGroup]
+                ?: run {
+                    logger.warn(
+                        "无地址且本地执行器未注册，节点已跳过: executorId={}, group={}",
+                        heartbeat.id,
+                        heartbeat.executorGroup
+                    )
+                    return null
+                }
+            return RoutedExecutor(heartbeat.id, local, null)
         }
+        val normalized = ExecutorAddresses.normalizeHttpBaseUrl(trimmed)
+        if (normalized != null) {
+            val remote = clientFactory?.create(heartbeat.copy(address = trimmed))
+                ?: run {
+                    logger.warn(
+                        "无法创建远程执行器客户端，节点已跳过: executorId={}, group={}, address={}",
+                        heartbeat.id,
+                        heartbeat.executorGroup,
+                        trimmed
+                    )
+                    return null
+                }
+            return RoutedExecutor(heartbeat.id, remote, normalized, trimmed)
+        }
+        logger.warn(
+            "跳过无效执行器地址: executorId={}, group={}, raw={}",
+            heartbeat.id,
+            heartbeat.executorGroup,
+            rawAddress
+        )
+        return null
     }
 }

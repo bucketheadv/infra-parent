@@ -1,4 +1,4 @@
-package io.infra.structure.schedule.persistence
+package io.infra.structure.schedule.admin.persistence
 
 import com.mybatisflex.kotlin.extensions.condition.and
 import com.mybatisflex.kotlin.extensions.db.update
@@ -16,10 +16,10 @@ import io.infra.structure.schedule.model.JobStatus
 import io.infra.structure.schedule.model.RouteStrategy
 import io.infra.structure.schedule.model.ScheduleJob
 import io.infra.structure.schedule.model.ScheduleType
-import io.infra.structure.schedule.persistence.entity.ScheduleExecutionLogEntity
-import io.infra.structure.schedule.persistence.entity.ScheduleJobEntity
-import io.infra.structure.schedule.persistence.mapper.ScheduleExecutionLogMapper
-import io.infra.structure.schedule.persistence.mapper.ScheduleJobMapper
+import io.infra.structure.schedule.admin.persistence.entity.ScheduleExecutionLogEntity
+import io.infra.structure.schedule.admin.persistence.entity.ScheduleJobEntity
+import io.infra.structure.schedule.admin.persistence.mapper.ScheduleExecutionLogMapper
+import io.infra.structure.schedule.admin.persistence.mapper.ScheduleJobMapper
 import io.infra.structure.schedule.repository.ScheduleExecutionLogRepository
 import io.infra.structure.schedule.repository.ScheduleJobRepository
 import io.infra.structure.schedule.repository.StaleRunningLogRef

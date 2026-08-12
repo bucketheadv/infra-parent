@@ -18,14 +18,11 @@ infra:
     dispatch-batch-size: 100
     dispatch-max-pages: 10
     claim-lease-millis: 60000
-    dispatcher-enabled: true
     executor:
       enabled: false
-      # 页面联调阶段关闭令牌校验；生产环境应启用 auth-enabled 并从环境变量注入令牌。
-      auth-enabled: false
+      auth-enabled: ${SCHEDULE_EXECUTOR_AUTH_ENABLED:false}
       access-token: ${SCHEDULE_ACCESS_TOKEN:}
     management:
       enabled: true
-      # 暂不接入 SSO 登录和鉴权，直接开放管理页面及其同源接口。
-      auth-enabled: false
+      auth-enabled: ${SCHEDULE_ADMIN_AUTH_ENABLED:false}
       access-token: ${SCHEDULE_ADMIN_ACCESS_TOKEN:}

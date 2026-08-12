@@ -1,10 +1,12 @@
-package io.infra.structure.schedule.persistence.mapper
+package io.infra.structure.schedule.admin.persistence.mapper
 
 import com.mybatisflex.core.BaseMapper
-import io.infra.structure.schedule.persistence.entity.ScheduleExecutionLogEntity
-import io.infra.structure.schedule.persistence.entity.ScheduleExecutorEntity
-import io.infra.structure.schedule.persistence.entity.ScheduleExecutorRegistryEntity
-import io.infra.structure.schedule.persistence.entity.ScheduleJobEntity
+import io.infra.structure.schedule.admin.persistence.entity.ScheduleExecutionLogEntity
+import io.infra.structure.schedule.admin.persistence.entity.ScheduleExecutorEntity
+import io.infra.structure.schedule.admin.persistence.entity.ScheduleExecutorRegistryEntity
+import io.infra.structure.schedule.admin.persistence.entity.ScheduleRouteCursorEntity
+import io.infra.structure.schedule.admin.persistence.entity.ScheduleRouteStatEntity
+import io.infra.structure.schedule.admin.persistence.entity.ScheduleJobEntity
 import io.infra.structure.schedule.repository.StaleRunningLogRef
 import org.apache.ibatis.annotations.Mapper
 import org.apache.ibatis.annotations.Param
@@ -145,3 +147,37 @@ interface ScheduleExecutorMapper : BaseMapper<ScheduleExecutorEntity>
 /** 执行器实例地址注册表 Mapper。 */
 @Mapper
 interface ScheduleExecutorRegistryMapper : BaseMapper<ScheduleExecutorRegistryEntity>
+
+/** 路由 LFU/LRU 统计 Mapper。 */
+@Mapper
+interface ScheduleRouteStatMapper : BaseMapper<ScheduleRouteStatEntity> {
+    @Update(
+        """
+        INSERT INTO infra_schedule_route_stat (node_key, use_count, last_route_time, update_time)
+        VALUES (#{nodeKey}, 1, #{now}, #{now})
+        ON DUPLICATE KEY UPDATE
+            use_count = use_count + 1,
+            last_route_time = VALUES(last_route_time),
+            update_time = VALUES(update_time)
+        """
+    )
+    fun upsertRouteUse(@Param("nodeKey") nodeKey: String, @Param("now") now: Long): Int
+}
+
+/** 路由 ROUND 游标 Mapper。 */
+@Mapper
+interface ScheduleRouteCursorMapper : BaseMapper<ScheduleRouteCursorEntity> {
+    @Update(
+        """
+        INSERT INTO infra_schedule_route_cursor (cursor_key, cursor_value, update_time)
+        VALUES (#{cursorKey}, 1, #{now})
+        ON DUPLICATE KEY UPDATE
+            cursor_value = cursor_value + 1,
+            update_time = VALUES(update_time)
+        """
+    )
+    fun incrementCursor(@Param("cursorKey") cursorKey: String, @Param("now") now: Long): Int
+
+    @Select("SELECT cursor_value FROM infra_schedule_route_cursor WHERE cursor_key = #{cursorKey}")
+    fun selectCursorValue(@Param("cursorKey") cursorKey: String): Long?
+}

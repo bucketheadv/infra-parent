@@ -49,13 +49,16 @@ class ExecutorHeartbeatReporter(
         }
     }
 
-    /** 进程关闭时尽量主动离线，并从自动注册地址列表剔除本实例。 */
+    /** 进程关闭时向调度中心上报离线。 */
     override fun destroy() {
         if (!properties.executor.enabled) return
         val group = properties.executor.group
         val address = properties.executor.address
-        runCatching { executorRegistry.markOffline(group, address) }
-        val remote = client ?: return
+        val remote = client
+        if (remote == null) {
+            runCatching { executorRegistry.markOffline(group, address) }
+            return
+        }
         val token = properties.executor.accessToken?.takeIf { it.isNotBlank() }
         runCatching {
             val request = remote.post()

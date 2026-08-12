@@ -3,7 +3,7 @@ package io.infra.structure.schedule.admin.controller
 import io.infra.structure.schedule.core.ExecutorRegistry
 import io.infra.structure.schedule.model.ExecutorStatus
 import io.infra.structure.schedule.model.JobStatus
-import io.infra.structure.schedule.service.ScheduleService
+import io.infra.structure.schedule.admin.service.ScheduleService
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.GetMapping

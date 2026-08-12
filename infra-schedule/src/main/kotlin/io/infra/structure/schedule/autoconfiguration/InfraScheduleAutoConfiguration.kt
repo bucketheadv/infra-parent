@@ -6,46 +6,29 @@ import io.infra.structure.schedule.core.ExecutorRegistry
 import io.infra.structure.schedule.core.ExecutorHeartbeatReporter
 import io.infra.structure.schedule.core.ExecutorTaskTracker
 import io.infra.structure.schedule.core.HandlerRegistry
-import io.infra.structure.schedule.core.HttpScheduleCancelClient
-import io.infra.structure.schedule.core.HttpScheduleExecutorClientFactory
 import io.infra.structure.schedule.core.LocalScheduleExecutor
-import io.infra.structure.schedule.core.ScheduleExecutorClientFactory
-import io.infra.structure.schedule.core.ScheduleDispatcher
 import io.infra.structure.schedule.core.ScheduleLogReporter
-import io.infra.structure.schedule.persistence.FlexExecutorHeartbeatRepository
-import io.infra.structure.schedule.persistence.FlexScheduleExecutionLogRepository
-import io.infra.structure.schedule.persistence.FlexScheduleJobRepository
-import io.infra.structure.schedule.persistence.mapper.ScheduleExecutionLogMapper
-import io.infra.structure.schedule.persistence.mapper.ScheduleExecutorMapper
-import io.infra.structure.schedule.persistence.mapper.ScheduleExecutorRegistryMapper
-import io.infra.structure.schedule.persistence.mapper.ScheduleJobMapper
 import io.infra.structure.schedule.properties.InfraScheduleProperties
 import io.infra.structure.schedule.repository.ExecutorHeartbeatRepository
 import io.infra.structure.schedule.repository.InMemoryExecutorHeartbeatRepository
+import io.infra.structure.schedule.repository.InMemoryRouteCursorRepository
+import io.infra.structure.schedule.repository.InMemoryRouteNodeStatRepository
 import io.infra.structure.schedule.repository.InMemoryScheduleExecutionLogRepository
 import io.infra.structure.schedule.repository.InMemoryScheduleJobRepository
+import io.infra.structure.schedule.repository.RouteCursorRepository
+import io.infra.structure.schedule.repository.RouteNodeStatRepository
 import io.infra.structure.schedule.repository.ScheduleExecutionLogRepository
 import io.infra.structure.schedule.repository.ScheduleJobRepository
-import io.infra.structure.schedule.service.ScheduleService
-import io.infra.structure.schedule.web.ScheduleAdminController
-import io.infra.structure.schedule.web.ScheduleAdminAccessInterceptor
-import io.infra.structure.schedule.web.ScheduleAdminWebConfigurer
 import io.infra.structure.schedule.web.ScheduleExecutorController
-import org.apache.ibatis.annotations.Mapper
-import org.mybatis.spring.annotation.MapperScan
 import org.springframework.boot.autoconfigure.AutoConfiguration
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.scheduling.annotation.EnableScheduling
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import javax.sql.DataSource
 
+/** 执行器 starter：Handler、HTTP 执行端点、心跳与日志上报。调度中心见 infra-schedule-admin。 */
 @AutoConfiguration
 @EnableScheduling
 @EnableConfigurationProperties(InfraScheduleProperties::class)
@@ -54,16 +37,6 @@ class InfraScheduleAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun handlerRegistry(handlers: List<ScheduleJobHandler>) = HandlerRegistry(handlers)
-
-    @Bean(destroyMethod = "shutdown")
-    @ConditionalOnMissingBean(name = ["infraScheduleWorkerExecutor"])
-    fun infraScheduleWorkerExecutor(): ExecutorService =
-        // 重叠触发时调度侧会并发等待执行器（SERIAL 排队 / COVER 覆盖），用虚拟线程避免池打满。
-        Executors.newVirtualThreadPerTaskExecutor()
-
-    @Bean(destroyMethod = "shutdown")
-    @ConditionalOnMissingBean(name = ["infraScheduleAttemptExecutor"])
-    fun infraScheduleAttemptExecutor(): ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
 
     @Bean
     @ConditionalOnMissingBean
@@ -95,31 +68,24 @@ class InfraScheduleAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    fun httpScheduleCancelClient(properties: InfraScheduleProperties) = HttpScheduleCancelClient(
-        properties.executor.accessToken,
-        properties.executor.authEnabled,
-        properties.executor.connectTimeoutMillis,
-        // 终止请求应快速返回，避免管理端长时间卡住。
-        minOf(properties.executor.readTimeoutMillis, 5_000L)
+    @ConditionalOnProperty(
+        prefix = "infra.schedule.management",
+        name = ["enabled"],
+        havingValue = "false",
+        matchIfMissing = true
     )
-
-    @Bean
-    @ConditionalOnMissingBean
-    fun scheduleExecutorClientFactory(properties: InfraScheduleProperties): ScheduleExecutorClientFactory =
-        HttpScheduleExecutorClientFactory(
-            properties.executor.accessToken,
-            properties.executor.authEnabled,
-            properties.executor.connectTimeoutMillis,
-            properties.executor.readTimeoutMillis
-        )
-
-    @Bean
-    @ConditionalOnMissingBean
     fun executorRegistry(
         heartbeatRepository: ExecutorHeartbeatRepository,
-        clientFactory: ScheduleExecutorClientFactory,
-        properties: InfraScheduleProperties
-    ) = ExecutorRegistry(heartbeatRepository, properties.executor.heartbeatTimeoutMillis, clientFactory)
+        properties: InfraScheduleProperties,
+        routeStatRepository: RouteNodeStatRepository,
+        routeCursorRepository: RouteCursorRepository
+    ) = ExecutorRegistry(
+        heartbeatRepository,
+        properties.executor.heartbeatTimeoutMillis,
+        clientFactory = null,
+        routeStatRepository,
+        routeCursorRepository
+    )
 
     @Bean
     @ConditionalOnProperty(prefix = "infra.schedule.executor", name = ["enabled"], havingValue = "true", matchIfMissing = true)
@@ -139,50 +105,6 @@ class InfraScheduleAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    fun scheduleService(
-        jobRepository: ScheduleJobRepository,
-        logRepository: ScheduleExecutionLogRepository,
-        executorRegistry: ExecutorRegistry,
-        @Qualifier("infraScheduleWorkerExecutor") workerExecutor: ExecutorService,
-        @Qualifier("infraScheduleAttemptExecutor") attemptExecutor: ExecutorService,
-        taskTracker: ExecutorTaskTracker,
-        cancelClient: HttpScheduleCancelClient,
-        properties: InfraScheduleProperties
-    ) = ScheduleService(
-        jobRepository, logRepository, executorRegistry, workerExecutor, attemptExecutor,
-        taskTracker, cancelClient, properties.claimLeaseMillis, properties.schedulerId
-    )
-
-    @Bean
-    @ConditionalOnMissingBean
-    fun scheduleDispatcher(
-        scheduleService: ScheduleService,
-        executorRegistry: ExecutorRegistry,
-        properties: InfraScheduleProperties
-    ) = ScheduleDispatcher(scheduleService, executorRegistry, properties)
-
-    @Bean
-    @ConditionalOnMissingBean
-    @ConditionalOnProperty(prefix = "infra.schedule.management", name = ["enabled"], havingValue = "true")
-    fun scheduleAdminController(
-        scheduleService: ScheduleService,
-        executorRegistry: ExecutorRegistry,
-        properties: InfraScheduleProperties
-    ) = ScheduleAdminController(scheduleService, executorRegistry, properties)
-
-    @Bean
-    @ConditionalOnMissingBean
-    @ConditionalOnProperty(prefix = "infra.schedule.management", name = ["auth-enabled"], havingValue = "true")
-    fun scheduleAdminAccessInterceptor(properties: InfraScheduleProperties) = ScheduleAdminAccessInterceptor(properties)
-
-    @Bean
-    @ConditionalOnMissingBean
-    @ConditionalOnProperty(prefix = "infra.schedule.management", name = ["auth-enabled"], havingValue = "true")
-    fun scheduleAdminWebConfigurer(accessInterceptor: ScheduleAdminAccessInterceptor) =
-        ScheduleAdminWebConfigurer(accessInterceptor)
-
-    @Bean
-    @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "infra.schedule.executor", name = ["enabled"], havingValue = "true")
     fun scheduleExecutorController(
         taskTracker: ExecutorTaskTracker,
@@ -198,34 +120,21 @@ class InfraScheduleAutoConfiguration {
     ) = ExecutorHeartbeatReporter(properties, executorRegistry)
 
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnBean(DataSource::class)
-    @MapperScan(basePackages = ["io.infra.structure.schedule.persistence.mapper"], annotationClass = Mapper::class)
-    class FlexPersistenceConfiguration {
-        @Bean
-        @ConditionalOnMissingBean(ScheduleJobRepository::class)
-        fun scheduleJobRepository(mapper: ScheduleJobMapper): ScheduleJobRepository = FlexScheduleJobRepository(mapper)
-
-        @Bean
-        @ConditionalOnMissingBean(ScheduleExecutionLogRepository::class)
-        fun scheduleExecutionLogRepository(mapper: ScheduleExecutionLogMapper): ScheduleExecutionLogRepository =
-            FlexScheduleExecutionLogRepository(mapper)
-
-        @Bean
-        @ConditionalOnMissingBean(ExecutorHeartbeatRepository::class)
-        fun executorHeartbeatRepository(
-            mapper: ScheduleExecutorMapper,
-            registryMapper: ScheduleExecutorRegistryMapper,
-            properties: InfraScheduleProperties
-        ): ExecutorHeartbeatRepository = FlexExecutorHeartbeatRepository(
-            mapper,
-            registryMapper,
-            properties.executor.heartbeatTimeoutMillis
-        )
-    }
-
-    @Configuration(proxyBeanMethods = false)
-    @ConditionalOnMissingBean(DataSource::class)
+    @ConditionalOnProperty(
+        prefix = "infra.schedule.management",
+        name = ["enabled"],
+        havingValue = "false",
+        matchIfMissing = true
+    )
     class LocalPersistenceConfiguration {
+        @Bean
+        @ConditionalOnMissingBean(RouteNodeStatRepository::class)
+        fun routeNodeStatRepository(): RouteNodeStatRepository = InMemoryRouteNodeStatRepository()
+
+        @Bean
+        @ConditionalOnMissingBean(RouteCursorRepository::class)
+        fun routeCursorRepository(): RouteCursorRepository = InMemoryRouteCursorRepository()
+
         @Bean
         @ConditionalOnMissingBean(ScheduleJobRepository::class)
         fun scheduleJobRepository(): ScheduleJobRepository = InMemoryScheduleJobRepository()

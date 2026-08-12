@@ -15,8 +15,6 @@ class InfraScheduleProperties {
     var dispatchBatchSize: Int = 100
     /** 单轮扫描最多领取的页数，避免到期任务过多时长期占用调度线程。 */
     var dispatchMaxPages: Int = 10
-    /** 是否启用当前应用的调度扫描；纯执行器实例应关闭此开关。 */
-    var dispatcherEnabled: Boolean = true
     /** 用于编排任务执行的工作线程数量。 */
     var workerThreads: Int = 8
     /** 当前调度节点唯一 ID；集群部署时应配置为稳定且互不重复的值。 */

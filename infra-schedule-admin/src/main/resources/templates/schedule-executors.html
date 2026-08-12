@@ -8,7 +8,8 @@
     <link rel="icon" type="image/svg+xml" th:href="@{/schedule-admin/favicon.svg}" href="/schedule-admin/favicon.svg">
     <link rel="stylesheet" th:href="@{/schedule-admin/dashboard.css(v=${#dates.createNow().time})}">
 </head>
-<body data-page="executors">
+<body data-page="executors"
+      th:attr="data-admin-auth-enabled=${adminAuthEnabled},data-admin-access-token=${adminAccessToken}">
 <div class="app-shell">
     <aside class="sidebar">
         <a class="brand" th:href="@{/}" aria-label="Infra Schedule 首页">
@@ -66,8 +67,8 @@
             <label>地址来源<select id="executor-address-mode" name="addressMode"><option value="AUTO_REGISTER">自动注册</option><option value="MANUAL">手动输入</option></select></label>
             <label>调度状态<select id="executor-node-status" name="status"><option value="ENABLED">启用</option><option value="DISABLED">禁用</option></select></label>
             <label class="full-width" id="executor-address-field">访问地址（支持多个）
-                <textarea id="executor-node-address" name="address" rows="3" placeholder="每行一个，或用逗号分隔&#10;例如：&#10;http://10.0.0.1:18081&#10;http://10.0.0.2:18081"></textarea>
-                <span class="field-hint" id="executor-address-hint">手动模式可配置多个地址；自动注册由心跳维护，节点下线或心跳超时会自动剔除。</span>
+                <textarea id="executor-node-address" name="address" rows="3" placeholder="每行一个，或用逗号分隔&#10;例如：&#10;http://10.0.0.1:18081&#10;10.0.0.2:18081（可省略 http://）"></textarea>
+                <span class="field-hint" id="executor-address-hint">手动模式可配置多个地址；支持 http:// 或 host:port。自动注册由心跳维护，节点下线或心跳超时会自动剔除。</span>
             </label>
         </div>
         <p class="form-error" id="executor-form-error" role="alert"></p>

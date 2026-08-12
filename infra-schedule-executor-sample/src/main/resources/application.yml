@@ -1,10 +1,6 @@
 spring:
   application:
     name: infra-schedule-executor-sample
-  datasource:
-    url: ${SCHEDULE_DB_URL:jdbc:mysql://127.0.0.1:3306/infra_schedule?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai}
-    username: ${SCHEDULE_DB_USERNAME:root}
-    password: ${SCHEDULE_DB_PASSWORD:123456}
 
 server:
   port: ${SCHEDULE_EXECUTOR_PORT:18081}
@@ -12,17 +8,15 @@ server:
 infra:
   schedule:
     enabled: true
-    # 执行器只接受调度中心指令，不直接扫描数据库调度任务。
-    dispatcher-enabled: false
-    scheduler-id: ${SCHEDULE_EXECUTOR_NODE_ID:infra-schedule-executor-sample}
     executor:
       enabled: true
       name: ${SCHEDULE_EXECUTOR_NAME:infra-schedule-executor-sample}
       group: ${SCHEDULE_EXECUTOR_GROUP:infra-schedule-executor-sample}
+      # 必须是调度中心能访问到的地址；分机部署时不要用 127.0.0.1。
       address: ${SCHEDULE_EXECUTOR_ADDRESS:http://127.0.0.1:18081}
       admin-address: ${SCHEDULE_ADMIN_ADDRESS:http://127.0.0.1:18080}
-      # 必须从环境变量提供，禁止提交固定令牌。
       access-token: ${SCHEDULE_ACCESS_TOKEN:}
+      auth-enabled: ${SCHEDULE_EXECUTOR_AUTH_ENABLED:false}
       connect-timeout-millis: 3000
       read-timeout-millis: 30000
       heartbeat-interval-millis: 10000

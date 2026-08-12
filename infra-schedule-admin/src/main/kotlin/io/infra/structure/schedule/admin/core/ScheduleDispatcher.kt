@@ -1,10 +1,11 @@
-package io.infra.structure.schedule.core
+package io.infra.structure.schedule.admin.core
 
+import io.infra.structure.schedule.core.ExecutorRegistry
 import io.infra.structure.schedule.properties.InfraScheduleProperties
-import io.infra.structure.schedule.service.ScheduleService
+import io.infra.structure.schedule.admin.service.ScheduleService
 import org.springframework.scheduling.annotation.Scheduled
 
-/** 定时刷新本地执行器心跳并扫描数据库中的到期任务。 */
+/** 定时扫描数据库中的到期任务并回收僵尸运行中日志。 */
 class ScheduleDispatcher(
     private val scheduleService: ScheduleService,
     private val executorRegistry: ExecutorRegistry,
@@ -20,12 +21,10 @@ class ScheduleDispatcher(
                 properties.executor.address
             )
         }
-        if (properties.dispatcherEnabled) {
-            scheduleService.reapStaleRunningLogs(
-                properties.staleRunningLogMillis,
-                properties.staleRunningLogBatchSize
-            )
-            scheduleService.dispatchDueJobs(properties.dispatchBatchSize, properties.dispatchMaxPages)
-        }
+        scheduleService.reapStaleRunningLogs(
+            properties.staleRunningLogMillis,
+            properties.staleRunningLogBatchSize
+        )
+        scheduleService.dispatchDueJobs(properties.dispatchBatchSize, properties.dispatchMaxPages)
     }
 }

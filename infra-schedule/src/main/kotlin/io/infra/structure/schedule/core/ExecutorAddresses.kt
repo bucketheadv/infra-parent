@@ -18,4 +18,19 @@ object ExecutorAddresses {
     /** 格式化为存储/展示用的逗号分隔字符串。 */
     fun format(addresses: Collection<String>): String? =
         parse(addresses.joinToString(",")).takeIf { it.isNotEmpty() }?.joinToString(",")
+
+    /**
+     * 规范化为 HTTP 调用 baseUrl。
+     * 支持 `http(s)://host:port` 与 `host:port`；无法识别时返回 null。
+     */
+    fun normalizeHttpBaseUrl(raw: String?): String? {
+        val target = raw?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val normalized = when {
+            target.startsWith("http://", ignoreCase = true) ||
+                target.startsWith("https://", ignoreCase = true) -> target
+            target.contains("://") -> return null
+            else -> "http://$target"
+        }
+        return normalized.removeSuffix("/")
+    }
 }

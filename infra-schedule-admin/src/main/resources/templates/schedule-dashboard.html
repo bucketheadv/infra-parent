@@ -8,7 +8,8 @@
     <link rel="icon" type="image/svg+xml" th:href="@{/schedule-admin/favicon.svg}" href="/schedule-admin/favicon.svg">
     <link rel="stylesheet" th:href="@{/schedule-admin/dashboard.css(v=${#dates.createNow().time})}">
 </head>
-<body data-page="jobs">
+<body data-page="jobs"
+      th:attr="data-admin-auth-enabled=${adminAuthEnabled},data-admin-access-token=${adminAccessToken}">
 <div class="app-shell">
     <aside class="sidebar">
         <a class="brand" th:href="@{/}" aria-label="Infra Schedule 首页">

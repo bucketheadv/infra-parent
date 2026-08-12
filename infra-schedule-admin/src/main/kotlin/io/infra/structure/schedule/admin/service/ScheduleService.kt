@@ -1,8 +1,9 @@
-package io.infra.structure.schedule.service
+package io.infra.structure.schedule.admin.service
 
+import io.infra.structure.schedule.core.ExecutorAddresses
 import io.infra.structure.schedule.core.ExecutorRegistry
 import io.infra.structure.schedule.core.ExecutorTaskTracker
-import io.infra.structure.schedule.core.HttpScheduleCancelClient
+import io.infra.structure.schedule.admin.core.HttpScheduleCancelClient
 import io.infra.structure.schedule.core.LogFinishRequest
 import io.infra.structure.schedule.core.RoutedExecutor
 import io.infra.structure.schedule.core.ScheduleCalculator
@@ -111,7 +112,9 @@ class ScheduleService(
         page: Int = 1,
         pageSize: Int = query.limit
     ): ExecutionLogPage {
-        require(query.triggerTimeFrom == null || query.triggerTimeTo == null || query.triggerTimeFrom <= query.triggerTimeTo) {
+        val triggerTimeFrom = query.triggerTimeFrom
+        val triggerTimeTo = query.triggerTimeTo
+        require(triggerTimeFrom == null || triggerTimeTo == null || triggerTimeFrom <= triggerTimeTo) {
             "触发时间范围无效：开始时间不能晚于结束时间"
         }
         val size = pageSize.coerceIn(1, 1_000)
@@ -227,20 +230,21 @@ class ScheduleService(
         )
     }
 
-    /** 远程地址走 HTTP cancel；本地执行走同进程 [ExecutorTaskTracker]。 */
+    /** 远程地址走 HTTP cancel；无 HTTP 地址时走本进程 [ExecutorTaskTracker]。 */
     private fun killExecutorTask(log: JobExecutionLog) {
-        val target = log.targetAddress?.takeIf { it.isNotBlank() && it != "本地" }
-        if (target != null && (target.startsWith("http://") || target.startsWith("https://"))) {
-            val ok = cancelClient.cancel(target, log.id)
-            logger.warn(
-                "已请求远程执行器中止: logId={}, target={}, accepted={}",
-                log.id,
-                target,
-                ok
-            )
-        } else {
+        val probeUrl = resolveExecutorProbeUrl(log.targetAddress)
+        if (probeUrl == null) {
             taskTracker.cancel(log.id)
+            logger.warn("已请求本地执行器中止: logId={}", log.id)
+            return
         }
+        val ok = cancelClient.cancel(probeUrl, log.id)
+        logger.warn(
+            "已请求远程执行器中止: logId={}, target={}, accepted={}",
+            log.id,
+            probeUrl,
+            ok
+        )
     }
 
     /**
@@ -351,8 +355,7 @@ class ScheduleService(
     /** 将日志中的目标地址解析为可探活的 baseUrl；本地执行返回 null。 */
     private fun resolveExecutorProbeUrl(targetAddress: String?): String? {
         val target = targetAddress?.trim()?.takeIf { it.isNotBlank() && it != "本地" } ?: return null
-        if (target.startsWith("http://") || target.startsWith("https://")) return target
-        return "http://$target"
+        return ExecutorAddresses.normalizeHttpBaseUrl(target)
     }
 
     /** 异步提交一次触发；阻塞策略由执行器 JobThread 解释。 */
@@ -377,51 +380,96 @@ class ScheduleService(
 
     /** 选择执行器并构造对应的执行上下文。 */
     private fun execute(job: ScheduleJob, triggerTime: Long) {
-        val executors = resolveExecutors(job)
-        if (executors.isEmpty()) {
+        val route = resolveExecutors(job)
+        if (route.executors.isEmpty()) {
             val target = job.executorId?.let { "执行器: $it" } ?: "分组: ${job.executorGroup}"
-            val reason = when (job.routeStrategy) {
-                RouteStrategy.FAILOVER -> "故障转移未找到心跳成功的执行器，$target"
-                RouteStrategy.BUSYOVER -> "忙碌转移未找到空闲执行器，$target"
-                else -> "没有可用执行器，$target"
-            }
-            appendFailed(job, null, triggerTime, reason)
+            appendFailed(job, null, triggerTime, route.failureReason ?: "没有可用执行器，$target")
             return
         }
-        executors.forEachIndexed { index, routed ->
-            executeWithRetry(job, routed, triggerTime, shardIndex = index, shardTotal = executors.size)
+        route.executors.forEachIndexed { index, routed ->
+            executeWithRetry(job, routed, triggerTime, shardIndex = index, shardTotal = route.executors.size)
         }
     }
+
+    private data class ExecutorRouteResult(
+        val executors: List<RoutedExecutor>,
+        val failureReason: String? = null
+    )
 
     /**
      * 解析本次触发应调用的执行器地址节点列表。
      * FAILOVER / BUSYOVER 在有序候选上探活后只返回首个可用节点。
      */
-    private fun resolveExecutors(job: ScheduleJob): List<RoutedExecutor> {
-        val candidates = if (job.executorId != null) {
-            executorRegistry.runnableNodes(job.executorId)
+    private fun resolveExecutors(job: ScheduleJob): ExecutorRouteResult {
+        val executorId = job.executorId
+        val target = executorId?.let { "执行器: $it" } ?: "分组: ${job.executorGroup}"
+        val candidates = if (executorId != null) {
+            executorRegistry.runnableNodes(executorId)
         } else {
             executorRegistry.activeRouted(job.executorGroup)
         }
-        val cursorKey = job.executorId?.let { "executor:$it" } ?: job.executorGroup
+        if (candidates.isEmpty()) {
+            return ExecutorRouteResult(emptyList(), "没有可用执行器，$target")
+        }
+        val cursorKey = executorId?.let { "executor:$it" } ?: job.executorGroup
         val routed = executorRegistry.applyRoute(candidates, job.routeStrategy, job.id.toString(), cursorKey)
+        if (routed.isEmpty()) {
+            return ExecutorRouteResult(emptyList(), "没有可用执行器，$target")
+        }
         return when (job.routeStrategy) {
-            RouteStrategy.FAILOVER -> routed.firstOrNull { beatExecutor(it) }?.let { listOf(it) } ?: emptyList()
-            RouteStrategy.BUSYOVER -> routed.firstOrNull { idleBeatExecutor(it, job.id) }?.let { listOf(it) } ?: emptyList()
-            else -> routed
+            RouteStrategy.FAILOVER -> selectFailover(routed, target)
+            RouteStrategy.BUSYOVER -> selectBusyover(routed, job.id, target)
+            else -> ExecutorRouteResult(routed)
         }
     }
 
-    private fun beatExecutor(routed: RoutedExecutor): Boolean {
-        val probeUrl = resolveExecutorProbeUrl(routed.address)
-        if (probeUrl == null) return true // 本地执行器视为存活
+    private fun selectFailover(candidates: List<RoutedExecutor>, target: String): ExecutorRouteResult {
+        var unreachable = 0
+        for (node in candidates) {
+            when (probeBeat(node)) {
+                true -> return ExecutorRouteResult(listOf(node))
+                false -> Unit
+                null -> unreachable++
+            }
+        }
+        val reason = if (unreachable == candidates.size) {
+            "故障转移：全部 ${candidates.size} 个节点不可达，$target"
+        } else {
+            "故障转移未找到心跳成功的执行器，$target"
+        }
+        return ExecutorRouteResult(emptyList(), reason)
+    }
+
+    private fun selectBusyover(candidates: List<RoutedExecutor>, jobId: Long, target: String): ExecutorRouteResult {
+        var busy = false
+        var unreachable = 0
+        for (node in candidates) {
+            when (probeIdleBeat(node, jobId)) {
+                true -> return ExecutorRouteResult(listOf(node))
+                false -> busy = true
+                null -> unreachable++
+            }
+        }
+        val reason = when {
+            unreachable == candidates.size ->
+                "忙碌转移：全部 ${candidates.size} 个节点不可达，$target"
+            busy ->
+                "忙碌转移未找到空闲执行器，$target"
+            else ->
+                "忙碌转移未找到可用执行器，$target"
+        }
+        return ExecutorRouteResult(emptyList(), reason)
+    }
+
+    private fun probeBeat(routed: RoutedExecutor): Boolean? {
+        val probeUrl = resolveExecutorProbeUrl(routed.address) ?: return true
         return cancelClient.beat(probeUrl)
     }
 
-    private fun idleBeatExecutor(routed: RoutedExecutor, jobId: Long): Boolean {
+    private fun probeIdleBeat(routed: RoutedExecutor, jobId: Long): Boolean? {
         val probeUrl = resolveExecutorProbeUrl(routed.address)
-        if (probeUrl == null) return taskTracker.isJobIdle(jobId)
-        return cancelClient.idleBeat(probeUrl, jobId) == true
+        if (probeUrl == null) return if (taskTracker.isJobIdle(jobId)) true else false
+        return cancelClient.idleBeat(probeUrl, jobId)
     }
 
     /** 在同一执行器上完成一次任务调用及其配置的重试次数；开始即记运行中，结束回写终态。 */
