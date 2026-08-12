@@ -29,6 +29,8 @@ open class ScheduleJobEntity(
     open var routeStrategy: String = "FAILOVER",
     /** 重叠触发阻塞策略枚举名称。 */
     open var blockStrategy: String = "SERIAL",
+    /** 是否常驻任务。 */
+    open var resident: Boolean = false,
     /** 最大额外重试次数。 */
     open var maxRetryCount: Int = 0,
     /** 两次重试之间的等待时间（毫秒）。 */
@@ -69,6 +71,8 @@ open class ScheduleExecutionLogEntity(
     open var retryCount: Int = 0,
     /** 结果、错误或跳过原因。 */
     open var message: String? = null,
+    /** 业务执行过程日志。 */
+    open var handleLog: String? = null,
     /** 本次调用的目标地址。 */
     open var targetAddress: String? = null,
     /** 本次实际执行耗时（毫秒）。 */

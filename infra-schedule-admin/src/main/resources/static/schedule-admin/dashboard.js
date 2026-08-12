@@ -8,6 +8,8 @@
         status: id => `/jobs/${encodeURIComponent(id)}/status`,
         logs: id => `/jobs/${encodeURIComponent(id)}/logs`,
         queryLogs: "/logs",
+        log: id => `/logs/${encodeURIComponent(id)}`,
+        cancelLog: id => `/logs/${encodeURIComponent(id)}/cancel`,
         nextTriggers: id => `/jobs/${encodeURIComponent(id)}/next-triggers`,
         nextTriggersPreview: "/jobs/next-triggers/preview",
         executors: "/executors",
@@ -35,7 +37,14 @@
         });
         if (!response.ok) {
             const body = await response.text();
-            throw new Error(body || `请求失败（${response.status}）`);
+            let message = body || `请求失败（${response.status}）`;
+            try {
+                const json = JSON.parse(body);
+                message = json.message || json.error || message;
+            } catch (_ignored) {
+                /* 非 JSON 错误体，沿用原文 */
+            }
+            throw new Error(message);
         }
         if (response.status === 204) return null;
         return response.json();
@@ -52,6 +61,17 @@
     }
 
     /** 格式化执行耗时；不足 1 秒显示毫秒，否则显示秒。 */
+    /** 日志中的目标地址可能是完整 URL，展示为 host:port。 */
+    function formatTargetAddress(address) {
+        if (!address || address === "本地") return "本地";
+        try {
+            const url = new URL(address);
+            return url.host || address;
+        } catch (_error) {
+            return address;
+        }
+    }
+
     function formatDuration(durationMillis) {
         if (durationMillis == null || durationMillis === "") return "—";
         const millis = Number(durationMillis);
@@ -78,8 +98,100 @@
         FAILED: "失败",
         TIMEOUT: "超时",
         SKIPPED: "跳过",
-        RUNNING: "运行中"
+        RUNNING: "运行中",
+        CANCELLED: "已终止"
     });
+
+    /** 渲染单条执行日志；运行中时提供终止按钮。 */
+    function renderLogArticle(log, options = {}) {
+        const showJob = options.showJob === true;
+        const metaParts = [
+            `<span class="log-meta">日志：#${escapeHtml(log.id)}</span>`,
+            `<button type="button" class="action-btn action-next log-detail-btn" data-log-detail="${escapeHtml(log.id)}">详情</button>`
+        ];
+        if (showJob) metaParts.push(`<span class="log-meta">任务：${escapeHtml(options.jobLabel(log.jobId))}</span>`);
+        metaParts.push(`<span class="log-meta">执行器：${log.executorId != null ? (showJob ? escapeHtml(options.executorLabel(log.executorId)) : "#" + escapeHtml(log.executorId)) : "—"}</span>`);
+        metaParts.push(`<span class="log-meta">重试：${escapeHtml(log.retryCount)}</span>`);
+        metaParts.push(`<span class="log-meta">触发：${formatTime(log.triggerTime)}</span>`);
+        metaParts.push(`<span class="log-meta">结束：${formatTime(log.finishTime)}</span>`);
+        metaParts.push(`<span class="log-meta">目标：${escapeHtml(formatTargetAddress(log.targetAddress) || "—")}</span>`);
+        metaParts.push(`<span class="log-meta">耗时：${formatDuration(log.durationMillis)}</span>`);
+        const cancelButton = log.status === "RUNNING"
+            ? `<div class="log-actions"><button type="button" class="action-btn action-delete log-cancel-btn" data-cancel-log="${escapeHtml(log.id)}">终止</button></div>`
+            : "";
+        return `
+            <article class="log-item${cancelButton ? " has-cancel" : ""}">
+                <div class="log-status ${escapeHtml(log.status)}">${escapeHtml(executionStatusLabels[log.status] || log.status)}</div>
+                <div>
+                    <p class="log-message">${escapeHtml(log.message || "无返回信息")}</p>
+                    <div class="log-meta-row">${metaParts.join("")}</div>
+                </div>
+                ${cancelButton}
+            </article>`;
+    }
+
+    /** 打开业务过程日志详情弹窗。 */
+    async function openHandleLogDetail(logId) {
+        const dialog = document.querySelector("#handle-log-dialog");
+        if (!dialog) return;
+        document.querySelector("#handle-log-title").textContent = `日志 #${logId}`;
+        document.querySelector("#handle-log-subtitle").textContent = "正在加载…";
+        document.querySelector("#handle-log-content").textContent = "";
+        dialog.showModal();
+        try {
+            const log = await request(SchedulePaths.log(logId));
+            const statusLabel = executionStatusLabels[log.status] || log.status;
+            document.querySelector("#handle-log-subtitle").textContent =
+                `${statusLabel} · 触发 ${formatTime(log.triggerTime)} · 目标 ${formatTargetAddress(log.targetAddress) || "—"}`;
+            document.querySelector("#handle-log-content").textContent =
+                log.handleLog?.trim() ? log.handleLog : "暂无业务过程日志";
+        } catch (error) {
+            document.querySelector("#handle-log-subtitle").textContent = "加载失败";
+            document.querySelector("#handle-log-content").textContent = error.message;
+        }
+    }
+
+    function bindLogListActions(container, onCancelled) {
+        if (!container) return;
+        container.addEventListener("click", async event => {
+            const detailButton = event.target.closest("[data-log-detail]");
+            if (detailButton) {
+                openHandleLogDetail(detailButton.dataset.logDetail).catch(error => showToast(error.message, true));
+                return;
+            }
+            const cancelButton = event.target.closest("[data-cancel-log]");
+            if (!cancelButton) return;
+            try {
+                const cancelled = await cancelRunningLog(cancelButton.dataset.cancelLog);
+                if (cancelled && onCancelled) await onCancelled();
+            } catch (error) {
+                showToast(error.message, true);
+            }
+        });
+    }
+
+    const handleLogDialog = document.querySelector("#handle-log-dialog");
+    if (handleLogDialog) {
+        document.querySelector("[data-close-handle-log]")?.addEventListener("click", () => handleLogDialog.close());
+        handleLogDialog.addEventListener("click", event => {
+            if (event.target === handleLogDialog) handleLogDialog.close();
+        });
+    }
+
+    /** 确认并终止运行中的执行日志。 */
+    async function cancelRunningLog(logId) {
+        const confirmed = await openConfirm({
+            eyebrow: "终止执行",
+            title: "终止运行中的任务？",
+            message: "将通知执行器中断 handler 线程，并中断调度侧等待；该任务下运行中日志会标记为已终止。处理器需响应线程中断才会立刻停下。",
+            confirmLabel: "终止",
+            tone: "danger"
+        });
+        if (!confirmed) return false;
+        await request(SchedulePaths.cancelLog(logId), { method: "POST" });
+        showToast("已发送终止指令");
+        return true;
+    }
 
     /** 以短暂提示反馈写操作结果。 */
     function showToast(message, isError = false) {
@@ -177,7 +289,7 @@
         function strategyLabel(job) {
             const route = routeStrategyLabels[job.routeStrategy] || job.routeStrategy;
             const block = blockStrategyLabels[job.blockStrategy] || job.blockStrategy;
-            return `${route} · ${block}`;
+            return job.resident ? `${route} · ${block} · 常驻` : `${route} · ${block}`;
         }
 
         function filteredJobs() {
@@ -247,6 +359,7 @@
                     const input = jobForm.elements.namedItem(key);
                     if (input && job[key] != null) input.value = job[key];
                 });
+                jobForm.elements.namedItem("resident").value = job.resident ? "true" : "false";
             }
             populateExecutorSelect(job?.executorId);
             toggleScheduleFields();
@@ -282,6 +395,7 @@
                 status: existing?.status || "DISABLED",
                 routeStrategy: form.get("routeStrategy"),
                 blockStrategy: form.get("blockStrategy"),
+                resident: form.get("resident") === "true",
                 maxRetryCount: Number(form.get("maxRetryCount")),
                 retryIntervalMillis: 1000,
                 timeoutSeconds: Number(form.get("timeoutSeconds"))
@@ -292,22 +406,21 @@
             document.querySelector("#logs-title").textContent = `${job.name} · 执行日志`;
             const content = document.querySelector("#logs-content");
             content.innerHTML = "<p class=\"muted\">正在加载日志…</p>";
+            content.dataset.jobId = String(job.id);
             logsDialog.showModal();
             try {
-                const logs = await request(`${SchedulePaths.logs(job.id)}?limit=100`);
-                content.innerHTML = logs.length ? logs.map(log => `
-                    <article class="log-item">
-                        <div class="log-status ${escapeHtml(log.status)}">${escapeHtml(executionStatusLabels[log.status] || log.status)}</div>
-                        <div>
-                            <p class="log-message">${escapeHtml(log.message || "无返回信息")}</p>
-                            <span class="log-meta">执行器：${log.executorId != null ? "#" + escapeHtml(log.executorId) : "—"}　重试：${escapeHtml(log.retryCount)}</span>
-                            <span class="log-meta">触发：${formatTime(log.triggerTime)}　结束：${formatTime(log.finishTime)}</span>
-                            <span class="log-meta">目标：${escapeHtml(log.targetAddress || "—")}　耗时：${formatDuration(log.durationMillis)}</span>
-                        </div>
-                    </article>`).join("") : "<p class=\"log-empty\">暂无执行日志</p>";
+                await reloadJobLogs(job.id);
             } catch (error) {
                 content.innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`;
             }
+        }
+
+        async function reloadJobLogs(jobId) {
+            const content = document.querySelector("#logs-content");
+            const logs = await request(`${SchedulePaths.logs(jobId)}?limit=100`);
+            content.innerHTML = logs.length
+                ? logs.map(log => renderLogArticle(log)).join("")
+                : "<p class=\"log-empty\">暂无执行日志</p>";
         }
 
         function renderNextTriggers(times) {
@@ -425,6 +538,10 @@
         document.querySelectorAll("[data-close-dialog]").forEach(button => button.addEventListener("click", () => jobDialog.close()));
         document.querySelector("[data-close-logs]").addEventListener("click", () => logsDialog.close());
         document.querySelector("[data-close-next-triggers]").addEventListener("click", () => nextTriggersDialog.close());
+        bindLogListActions(document.querySelector("#logs-content"), async () => {
+            const jobId = document.querySelector("#logs-content").dataset.jobId;
+            if (jobId) await reloadJobLogs(jobId);
+        });
 
         Promise.all([loadJobs(), loadExecutors()]).then(() => { renderJobs(); updateMetrics(); }).catch(error => showToast(error.message, true));
     }
@@ -674,7 +791,7 @@
 
         function renderSummary(logs) {
             const success = logs.filter(log => log.status === "SUCCESS").length;
-            const failed = logs.filter(log => log.status === "FAILED" || log.status === "TIMEOUT").length;
+            const failed = logs.filter(log => log.status === "FAILED" || log.status === "TIMEOUT" || log.status === "CANCELLED").length;
             const other = logs.length - success - failed;
             document.querySelector("#log-stat-total").textContent = String(logs.length);
             document.querySelector("#log-stat-success").textContent = String(success);
@@ -686,16 +803,13 @@
         function renderLogs(logs) {
             resultCount.textContent = logs.length ? `共 ${logs.length} 条结果` : "无匹配日志";
             renderSummary(logs);
-            resultBox.innerHTML = logs.length ? logs.map(log => `
-                <article class="log-item">
-                    <div class="log-status ${escapeHtml(log.status)}">${escapeHtml(executionStatusLabels[log.status] || log.status)}</div>
-                    <div>
-                        <p class="log-message">${escapeHtml(log.message || "无返回信息")}</p>
-                        <span class="log-meta">任务：${escapeHtml(jobLabel(log.jobId))}　执行器：${escapeHtml(executorLabel(log.executorId))}　重试：${escapeHtml(log.retryCount)}</span>
-                        <span class="log-meta">触发：${formatTime(log.triggerTime)}　结束：${formatTime(log.finishTime)}</span>
-                        <span class="log-meta">目标：${escapeHtml(log.targetAddress || "—")}　耗时：${formatDuration(log.durationMillis)}</span>
-                    </div>
-                </article>`).join("") : "<p class=\"log-empty\">没有符合条件的执行日志</p>";
+            resultBox.innerHTML = logs.length
+                ? logs.map(log => renderLogArticle(log, {
+                    showJob: true,
+                    jobLabel,
+                    executorLabel
+                })).join("")
+                : "<p class=\"log-empty\">没有符合条件的执行日志</p>";
         }
 
         async function queryLogs() {
@@ -752,6 +866,7 @@
         ["#log-from", "#log-to"].forEach(selector => {
             document.querySelector(selector).addEventListener("change", () => setActiveChip(null));
         });
+        bindLogListActions(resultBox, () => queryLogs());
 
         bootstrap().catch(error => showToast(error.message, true));
     }

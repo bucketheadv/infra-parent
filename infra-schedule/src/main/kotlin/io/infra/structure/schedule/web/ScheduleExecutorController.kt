@@ -1,6 +1,8 @@
 package io.infra.structure.schedule.web
 
-import io.infra.structure.schedule.core.HandlerRegistry
+import io.infra.structure.schedule.core.ExecutorCancelRequest
+import io.infra.structure.schedule.core.ExecutorCancelResponse
+import io.infra.structure.schedule.core.ExecutorTaskTracker
 import io.infra.structure.schedule.core.SCHEDULE_ACCESS_TOKEN_HEADER
 import io.infra.structure.schedule.model.JobExecutionContext
 import io.infra.structure.schedule.model.JobExecutionResult
@@ -17,17 +19,27 @@ import org.springframework.web.server.ResponseStatusException
 @RestController
 @RequestMapping(ScheduleWebPaths.EXECUTOR_ROOT)
 class ScheduleExecutorController(
-    private val handlerRegistry: HandlerRegistry,
+    private val taskTracker: ExecutorTaskTracker,
     private val properties: InfraScheduleProperties
 ) {
-    /** 校验共享令牌后在本进程执行已注册处理器。 */
+    /** 校验共享令牌后在本进程执行已注册处理器，并按 logId 跟踪以便终止。 */
     @PostMapping(ScheduleWebPaths.RUN)
     fun run(
         @RequestHeader(value = SCHEDULE_ACCESS_TOKEN_HEADER, required = false) accessToken: String?,
         @RequestBody context: JobExecutionContext
     ): JobExecutionResult {
         requireAuthorized(accessToken)
-        return handlerRegistry.execute(context)
+        return taskTracker.run(context)
+    }
+
+    /** 按执行日志 ID 中断本进程内对应的 handler 线程。 */
+    @PostMapping(ScheduleWebPaths.CANCEL)
+    fun cancel(
+        @RequestHeader(value = SCHEDULE_ACCESS_TOKEN_HEADER, required = false) accessToken: String?,
+        @RequestBody request: ExecutorCancelRequest
+    ): ExecutorCancelResponse {
+        requireAuthorized(accessToken)
+        return ExecutorCancelResponse(cancelled = taskTracker.cancel(request.logId))
     }
 
     private fun requireAuthorized(accessToken: String?) {

@@ -10,6 +10,7 @@ import org.apache.ibatis.annotations.Param
 import org.apache.ibatis.annotations.Result
 import org.apache.ibatis.annotations.Results
 import org.apache.ibatis.annotations.Select
+import org.apache.ibatis.annotations.Update
 
 /** 调度任务定义的 MyBatis-Flex Mapper。 */
 @Mapper
@@ -40,6 +41,7 @@ interface ScheduleJobMapper : BaseMapper<ScheduleJobEntity> {
             Result(property = "fixedRateMillis", column = "fixed_rate_millis"),
             Result(property = "routeStrategy", column = "route_strategy"),
             Result(property = "blockStrategy", column = "block_strategy"),
+            Result(property = "resident", column = "resident"),
             Result(property = "maxRetryCount", column = "max_retry_count"),
             Result(property = "retryIntervalMillis", column = "retry_interval_millis"),
             Result(property = "timeoutSeconds", column = "timeout_seconds"),
@@ -59,7 +61,20 @@ interface ScheduleJobMapper : BaseMapper<ScheduleJobEntity> {
 
 /** 调度执行日志的 MyBatis-Flex Mapper。 */
 @Mapper
-interface ScheduleExecutionLogMapper : BaseMapper<ScheduleExecutionLogEntity>
+interface ScheduleExecutionLogMapper : BaseMapper<ScheduleExecutionLogEntity> {
+    /**
+     * 原子追加业务执行日志；超过约 1MB 时截断，避免撑爆行。
+     * MySQL 5.x 兼容 CONCAT / IFNULL / LEFT。
+     */
+    @Update(
+        """
+        UPDATE infra_schedule_execution_log
+        SET handle_log = LEFT(CONCAT(IFNULL(handle_log, ''), #{chunk}), 1000000)
+        WHERE id = #{id}
+        """
+    )
+    fun appendHandleLog(@Param("id") id: Long, @Param("chunk") chunk: String): Int
+}
 
 /** 执行器心跳的 MyBatis-Flex Mapper。 */
 @Mapper

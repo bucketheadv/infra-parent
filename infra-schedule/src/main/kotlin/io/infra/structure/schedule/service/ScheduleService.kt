@@ -1,6 +1,8 @@
 package io.infra.structure.schedule.service
 
 import io.infra.structure.schedule.core.ExecutorRegistry
+import io.infra.structure.schedule.core.ExecutorTaskTracker
+import io.infra.structure.schedule.core.HttpScheduleCancelClient
 import io.infra.structure.schedule.core.RoutedExecutor
 import io.infra.structure.schedule.core.ScheduleCalculator
 import io.infra.structure.schedule.model.BlockStrategy
@@ -14,6 +16,8 @@ import io.infra.structure.schedule.model.ScheduleJob
 import io.infra.structure.schedule.model.ScheduleJobDraft
 import io.infra.structure.schedule.repository.ScheduleExecutionLogRepository
 import io.infra.structure.schedule.repository.ScheduleJobRepository
+import org.slf4j.LoggerFactory
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Future
 import java.util.concurrent.FutureTask
@@ -27,11 +31,16 @@ class ScheduleService(
     private val executorRegistry: ExecutorRegistry,
     private val workerExecutor: ExecutorService,
     private val attemptExecutor: ExecutorService,
+    private val taskTracker: ExecutorTaskTracker,
+    private val cancelClient: HttpScheduleCancelClient,
     private val claimLeaseMillis: Long,
     private val schedulerId: String
 ) {
+    private val logger = LoggerFactory.getLogger(javaClass)
     private val running = mutableMapOf<Long, FutureTask<Unit>>()
     private val runningLock = Any()
+    /** 调度侧等待执行器返回的 Future，按日志 ID 可中断。 */
+    private val attemptFutures = ConcurrentHashMap<Long, Future<*>>()
 
     /** 校验并创建任务，同时计算首次定时触发时间。 */
     fun create(draft: ScheduleJobDraft): ScheduleJob {
@@ -98,12 +107,25 @@ class ScheduleService(
     /** 查询指定任务近期的执行审计记录。 */
     fun executionLogs(jobId: Long, limit: Int): List<JobExecutionLog> = logRepository.findByJobId(jobId, limit)
 
+    /** 按日志主键查询单条执行记录。 */
+    fun executionLog(logId: Long): JobExecutionLog =
+        logRepository.findById(logId) ?: error("执行日志不存在: $logId")
+
     /** 按任务、执行器、状态与触发时间范围查询执行日志。 */
     fun queryExecutionLogs(query: ExecutionLogQuery): List<JobExecutionLog> {
         require(query.triggerTimeFrom == null || query.triggerTimeTo == null || query.triggerTimeFrom <= query.triggerTimeTo) {
             "触发时间范围无效：开始时间不能晚于结束时间"
         }
         return logRepository.query(query.copy(limit = query.limit.coerceIn(1, 1_000)))
+    }
+
+    /** 追加业务执行过程日志（执行器异步上报）。 */
+    fun appendHandleLog(logId: Long, lines: List<String>): Boolean {
+        if (lines.isEmpty()) return logRepository.findById(logId) != null
+        val chunk = lines.joinToString(separator = "") { line ->
+            if (line.endsWith("\n")) line else "$line\n"
+        }
+        return logRepository.appendHandleLog(logId, chunk)
     }
 
     /** 预览任务接下来若干次调度时间，供管理端展示。 */
@@ -124,6 +146,56 @@ class ScheduleService(
     fun triggerNow(id: Long): Boolean {
         val job = requireJob(id)
         return submit(job, System.currentTimeMillis(), scheduled = false)
+    }
+
+    /**
+     * 真正终止运行中任务：中断调度侧等待线程，并通知执行器按 logId kill handler 线程，最后回写日志。
+     * @return false 表示日志不存在于运行中状态
+     */
+    fun cancelRunningLog(logId: Long): Boolean {
+        val log = logRepository.findById(logId) ?: error("执行日志不存在: $logId")
+        if (log.status != ExecutionStatus.RUNNING) return false
+        logger.warn(
+            "管理员中止任务: jobId={}, logId={}, target={}",
+            log.jobId,
+            log.id,
+            log.targetAddress
+        )
+        // 先落库 CANCELLED，避免中断后执行回写抢先改成 SUCCESS/FAILED 导致此处更新 0 行并误报 409。
+        val targets = logRepository.query(
+            ExecutionLogQuery(jobId = log.jobId, status = ExecutionStatus.RUNNING, limit = 100)
+        )
+        val updated = logRepository.cancelRunningByJobId(
+            jobId = log.jobId,
+            message = "管理员终止执行",
+            finishTime = System.currentTimeMillis()
+        )
+        synchronized(runningLock) {
+            running[log.jobId]?.cancel(true)
+        }
+        targets.forEach { active ->
+            attemptFutures.remove(active.id)?.cancel(true)
+            killExecutorTask(active)
+        }
+        if (updated > 0) return true
+        val current = logRepository.findById(logId)
+        return current != null && current.status != ExecutionStatus.RUNNING
+    }
+
+    /** 远程地址走 HTTP cancel；本地执行走同进程 [ExecutorTaskTracker]。 */
+    private fun killExecutorTask(log: JobExecutionLog) {
+        val target = log.targetAddress?.takeIf { it.isNotBlank() && it != "本地" }
+        if (target != null && (target.startsWith("http://") || target.startsWith("https://"))) {
+            val ok = cancelClient.cancel(target, log.id)
+            logger.warn(
+                "已请求远程执行器中止: logId={}, target={}, accepted={}",
+                log.id,
+                target,
+                ok
+            )
+        } else {
+            taskTracker.cancel(log.id)
+        }
     }
 
     /**
@@ -152,7 +224,10 @@ class ScheduleService(
                 if (job.blockStrategy == BlockStrategy.COVER_EARLY) {
                     previous.cancel(true)
                 } else {
-                    appendSkipped(job, triggerTime, "任务正在执行，按 ${job.blockStrategy} 策略跳过本次触发")
+                    // 常驻任务在串行跳过 / 丢弃后续时不写跳过日志，避免长驻运行刷屏。
+                    if (!job.resident) {
+                        appendSkipped(job, triggerTime, "任务正在执行，按 ${job.blockStrategy} 策略跳过本次触发")
+                    }
                     if (scheduled) completeSchedule(job, triggerTime)
                     return false
                 }
@@ -190,16 +265,7 @@ class ScheduleService(
             return
         }
         executors.forEachIndexed { index, routed ->
-            val context = JobExecutionContext(
-                jobId = job.id,
-                jobName = job.name,
-                handler = job.handler,
-                parameters = job.parameters,
-                triggerTime = triggerTime,
-                shardIndex = index,
-                shardTotal = executors.size
-            )
-            executeWithRetry(job, routed, triggerTime) { routed.executor.execute(context) }
+            executeWithRetry(job, routed, triggerTime, shardIndex = index, shardTotal = executors.size)
         }
     }
 
@@ -226,17 +292,10 @@ class ScheduleService(
         var lastMessage = "没有可用执行器"
         var lastExecutorId: Long? = null
         for ((index, routed) in executors.withIndex()) {
-            val context = JobExecutionContext(
-                jobId = job.id,
-                jobName = job.name,
-                handler = job.handler,
-                parameters = job.parameters,
-                triggerTime = triggerTime,
-                shardIndex = index,
-                shardTotal = executors.size
-            )
             when (
-                val outcome = executeWithRetry(job, routed, triggerTime) { routed.executor.execute(context) }
+                val outcome = executeWithRetry(
+                    job, routed, triggerTime, shardIndex = index, shardTotal = executors.size
+                )
             ) {
                 AttemptOutcome.Success, AttemptOutcome.Cancelled -> return
                 is AttemptOutcome.Failed -> {
@@ -253,9 +312,11 @@ class ScheduleService(
         job: ScheduleJob,
         routed: RoutedExecutor,
         triggerTime: Long,
-        action: () -> io.infra.structure.schedule.model.JobExecutionResult
+        shardIndex: Int = 0,
+        shardTotal: Int = 1
     ): AttemptOutcome {
-        val initialTarget = formatTargetAddress(routed.address)
+        // 保留完整地址供远程终止；本地显示为「本地」。
+        val storageTarget = routed.address?.takeIf { it.isNotBlank() } ?: "本地"
         val runningLog = logRepository.append(
             JobExecutionLog(
                 jobId = job.id,
@@ -263,42 +324,60 @@ class ScheduleService(
                 triggerTime = triggerTime,
                 status = ExecutionStatus.RUNNING,
                 message = "${job.handler} 执行中",
-                targetAddress = initialTarget
+                targetAddress = storageTarget
             )
         )
         var lastMessage = ""
-        var lastTarget: String? = initialTarget
+        var lastTarget: String? = storageTarget
         var lastDurationMs: Long? = null
         for (attempt in 0..job.maxRetryCount) {
             var future: Future<io.infra.structure.schedule.model.JobExecutionResult>? = null
             val startedAt = System.currentTimeMillis()
             try {
-                future = attemptExecutor.submit<io.infra.structure.schedule.model.JobExecutionResult> { action() }
-                val result = if (job.timeoutSeconds > 0) {
-                    future.get(job.timeoutSeconds, TimeUnit.SECONDS)
-                } else {
-                    future.get()
+                future = attemptExecutor.submit<io.infra.structure.schedule.model.JobExecutionResult> {
+                    routed.executor.execute(
+                        JobExecutionContext(
+                            jobId = job.id,
+                            jobName = job.name,
+                            handler = job.handler,
+                            parameters = job.parameters,
+                            triggerTime = triggerTime,
+                            shardIndex = shardIndex,
+                            shardTotal = shardTotal,
+                            logId = runningLog.id
+                        )
+                    )
+                }
+                attemptFutures[runningLog.id] = future
+                val result = try {
+                    if (job.timeoutSeconds > 0) {
+                        future.get(job.timeoutSeconds, TimeUnit.SECONDS)
+                    } else {
+                        future.get()
+                    }
+                } finally {
+                    attemptFutures.remove(runningLog.id, future)
                 }
                 val durationMs = System.currentTimeMillis() - startedAt
-                val target = formatTargetAddress(routed.address)
                 if (result.success) {
                     finishLog(
                         runningLog,
                         status = ExecutionStatus.SUCCESS,
                         retryCount = attempt,
                         message = formatSuccessMessage(job.handler, result.message),
-                        targetAddress = target,
+                        targetAddress = storageTarget,
                         durationMillis = durationMs
                     )
                     return AttemptOutcome.Success
                 }
                 lastMessage = result.message ?: "任务处理器返回失败"
-                lastTarget = target
+                lastTarget = storageTarget
                 lastDurationMs = durationMs
             } catch (_: TimeoutException) {
                 future?.cancel(true)
+                killExecutorTask(runningLog)
                 lastMessage = "任务执行超时（${job.timeoutSeconds} 秒）"
-                lastTarget = formatTargetAddress(routed.address)
+                lastTarget = storageTarget
                 lastDurationMs = System.currentTimeMillis() - startedAt
                 finishLog(
                     runningLog,
@@ -311,6 +390,8 @@ class ScheduleService(
                 return AttemptOutcome.Failed(lastMessage)
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()
+                future?.cancel(true)
+                killExecutorTask(runningLog)
                 finishLog(
                     runningLog,
                     status = ExecutionStatus.SKIPPED,
@@ -321,7 +402,7 @@ class ScheduleService(
                 return AttemptOutcome.Cancelled
             } catch (exception: Exception) {
                 lastMessage = exception.cause?.message ?: exception.message ?: exception.javaClass.simpleName
-                lastTarget = formatTargetAddress(routed.address)
+                lastTarget = storageTarget
                 lastDurationMs = System.currentTimeMillis() - startedAt
             }
             if (attempt < job.maxRetryCount && job.retryIntervalMillis > 0) Thread.sleep(job.retryIntervalMillis)
@@ -337,7 +418,7 @@ class ScheduleService(
         return AttemptOutcome.Failed(lastMessage)
     }
 
-    /** 将运行中日志回写为终态。 */
+    /** 将运行中日志回写为终态；若已被管理员终止则不再覆盖。 */
     private fun finishLog(
         runningLog: JobExecutionLog,
         status: ExecutionStatus,
@@ -346,7 +427,7 @@ class ScheduleService(
         targetAddress: String? = runningLog.targetAddress,
         durationMillis: Long? = null
     ) {
-        logRepository.update(
+        logRepository.updateIfRunning(
             runningLog.copy(
                 finishTime = System.currentTimeMillis(),
                 status = status,
@@ -363,19 +444,6 @@ class ScheduleService(
         val base = "$handler 执行成功"
         val value = returnValue?.takeIf { it.isNotBlank() } ?: return base
         return "$base：$value"
-    }
-
-    /** 将执行器地址格式化为 host:port；本地执行器显示为「本地」。 */
-    private fun formatTargetAddress(address: String?): String {
-        if (address.isNullOrBlank()) return "本地"
-        return try {
-            val uri = java.net.URI(address)
-            val host = uri.host ?: return address
-            val port = uri.port.takeIf { it > 0 }?.let { ":$it" } ?: ""
-            "$host$port"
-        } catch (_: Exception) {
-            address
-        }
     }
 
     private sealed class AttemptOutcome {
@@ -430,7 +498,7 @@ class ScheduleService(
         id = id, name = draft.name, executorGroup = draft.executorGroup, executorId = draft.executorId, handler = draft.handler,
         parameters = draft.parameters, scheduleType = draft.scheduleType, cron = draft.cron,
         fixedRateMillis = draft.fixedRateMillis, status = draft.status, routeStrategy = draft.routeStrategy,
-        blockStrategy = draft.blockStrategy, maxRetryCount = draft.maxRetryCount,
+        blockStrategy = draft.blockStrategy, resident = draft.resident, maxRetryCount = draft.maxRetryCount,
         retryIntervalMillis = draft.retryIntervalMillis, timeoutSeconds = draft.timeoutSeconds,
         createTime = now, updateTime = now
     )

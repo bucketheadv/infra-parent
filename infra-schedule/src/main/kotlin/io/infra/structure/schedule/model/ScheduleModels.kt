@@ -53,7 +53,9 @@ enum class ExecutionStatus {
     /** 因阻塞或取消策略未实际执行。 */
     SKIPPED,
     /** 超过任务配置的执行时限。 */
-    TIMEOUT
+    TIMEOUT,
+    /** 管理员主动终止执行。 */
+    CANCELLED
 }
 
 /** 执行器在调度中心中的可用状态。 */
@@ -98,6 +100,11 @@ data class ScheduleJob(
     val routeStrategy: RouteStrategy = RouteStrategy.FAILOVER,
     /** 同一任务发生重叠触发时的处理策略。 */
     val blockStrategy: BlockStrategy = BlockStrategy.SERIAL,
+    /**
+     * 是否常驻任务。
+     * 常驻任务在串行跳过 / 丢弃后续策略下因重叠未实际执行时，不写入调度日志。
+     */
+    val resident: Boolean = false,
     /** 一次触发失败后的最大额外重试次数。 */
     val maxRetryCount: Int = 0,
     /** 两次重试之间的等待时间（毫秒）。 */
@@ -142,6 +149,8 @@ data class ScheduleJobDraft(
     val routeStrategy: RouteStrategy = RouteStrategy.FAILOVER,
     /** 重叠触发处理策略。 */
     val blockStrategy: BlockStrategy = BlockStrategy.SERIAL,
+    /** 是否常驻任务；常驻时串行跳过 / 丢弃后续不写调度日志。 */
+    val resident: Boolean = false,
     /** 一次触发的最大额外重试次数。 */
     val maxRetryCount: Int = 0,
     /** 重试间隔（毫秒）。 */
@@ -165,7 +174,9 @@ data class JobExecutionContext(
     /** 广播执行时的当前分片下标，从 0 开始。 */
     val shardIndex: Int = 0,
     /** 广播执行时的总分片数。 */
-    val shardTotal: Int = 1
+    val shardTotal: Int = 1,
+    /** 对应执行日志主键；执行器按此 ID 跟踪并支持远程终止。 */
+    val logId: Long? = null
 )
 
 /** 任务处理器返回给调度器的执行结果。 */
@@ -217,6 +228,8 @@ data class JobExecutionLog(
     val retryCount: Int = 0,
     /** 执行结果、失败原因或跳过原因。 */
     val message: String? = null,
+    /** 业务执行过程日志（[io.infra.structure.schedule.api.ScheduleLogHelper] 异步上报）。 */
+    val handleLog: String? = null,
     /** 本次调用的目标地址（host:port 或完整 URL）；本地执行可为空。 */
     val targetAddress: String? = null,
     /** 本次实际执行耗时（毫秒）。 */

@@ -409,6 +409,7 @@ tbody tr:hover { background: #f7faff; }
     display: grid;
     grid-template-columns: 88px 1fr;
     gap: 14px;
+    align-items: start;
     padding: 14px 12px;
     margin: 0 0 8px;
     border: 1px solid #e7edf5;
@@ -416,6 +417,7 @@ tbody tr:hover { background: #f7faff; }
     background: linear-gradient(180deg, #ffffff, #fbfcfe);
     box-shadow: var(--shadow-sm);
 }
+.log-item.has-cancel { grid-template-columns: 88px 1fr auto; }
 .log-item:last-child { margin-bottom: 0; }
 .log-status {
     display: inline-flex;
@@ -430,13 +432,55 @@ tbody tr:hover { background: #f7faff; }
     letter-spacing: .02em;
     text-align: center;
 }
+.log-actions { display: flex; align-items: flex-start; }
+.log-cancel-btn { white-space: nowrap; }
 .log-status.SUCCESS { color: var(--success); background: #e8f7f0; border: 1px solid #c7ebda; }
-.log-status.FAILED, .log-status.TIMEOUT { color: var(--danger); background: #fff1f0; border: 1px solid #f3c1bc; }
+.log-status.FAILED, .log-status.TIMEOUT, .log-status.CANCELLED { color: var(--danger); background: #fff1f0; border: 1px solid #f3c1bc; }
 .log-status.SKIPPED { color: #9a6a18; background: #fff7e8; border: 1px solid #f0d3a0; }
 .log-status.RUNNING { color: #1f66d3; background: #ebf2ff; border: 1px solid #bfd2f7; }
 .log-message { margin: 0 0 8px; color: #2c3a4f; font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; font-weight: 550; }
-.log-meta { display: block; color: var(--muted); font-size: 11px; line-height: 1.6; }
-.log-meta + .log-meta { margin-top: 2px; }
+.log-handle {
+    margin: 0;
+    max-height: 240px;
+    overflow: auto;
+    padding: 10px 12px;
+    border: 1px solid #e5ebf3;
+    border-radius: 8px;
+    background: #f7fafc;
+    color: #334155;
+    font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.log-handle-dialog {
+    max-height: min(60vh, 520px);
+    margin: 0 22px 22px;
+}
+.handle-log-dialog { width: min(820px, calc(100vw - 32px)); }
+.handle-log-subtitle {
+    margin: 0 22px 12px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+.log-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+.log-meta { display: inline; white-space: nowrap; }
+.log-detail-btn {
+    height: 22px;
+    padding: 0 8px;
+    font-size: 11px;
+    line-height: 20px;
+}
 
 .log-query-panel .panel-header { border-bottom: 0; }
 .log-filter-shell {
@@ -555,5 +599,6 @@ tbody tr:hover { background: #f7faff; }
     .full-width { grid-column: auto; }
     .metric { min-height: 78px; }
     .row-actions { justify-content: flex-start; }
-    .log-item { grid-template-columns: 1fr; }
+    .log-item, .log-item.has-cancel { grid-template-columns: 1fr; }
+    .log-actions { justify-content: flex-end; }
 }

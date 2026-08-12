@@ -1,13 +1,17 @@
 package io.infra.structure.schedule.autoconfigure
 
 import io.infra.structure.schedule.api.ScheduleJobHandler
+import io.infra.structure.schedule.api.ScheduleLogHelper
 import io.infra.structure.schedule.core.ExecutorRegistry
 import io.infra.structure.schedule.core.ExecutorHeartbeatReporter
+import io.infra.structure.schedule.core.ExecutorTaskTracker
 import io.infra.structure.schedule.core.HandlerRegistry
+import io.infra.structure.schedule.core.HttpScheduleCancelClient
 import io.infra.structure.schedule.core.HttpScheduleExecutorClientFactory
 import io.infra.structure.schedule.core.LocalScheduleExecutor
 import io.infra.structure.schedule.core.ScheduleExecutorClientFactory
 import io.infra.structure.schedule.core.ScheduleDispatcher
+import io.infra.structure.schedule.core.ScheduleLogReporter
 import io.infra.structure.schedule.persistence.FlexExecutorHeartbeatRepository
 import io.infra.structure.schedule.persistence.FlexScheduleExecutionLogRepository
 import io.infra.structure.schedule.persistence.FlexScheduleJobRepository
@@ -60,6 +64,38 @@ class InfraScheduleAutoConfiguration {
     @ConditionalOnMissingBean(name = ["infraScheduleAttemptExecutor"])
     fun infraScheduleAttemptExecutor(): ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
 
+    @Bean(destroyMethod = "shutdown")
+    @ConditionalOnMissingBean(name = ["infraScheduleHandlerExecutor"])
+    fun infraScheduleHandlerExecutor(): ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun executorTaskTracker(
+        handlerRegistry: HandlerRegistry,
+        @Qualifier("infraScheduleHandlerExecutor") handlerExecutor: ExecutorService
+    ) = ExecutorTaskTracker(handlerRegistry, handlerExecutor)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun httpScheduleCancelClient(properties: InfraScheduleProperties) = HttpScheduleCancelClient(
+        properties.executor.accessToken,
+        properties.executor.authEnabled,
+        properties.executor.connectTimeoutMillis,
+        // 终止请求应快速返回，避免管理端长时间卡住。
+        minOf(properties.executor.readTimeoutMillis, 5_000L)
+    )
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun scheduleLogReporter(
+        properties: InfraScheduleProperties,
+        logRepository: ScheduleExecutionLogRepository
+    ): ScheduleLogReporter {
+        val reporter = ScheduleLogReporter(properties, logRepository)
+        ScheduleLogHelper.install(reporter)
+        return reporter
+    }
+
     @Bean
     @ConditionalOnMissingBean
     fun scheduleExecutorClientFactory(properties: InfraScheduleProperties): ScheduleExecutorClientFactory =
@@ -81,14 +117,14 @@ class InfraScheduleAutoConfiguration {
     @Bean
     @ConditionalOnProperty(prefix = "infra.schedule.executor", name = ["enabled"], havingValue = "true", matchIfMissing = true)
     fun localScheduleExecutor(
-        handlerRegistry: HandlerRegistry,
+        taskTracker: ExecutorTaskTracker,
         executorRegistry: ExecutorRegistry,
         properties: InfraScheduleProperties
     ): LocalScheduleExecutor {
         val executor = LocalScheduleExecutor(
             properties.executor.name ?: properties.executor.group,
             properties.executor.group,
-            handlerRegistry
+            taskTracker
         )
         executorRegistry.register(executor)
         return executor
@@ -102,10 +138,12 @@ class InfraScheduleAutoConfiguration {
         executorRegistry: ExecutorRegistry,
         @Qualifier("infraScheduleWorkerExecutor") workerExecutor: ExecutorService,
         @Qualifier("infraScheduleAttemptExecutor") attemptExecutor: ExecutorService,
+        taskTracker: ExecutorTaskTracker,
+        cancelClient: HttpScheduleCancelClient,
         properties: InfraScheduleProperties
     ) = ScheduleService(
         jobRepository, logRepository, executorRegistry, workerExecutor, attemptExecutor,
-        properties.claimLeaseMillis, properties.schedulerId
+        taskTracker, cancelClient, properties.claimLeaseMillis, properties.schedulerId
     )
 
     @Bean
@@ -140,9 +178,9 @@ class InfraScheduleAutoConfiguration {
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "infra.schedule.executor", name = ["enabled"], havingValue = "true")
     fun scheduleExecutorController(
-        handlerRegistry: HandlerRegistry,
+        taskTracker: ExecutorTaskTracker,
         properties: InfraScheduleProperties
-    ) = ScheduleExecutorController(handlerRegistry, properties)
+    ) = ScheduleExecutorController(taskTracker, properties)
 
     @Bean
     @ConditionalOnMissingBean

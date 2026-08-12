@@ -1,6 +1,7 @@
 package io.infra.structure.schedule.web
 
 import io.infra.structure.schedule.core.ExecutorRegistry
+import io.infra.structure.schedule.core.HandleLogAppendRequest
 import io.infra.structure.schedule.core.SCHEDULE_ACCESS_TOKEN_HEADER
 import io.infra.structure.schedule.model.BlockStrategy
 import io.infra.structure.schedule.model.ExecutionLogQuery
@@ -100,6 +101,43 @@ class ScheduleAdminController(
             limit = limit
         )
     )
+
+    @GetMapping(ScheduleWebPaths.LOG_BY_ID)
+    /** 查询单条执行日志（含业务过程日志）。 */
+    fun log(@PathVariable id: Long) = try {
+        scheduleService.executionLog(id)
+    } catch (exception: IllegalStateException) {
+        throw ResponseStatusException(HttpStatus.NOT_FOUND, exception.message)
+    }
+
+    @PostMapping(ScheduleWebPaths.LOG_CANCEL)
+    /** 终止运行中日志对应的执行进程，并将日志标记为已取消。 */
+    fun cancelLog(@PathVariable id: Long): CancelExecutionResponse {
+        val cancelled = try {
+            scheduleService.cancelRunningLog(id)
+        } catch (exception: IllegalStateException) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, exception.message)
+        }
+        if (!cancelled) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "该日志当前不在运行中")
+        }
+        return CancelExecutionResponse(cancelled = true)
+    }
+
+    @PostMapping(ScheduleWebPaths.LOG_HANDLE_APPEND)
+    /** 接收执行器异步上报的业务过程日志（执行器令牌鉴权）。 */
+    fun appendHandleLog(
+        @PathVariable id: Long,
+        @RequestHeader(value = SCHEDULE_ACCESS_TOKEN_HEADER, required = false) accessToken: String?,
+        @RequestBody request: HandleLogAppendRequest
+    ): ResponseEntity<Unit> {
+        requireExecutorToken(accessToken)
+        if (request.lines.isEmpty()) return ResponseEntity.noContent().build()
+        if (!scheduleService.appendHandleLog(id, request.lines)) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "执行日志不存在: $id")
+        }
+        return ResponseEntity.noContent().build()
+    }
 
     @GetMapping(ScheduleWebPaths.JOB_NEXT_TRIGGERS)
     /** 预览任务接下来若干次调度时间。 */
@@ -202,6 +240,8 @@ data class ScheduleJobRequest(
     val routeStrategy: RouteStrategy = RouteStrategy.FAILOVER,
     /** 重叠触发阻塞策略。 */
     val blockStrategy: BlockStrategy = BlockStrategy.SERIAL,
+    /** 是否常驻任务；常驻时串行跳过 / 丢弃后续不写调度日志。 */
+    val resident: Boolean = false,
     /** 最大额外重试次数。 */
     @field:Min(0) val maxRetryCount: Int = 0,
     /** 重试间隔（毫秒）。 */
@@ -213,8 +253,8 @@ data class ScheduleJobRequest(
     fun toDraft() = ScheduleJobDraft(
         name = name, executorGroup = "default", executorId = executorId, handler = handler, parameters = parameters,
         scheduleType = scheduleType, cron = cron, fixedRateMillis = fixedRateMillis, status = status,
-        routeStrategy = routeStrategy, blockStrategy = blockStrategy, maxRetryCount = maxRetryCount,
-        retryIntervalMillis = retryIntervalMillis, timeoutSeconds = timeoutSeconds
+        routeStrategy = routeStrategy, blockStrategy = blockStrategy, resident = resident,
+        maxRetryCount = maxRetryCount, retryIntervalMillis = retryIntervalMillis, timeoutSeconds = timeoutSeconds
     )
 }
 
@@ -275,6 +315,12 @@ data class ScheduleExecutorRequest(
 data class TriggerResponse(
     /** 是否已成功提交到本地工作线程池。 */
     val accepted: Boolean
+)
+
+/** 终止运行中执行的结果。 */
+data class CancelExecutionResponse(
+    /** 是否已取消本地执行并回写日志。 */
+    val cancelled: Boolean
 )
 
 /** 任务接下来若干次调度时间的预览结果。 */

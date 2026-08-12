@@ -8,7 +8,7 @@ import io.infra.structure.schedule.model.JobExecutionResult
 class LocalScheduleExecutor(
     override val id: String,
     override val group: String,
-    private val handlerRegistry: HandlerRegistry
+    private val taskTracker: ExecutorTaskTracker
 ) : ScheduleExecutor {
-    override fun execute(context: JobExecutionContext): JobExecutionResult = handlerRegistry.execute(context)
+    override fun execute(context: JobExecutionContext): JobExecutionResult = taskTracker.run(context)
 }

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Infra Schedule 执行日志查询">
     <title>执行日志 · Infra Schedule</title>
+    <link rel="icon" type="image/svg+xml" th:href="@{/schedule-admin/favicon.svg}" href="/schedule-admin/favicon.svg">
     <link rel="stylesheet" th:href="@{/schedule-admin/dashboard.css(v=${#dates.createNow().time})}">
 </head>
 <body data-page="logs">
@@ -69,6 +70,7 @@
                             <option value="FAILED">失败</option>
                             <option value="TIMEOUT">超时</option>
                             <option value="SKIPPED">跳过</option>
+                            <option value="CANCELLED">已终止</option>
                             <option value="RUNNING">运行中</option>
                         </select>
                     </label>
@@ -114,6 +116,18 @@
         </section>
     </main>
 </div>
+
+<dialog id="handle-log-dialog" class="dialog handle-log-dialog">
+    <div class="dialog-header">
+        <div>
+            <p class="eyebrow">业务过程日志</p>
+            <h2 id="handle-log-title">日志详情</h2>
+        </div>
+        <button class="close-button" type="button" data-close-handle-log aria-label="关闭">×</button>
+    </div>
+    <p class="handle-log-subtitle" id="handle-log-subtitle"></p>
+    <pre class="log-handle log-handle-dialog" id="handle-log-content"></pre>
+</dialog>
 
 <dialog id="confirm-dialog" class="dialog confirm-dialog" aria-labelledby="confirm-title">
     <div class="confirm-shell">

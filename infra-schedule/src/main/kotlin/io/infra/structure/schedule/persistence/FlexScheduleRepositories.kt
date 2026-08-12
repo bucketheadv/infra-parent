@@ -108,10 +108,44 @@ class FlexScheduleExecutionLogRepository(
         return entity.toModel()
     }
 
+    override fun findById(id: Long): JobExecutionLog? =
+        logMapper.selectOneById(id)?.toModel()
+
     override fun update(log: JobExecutionLog) {
         require(log.id > 0) { "更新执行日志需要有效主键" }
         logMapper.update(log.toEntity(), false)
     }
+
+    override fun updateIfRunning(log: JobExecutionLog): Boolean {
+        require(log.id > 0) { "更新执行日志需要有效主键" }
+        return update<ScheduleExecutionLogEntity> {
+            ScheduleExecutionLogEntity::executorId set log.executorId
+            ScheduleExecutionLogEntity::finishTime set log.finishTime
+            ScheduleExecutionLogEntity::status set log.status.name
+            ScheduleExecutionLogEntity::retryCount set log.retryCount
+            ScheduleExecutionLogEntity::message set log.message
+            ScheduleExecutionLogEntity::targetAddress set log.targetAddress
+            ScheduleExecutionLogEntity::durationMillis set log.durationMillis
+            where(
+                (ScheduleExecutionLogEntity::id eq log.id) and
+                    (ScheduleExecutionLogEntity::status eq ExecutionStatus.RUNNING.name)
+            )
+        } > 0
+    }
+
+    override fun cancelRunningByJobId(jobId: Long, message: String, finishTime: Long): Int =
+        update<ScheduleExecutionLogEntity> {
+            ScheduleExecutionLogEntity::status set ExecutionStatus.CANCELLED.name
+            ScheduleExecutionLogEntity::message set message
+            ScheduleExecutionLogEntity::finishTime set finishTime
+            where(
+                (ScheduleExecutionLogEntity::jobId eq jobId) and
+                    (ScheduleExecutionLogEntity::status eq ExecutionStatus.RUNNING.name)
+            )
+        }
+
+    override fun appendHandleLog(logId: Long, chunk: String): Boolean =
+        logMapper.appendHandleLog(logId, chunk) > 0
 
     override fun findByJobId(jobId: Long, limit: Int): List<JobExecutionLog> =
         query(ExecutionLogQuery(jobId = jobId, limit = limit))
@@ -137,9 +171,9 @@ class FlexScheduleExecutionLogRepository(
 private fun ScheduleJob.toEntity() = ScheduleJobEntity(
     id = id.takeIf { it > 0 }, name = name, executorId = executorId, handler = handler, parameters = parameters,
     scheduleType = scheduleType.name, cron = cron, fixedRateMillis = fixedRateMillis, status = status.name,
-    routeStrategy = routeStrategy.name, blockStrategy = blockStrategy.name, maxRetryCount = maxRetryCount,
-    retryIntervalMillis = retryIntervalMillis, timeoutSeconds = timeoutSeconds, nextTriggerAt = nextTriggerAt,
-    lastTriggerAt = lastTriggerAt, claimOwner = claimOwner, claimUntil = claimUntil,
+    routeStrategy = routeStrategy.name, blockStrategy = blockStrategy.name, resident = resident,
+    maxRetryCount = maxRetryCount, retryIntervalMillis = retryIntervalMillis, timeoutSeconds = timeoutSeconds,
+    nextTriggerAt = nextTriggerAt, lastTriggerAt = lastTriggerAt, claimOwner = claimOwner, claimUntil = claimUntil,
     createTime = createTime, updateTime = updateTime
 )
 
@@ -147,7 +181,7 @@ private fun ScheduleJobEntity.toModel() = ScheduleJob(
     id = id ?: 0, name = name, executorGroup = "default", executorId = executorId, handler = handler, parameters = parameters,
     scheduleType = ScheduleType.valueOf(scheduleType), cron = cron, fixedRateMillis = fixedRateMillis,
     status = JobStatus.valueOf(status), routeStrategy = RouteStrategy.valueOf(routeStrategy),
-    blockStrategy = BlockStrategy.valueOf(blockStrategy), maxRetryCount = maxRetryCount,
+    blockStrategy = BlockStrategy.valueOf(blockStrategy), resident = resident, maxRetryCount = maxRetryCount,
     retryIntervalMillis = retryIntervalMillis, timeoutSeconds = timeoutSeconds, nextTriggerAt = nextTriggerAt,
     lastTriggerAt = lastTriggerAt, claimOwner = claimOwner, claimUntil = claimUntil,
     createTime = createTime, updateTime = updateTime
@@ -156,12 +190,12 @@ private fun ScheduleJobEntity.toModel() = ScheduleJob(
 private fun JobExecutionLog.toEntity() = ScheduleExecutionLogEntity(
     // 新增日志必须让数据库自增主键生效；传入 0 会被当成显式主键导致后续插入冲突。
     id = id.takeIf { it > 0 }, jobId = jobId, executorId = executorId, triggerTime = triggerTime, finishTime = finishTime,
-    status = status.name, retryCount = retryCount, message = message,
+    status = status.name, retryCount = retryCount, message = message, handleLog = handleLog,
     targetAddress = targetAddress, durationMillis = durationMillis
 )
 
 private fun ScheduleExecutionLogEntity.toModel() = JobExecutionLog(
     id = id ?: 0, jobId = jobId, executorId = executorId, triggerTime = triggerTime, finishTime = finishTime,
-    status = ExecutionStatus.valueOf(status), retryCount = retryCount, message = message,
+    status = ExecutionStatus.valueOf(status), retryCount = retryCount, message = message, handleLog = handleLog,
     targetAddress = targetAddress, durationMillis = durationMillis
 )

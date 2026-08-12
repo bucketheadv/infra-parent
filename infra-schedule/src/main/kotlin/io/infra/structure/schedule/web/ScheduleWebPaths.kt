@@ -18,6 +18,16 @@ object ScheduleWebPaths {
     const val JOB_LOGS = "/jobs/{id}/logs"
     /** 多条件查询执行日志的相对路径。 */
     const val LOGS = "/logs"
+    /** 按日志 ID 查询单条执行记录的相对路径模板。 */
+    const val LOG_BY_ID = "/logs/{id}"
+    /** 终止运行中执行日志对应进程的相对路径模板。 */
+    const val LOG_CANCEL = "/logs/{id}/cancel"
+    /** 执行器异步追加业务执行日志的相对路径模板。 */
+    const val LOG_HANDLE_APPEND = "/logs/{id}/handle-log"
+    /** 执行器异步追加业务执行日志的完整路径模板。 */
+    const val EXECUTOR_LOG_HANDLE_APPEND = "$API_ROOT$LOG_HANDLE_APPEND"
+    /** 拦截器排除用的 Ant 路径（匹配任意日志 ID）。 */
+    const val EXECUTOR_LOG_HANDLE_APPEND_PATTERN = "$API_ROOT/logs/*/handle-log"
     /** 预览任务接下来若干次调度时间的相对路径模板。 */
     const val JOB_NEXT_TRIGGERS = "/jobs/{id}/next-triggers"
     /** 按当前表单中的调度配置预览接下来若干次调度时间。 */
@@ -46,4 +56,8 @@ object ScheduleWebPaths {
     const val RUN = "/run"
     /** 调度中心调用执行器处理任务的完整路径。 */
     const val EXECUTOR_RUN = "$EXECUTOR_ROOT$RUN"
+    /** 执行器终止运行中任务的相对路径。 */
+    const val CANCEL = "/cancel"
+    /** 调度中心调用执行器终止任务的完整路径。 */
+    const val EXECUTOR_CANCEL = "$EXECUTOR_ROOT$CANCEL"
 }

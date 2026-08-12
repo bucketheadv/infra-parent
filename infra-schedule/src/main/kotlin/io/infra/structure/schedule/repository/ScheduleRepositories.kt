@@ -1,6 +1,7 @@
 package io.infra.structure.schedule.repository
 
 import io.infra.structure.schedule.model.ExecutionLogQuery
+import io.infra.structure.schedule.model.ExecutionStatus
 import io.infra.structure.schedule.model.ExecutorHeartbeat
 import io.infra.structure.schedule.model.ExecutorStatus
 import io.infra.structure.schedule.model.JobExecutionLog
@@ -41,8 +42,16 @@ interface ScheduleJobRepository {
 interface ScheduleExecutionLogRepository {
     /** 新增一条执行审计记录，返回带数据库主键的完整对象。 */
     fun append(log: JobExecutionLog): JobExecutionLog
+    /** 按主键查询执行审计记录。 */
+    fun findById(id: Long): JobExecutionLog?
     /** 按主键更新执行审计记录（用于运行中 → 终态）。 */
     fun update(log: JobExecutionLog)
+    /** 仅当日志仍为运行中时回写终态，避免覆盖管理员终止结果。 */
+    fun updateIfRunning(log: JobExecutionLog): Boolean
+    /** 将指定任务下所有运行中日志标记为已取消，返回更新条数。 */
+    fun cancelRunningByJobId(jobId: Long, message: String, finishTime: Long): Int
+    /** 追加业务执行过程日志文本块；返回是否命中记录。 */
+    fun appendHandleLog(logId: Long, chunk: String): Boolean
     /** 按触发时间倒序查询指定任务的近期执行记录。 */
     fun findByJobId(jobId: Long, limit: Int = 100): List<JobExecutionLog>
     /** 按任务、执行器、状态与触发时间范围查询执行日志。 */
@@ -168,8 +177,43 @@ class InMemoryScheduleExecutionLogRepository : ScheduleExecutionLogRepository {
         return saved
     }
 
+    override fun findById(id: Long): JobExecutionLog? = logs.firstOrNull { it.id == id }
+
     override fun update(log: JobExecutionLog) {
         require(log.id > 0) { "更新执行日志需要有效主键" }
+        replace(log)
+    }
+
+    override fun updateIfRunning(log: JobExecutionLog): Boolean {
+        require(log.id > 0) { "更新执行日志需要有效主键" }
+        val current = findById(log.id) ?: return false
+        if (current.status != ExecutionStatus.RUNNING) return false
+        replace(log)
+        return true
+    }
+
+    override fun cancelRunningByJobId(jobId: Long, message: String, finishTime: Long): Int {
+        val targets = logs.filter { it.jobId == jobId && it.status == ExecutionStatus.RUNNING }
+        targets.forEach { current ->
+            replace(
+                current.copy(
+                    status = ExecutionStatus.CANCELLED,
+                    finishTime = finishTime,
+                    message = message
+                )
+            )
+        }
+        return targets.size
+    }
+
+    override fun appendHandleLog(logId: Long, chunk: String): Boolean {
+        val current = findById(logId) ?: return false
+        val merged = ((current.handleLog ?: "") + chunk).take(MAX_HANDLE_LOG_CHARS)
+        replace(current.copy(handleLog = merged))
+        return true
+    }
+
+    private fun replace(log: JobExecutionLog) {
         val iterator = logs.iterator()
         while (iterator.hasNext()) {
             if (iterator.next().id == log.id) {
@@ -196,6 +240,7 @@ class InMemoryScheduleExecutionLogRepository : ScheduleExecutionLogRepository {
 
     private companion object {
         const val MAX_LOGS = 10_000
+        const val MAX_HANDLE_LOG_CHARS = 1_000_000
     }
 }
 

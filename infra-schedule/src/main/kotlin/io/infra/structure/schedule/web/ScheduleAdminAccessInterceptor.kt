@@ -36,7 +36,8 @@ class ScheduleAdminWebConfigurer(
             .addPathPatterns(ScheduleWebPaths.API_ALL)
             .excludePathPatterns(
                 ScheduleWebPaths.EXECUTOR_HEARTBEAT,
-                ScheduleWebPaths.EXECUTOR_OFFLINE
+                ScheduleWebPaths.EXECUTOR_OFFLINE,
+                ScheduleWebPaths.EXECUTOR_LOG_HANDLE_APPEND_PATTERN
             )
     }
 }

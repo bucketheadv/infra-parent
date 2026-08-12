@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Infra Schedule 调度管理后台">
     <title>任务管理 · Infra Schedule</title>
+    <link rel="icon" type="image/svg+xml" th:href="@{/schedule-admin/favicon.svg}" href="/schedule-admin/favicon.svg">
     <link rel="stylesheet" th:href="@{/schedule-admin/dashboard.css(v=${#dates.createNow().time})}">
 </head>
 <body data-page="jobs">
@@ -86,6 +87,7 @@
             </label>
             <label>路由策略<select id="route-strategy" name="routeStrategy"><option value="FAILOVER" selected>故障转移</option><option value="FIRST">首个节点</option><option value="ROUND_ROBIN">轮询</option><option value="RANDOM">随机</option><option value="CONSISTENT_HASH">一致性哈希</option><option value="BROADCAST">广播</option></select></label>
             <label>阻塞策略<select id="block-strategy" name="blockStrategy"><option value="SERIAL">串行跳过</option><option value="DISCARD_LATER">丢弃后续</option><option value="COVER_EARLY">覆盖前次</option></select></label>
+            <label title="常驻任务在串行跳过/丢弃后续时不写跳过日志">常驻任务<select id="resident" name="resident"><option value="false" selected>否</option><option value="true">是</option></select></label>
             <label>最大重试次数<input id="max-retry-count" name="maxRetryCount" type="number" min="0" value="0"></label>
             <label>超时（秒，0 不限制）<input id="timeout-seconds" name="timeoutSeconds" type="number" min="0" value="0"></label>
             <label class="full-width">任务参数<textarea id="parameters" name="parameters" rows="3" placeholder="传递给任务处理器的原始参数"></textarea></label>
@@ -98,6 +100,18 @@
 <dialog id="logs-dialog" class="dialog logs-dialog">
     <div class="dialog-header"><div><p class="eyebrow">执行审计</p><h2 id="logs-title">任务日志</h2></div><button class="close-button" type="button" data-close-logs aria-label="关闭">×</button></div>
     <div class="logs-content" id="logs-content"></div>
+</dialog>
+
+<dialog id="handle-log-dialog" class="dialog handle-log-dialog">
+    <div class="dialog-header">
+        <div>
+            <p class="eyebrow">业务过程日志</p>
+            <h2 id="handle-log-title">日志详情</h2>
+        </div>
+        <button class="close-button" type="button" data-close-handle-log aria-label="关闭">×</button>
+    </div>
+    <p class="handle-log-subtitle" id="handle-log-subtitle"></p>
+    <pre class="log-handle log-handle-dialog" id="handle-log-content"></pre>
 </dialog>
 
 <dialog id="next-triggers-dialog" class="dialog next-triggers-dialog">
