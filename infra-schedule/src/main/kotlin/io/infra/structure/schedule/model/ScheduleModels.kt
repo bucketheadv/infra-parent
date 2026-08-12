@@ -55,7 +55,9 @@ enum class ExecutionStatus {
     /** 超过任务配置的执行时限。 */
     TIMEOUT,
     /** 管理员主动终止执行。 */
-    CANCELLED
+    CANCELLED,
+    /** 长时间停留在运行中被调度中心回收（节点崩溃或执行丢失）。 */
+    LOST
 }
 
 /** 执行器在调度中心中的可用状态。 */

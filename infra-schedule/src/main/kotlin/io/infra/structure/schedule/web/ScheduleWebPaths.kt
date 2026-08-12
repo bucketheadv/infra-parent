@@ -60,4 +60,8 @@ object ScheduleWebPaths {
     const val CANCEL = "/cancel"
     /** 调度中心调用执行器终止任务的完整路径。 */
     const val EXECUTOR_CANCEL = "$EXECUTOR_ROOT$CANCEL"
+    /** 查询执行器上指定日志是否仍在运行的相对路径。 */
+    const val RUNNING = "/running"
+    /** 调度中心查询执行器任务存活的完整路径。 */
+    const val EXECUTOR_RUNNING = "$EXECUTOR_ROOT$RUNNING"
 }

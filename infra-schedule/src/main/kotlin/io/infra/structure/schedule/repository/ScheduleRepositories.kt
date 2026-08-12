@@ -39,6 +39,14 @@ interface ScheduleJobRepository {
     fun completeSchedule(id: Long, owner: String, lastTriggerAt: Long, nextTriggerAt: Long, updateTime: Long): Boolean
 }
 
+/** 待回收的僵尸运行中日志引用。 */
+data class StaleRunningLogRef(
+    var id: Long = 0,
+    var jobId: Long = 0,
+    /** 执行目标地址；远程为 http(s) URL，本地为「本地」。 */
+    var targetAddress: String? = null
+)
+
 interface ScheduleExecutionLogRepository {
     /** 新增一条执行审计记录，返回带数据库主键的完整对象。 */
     fun append(log: JobExecutionLog): JobExecutionLog
@@ -52,6 +60,17 @@ interface ScheduleExecutionLogRepository {
     fun cancelRunningByJobId(jobId: Long, message: String, finishTime: Long): Int
     /** 追加业务执行过程日志文本块；返回是否命中记录。 */
     fun appendHandleLog(logId: Long, chunk: String): Boolean
+    /** 查询过期仍处于运行中的日志候选（含目标地址，供节点探活）。 */
+    fun findStaleRunningCandidates(staleBeforeTriggerTime: Long, limit: Int): List<StaleRunningLogRef>
+    /** 将指定 ID 且仍为 RUNNING 的日志标记为 LOST。 */
+    fun markLostIfRunning(id: Long, now: Long, message: String): Boolean
+    /** 将指定任务、触发时间下仍运行中的日志标记为失败（外层异常兜底）。 */
+    fun failRunningByJobAndTrigger(
+        jobId: Long,
+        triggerTime: Long,
+        message: String,
+        finishTime: Long
+    ): Int
     /** 按触发时间倒序查询指定任务的近期执行记录。 */
     fun findByJobId(jobId: Long, limit: Int = 100): List<JobExecutionLog>
     /** 按任务、执行器、状态与触发时间范围查询执行日志。 */
@@ -211,6 +230,50 @@ class InMemoryScheduleExecutionLogRepository : ScheduleExecutionLogRepository {
         val merged = ((current.handleLog ?: "") + chunk).take(MAX_HANDLE_LOG_CHARS)
         replace(current.copy(handleLog = merged))
         return true
+    }
+
+    override fun findStaleRunningCandidates(staleBeforeTriggerTime: Long, limit: Int): List<StaleRunningLogRef> =
+        logs.asSequence()
+            .filter { it.status == ExecutionStatus.RUNNING && it.triggerTime <= staleBeforeTriggerTime }
+            .sortedBy { it.triggerTime }
+            .take(limit.coerceAtLeast(1))
+            .map { StaleRunningLogRef(id = it.id, jobId = it.jobId, targetAddress = it.targetAddress) }
+            .toList()
+
+    override fun markLostIfRunning(id: Long, now: Long, message: String): Boolean {
+        val current = findById(id) ?: return false
+        if (current.status != ExecutionStatus.RUNNING) return false
+        replace(
+            current.copy(
+                status = ExecutionStatus.LOST,
+                finishTime = now,
+                message = message,
+                durationMillis = (now - current.triggerTime).coerceAtLeast(0)
+            )
+        )
+        return true
+    }
+
+    override fun failRunningByJobAndTrigger(
+        jobId: Long,
+        triggerTime: Long,
+        message: String,
+        finishTime: Long
+    ): Int {
+        val targets = logs.filter {
+            it.jobId == jobId && it.triggerTime == triggerTime && it.status == ExecutionStatus.RUNNING
+        }
+        targets.forEach { current ->
+            replace(
+                current.copy(
+                    status = ExecutionStatus.FAILED,
+                    finishTime = finishTime,
+                    message = message,
+                    durationMillis = (finishTime - current.triggerTime).coerceAtLeast(0)
+                )
+            )
+        }
+        return targets.size
     }
 
     private fun replace(log: JobExecutionLog) {

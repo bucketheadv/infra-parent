@@ -16,7 +16,9 @@ import io.infra.structure.schedule.model.ScheduleJob
 import io.infra.structure.schedule.model.ScheduleJobDraft
 import io.infra.structure.schedule.repository.ScheduleExecutionLogRepository
 import io.infra.structure.schedule.repository.ScheduleJobRepository
+import io.infra.structure.schedule.repository.StaleRunningLogRef
 import org.slf4j.LoggerFactory
+import java.util.concurrent.CancellationException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Future
@@ -214,6 +216,69 @@ class ScheduleService(
     }
 
     /**
+     * 回收长时间停留在 RUNNING 的僵尸执行日志。
+     *
+     * 无论是否常驻，都会先向目标节点按 logId 探活：
+     * - 仍在跑：跳过
+     * - 明确不在跑 / 节点不可达：标记 LOST
+     *
+     * 回收只改日志状态，不会 kill 执行进程。
+     */
+    fun reapStaleRunningLogs(staleAfterMillis: Long, batchSize: Int): Int {
+        val now = System.currentTimeMillis()
+        val threshold = staleAfterMillis.coerceAtLeast(claimLeaseMillis).coerceAtLeast(60_000L)
+        val staleBefore = now - threshold
+        val candidates = logRepository.findStaleRunningCandidates(
+            staleBeforeTriggerTime = staleBefore,
+            limit = batchSize.coerceIn(1, 1_000)
+        )
+        if (candidates.isEmpty()) return 0
+        val message = "执行日志超时回收（目标进程已不存在或节点不可达，阈值 ${threshold}ms）"
+        var reaped = 0
+        for (candidate in candidates) {
+            if (isExecutionStillAlive(candidate)) {
+                continue
+            }
+            if (logRepository.markLostIfRunning(candidate.id, now, message)) {
+                reaped++
+            }
+        }
+        if (reaped > 0) {
+            logger.warn("已回收僵尸运行中日志 {} 条（trigger_time <= {}）", reaped, staleBefore)
+        }
+        return reaped
+    }
+
+    /**
+     * 查询目标节点上该 logId 是否仍在执行。
+     * 远程走执行器 `/running`；本地查 [ExecutorTaskTracker] 与调度侧 attempt Future。
+     */
+    private fun isExecutionStillAlive(candidate: StaleRunningLogRef): Boolean {
+        val logId = candidate.id
+        if (attemptFutures[logId]?.isDone == false) return true
+        val probeUrl = resolveExecutorProbeUrl(candidate.targetAddress)
+        if (probeUrl == null) {
+            return taskTracker.isRunning(logId)
+        }
+        return when (cancelClient.isRunning(probeUrl, logId)) {
+            true -> true
+            false -> false
+            null -> {
+                // 节点不可达：视为进程已不可观测，允许回收。
+                logger.warn("探活执行器不可达，将回收日志: logId={}, target={}", logId, probeUrl)
+                false
+            }
+        }
+    }
+
+    /** 将日志中的目标地址解析为可探活的 baseUrl；本地执行返回 null。 */
+    private fun resolveExecutorProbeUrl(targetAddress: String?): String? {
+        val target = targetAddress?.trim()?.takeIf { it.isNotBlank() && it != "本地" } ?: return null
+        if (target.startsWith("http://") || target.startsWith("https://")) return target
+        return "http://$target"
+    }
+
+    /**
      * 依据阻塞策略提交执行任务。
      * 对定时任务，未执行的触发也必须推进下一次时间，避免反复领取相同到期记录。
      */
@@ -238,7 +303,16 @@ class ScheduleService(
                     execute(job, triggerTime)
                 } catch (exception: Exception) {
                     val message = exception.cause?.message ?: exception.message ?: exception.javaClass.simpleName
-                    appendFailed(job, null, triggerTime, "任务执行异常: $message")
+                    // 优先收口本批次 RUNNING，避免只追加 FAILED 留下僵尸运行中日志。
+                    val closed = logRepository.failRunningByJobAndTrigger(
+                        jobId = job.id,
+                        triggerTime = triggerTime,
+                        message = "任务执行异常: $message",
+                        finishTime = System.currentTimeMillis()
+                    )
+                    if (closed == 0) {
+                        appendFailed(job, null, triggerTime, "任务执行异常: $message")
+                    }
                 } finally {
                     if (scheduled) completeSchedule(job, triggerTime)
                     synchronized(runningLock) {
@@ -395,6 +469,17 @@ class ScheduleService(
                 finishLog(
                     runningLog,
                     status = ExecutionStatus.SKIPPED,
+                    retryCount = attempt,
+                    message = "任务执行被取消",
+                    targetAddress = lastTarget
+                )
+                return AttemptOutcome.Cancelled
+            } catch (_: CancellationException) {
+                // Future.cancel 后 get() 抛 CancellationException，不可再走重试/故障转移。
+                killExecutorTask(runningLog)
+                finishLog(
+                    runningLog,
+                    status = ExecutionStatus.CANCELLED,
                     retryCount = attempt,
                     message = "任务执行被取消",
                     targetAddress = lastTarget

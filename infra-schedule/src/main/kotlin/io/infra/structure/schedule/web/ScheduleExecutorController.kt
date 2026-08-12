@@ -2,6 +2,8 @@ package io.infra.structure.schedule.web
 
 import io.infra.structure.schedule.core.ExecutorCancelRequest
 import io.infra.structure.schedule.core.ExecutorCancelResponse
+import io.infra.structure.schedule.core.ExecutorRunningRequest
+import io.infra.structure.schedule.core.ExecutorRunningResponse
 import io.infra.structure.schedule.core.ExecutorTaskTracker
 import io.infra.structure.schedule.core.SCHEDULE_ACCESS_TOKEN_HEADER
 import io.infra.structure.schedule.model.JobExecutionContext
@@ -40,6 +42,16 @@ class ScheduleExecutorController(
     ): ExecutorCancelResponse {
         requireAuthorized(accessToken)
         return ExecutorCancelResponse(cancelled = taskTracker.cancel(request.logId))
+    }
+
+    /** 查询本进程内指定日志 ID 的 handler 是否仍在执行。 */
+    @PostMapping(ScheduleWebPaths.RUNNING)
+    fun running(
+        @RequestHeader(value = SCHEDULE_ACCESS_TOKEN_HEADER, required = false) accessToken: String?,
+        @RequestBody request: ExecutorRunningRequest
+    ): ExecutorRunningResponse {
+        requireAuthorized(accessToken)
+        return ExecutorRunningResponse(running = taskTracker.isRunning(request.logId))
     }
 
     private fun requireAuthorized(accessToken: String?) {

@@ -99,7 +99,8 @@
         TIMEOUT: "超时",
         SKIPPED: "跳过",
         RUNNING: "运行中",
-        CANCELLED: "已终止"
+        CANCELLED: "已终止",
+        LOST: "已丢失"
     });
 
     /** 渲染单条执行日志；运行中时提供终止按钮。 */
@@ -791,7 +792,9 @@
 
         function renderSummary(logs) {
             const success = logs.filter(log => log.status === "SUCCESS").length;
-            const failed = logs.filter(log => log.status === "FAILED" || log.status === "TIMEOUT" || log.status === "CANCELLED").length;
+            const failed = logs.filter(log =>
+                log.status === "FAILED" || log.status === "TIMEOUT" || log.status === "CANCELLED" || log.status === "LOST"
+            ).length;
             const other = logs.length - success - failed;
             document.querySelector("#log-stat-total").textContent = String(logs.length);
             document.querySelector("#log-stat-success").textContent = String(success);

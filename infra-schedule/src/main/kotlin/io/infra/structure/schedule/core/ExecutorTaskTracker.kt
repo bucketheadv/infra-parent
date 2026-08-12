@@ -72,4 +72,14 @@ class ExecutorTaskTracker(
         }
         return cancelled
     }
+
+    /** 指定日志 ID 对应的 handler 是否仍在本进程执行。 */
+    fun isRunning(logId: Long): Boolean {
+        val future = running[logId] ?: return false
+        if (future.isDone) {
+            running.remove(logId, future)
+            return false
+        }
+        return true
+    }
 }

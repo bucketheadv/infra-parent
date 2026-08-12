@@ -21,6 +21,13 @@ class InfraScheduleProperties {
     var workerThreads: Int = 8
     /** 当前调度节点唯一 ID；集群部署时应配置为稳定且互不重复的值。 */
     var schedulerId: String = "schedule-${UUID.randomUUID()}"
+    /**
+     * 运行中日志超过该时长（按 trigger_time）后进入回收候选。
+     * 实际是否回收还需向目标节点按 logId 探活；进程仍在则跳过。
+     */
+    var staleRunningLogMillis: Long = 600_000
+    /** 单轮最多回收的僵尸运行中日志条数。 */
+    var staleRunningLogBatchSize: Int = 100
     /** 本地执行器注册和健康检查配置。 */
     var executor: ExecutorProperties = ExecutorProperties()
     /** 管理 REST 接口暴露配置。 */

@@ -21,6 +21,7 @@ import io.infra.structure.schedule.persistence.mapper.ScheduleExecutionLogMapper
 import io.infra.structure.schedule.persistence.mapper.ScheduleJobMapper
 import io.infra.structure.schedule.repository.ScheduleExecutionLogRepository
 import io.infra.structure.schedule.repository.ScheduleJobRepository
+import io.infra.structure.schedule.repository.StaleRunningLogRef
 import org.springframework.transaction.annotation.Transactional
 
 /** 基于 MyBatis-Flex 的任务仓储，领取操作通过条件更新提供跨节点互斥。 */
@@ -146,6 +147,19 @@ class FlexScheduleExecutionLogRepository(
 
     override fun appendHandleLog(logId: Long, chunk: String): Boolean =
         logMapper.appendHandleLog(logId, chunk) > 0
+
+    override fun findStaleRunningCandidates(staleBeforeTriggerTime: Long, limit: Int): List<StaleRunningLogRef> =
+        logMapper.findStaleRunningCandidates(staleBeforeTriggerTime, limit.coerceAtLeast(1))
+
+    override fun markLostIfRunning(id: Long, now: Long, message: String): Boolean =
+        logMapper.markLostIfRunning(id, now, message) > 0
+
+    override fun failRunningByJobAndTrigger(
+        jobId: Long,
+        triggerTime: Long,
+        message: String,
+        finishTime: Long
+    ): Int = logMapper.failRunningByJobAndTrigger(jobId, triggerTime, message, finishTime)
 
     override fun findByJobId(jobId: Long, limit: Int): List<JobExecutionLog> =
         query(ExecutionLogQuery(jobId = jobId, limit = limit))

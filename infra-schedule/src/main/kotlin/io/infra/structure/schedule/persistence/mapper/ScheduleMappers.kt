@@ -5,6 +5,7 @@ import io.infra.structure.schedule.persistence.entity.ScheduleExecutionLogEntity
 import io.infra.structure.schedule.persistence.entity.ScheduleExecutorEntity
 import io.infra.structure.schedule.persistence.entity.ScheduleExecutorRegistryEntity
 import io.infra.structure.schedule.persistence.entity.ScheduleJobEntity
+import io.infra.structure.schedule.repository.StaleRunningLogRef
 import org.apache.ibatis.annotations.Mapper
 import org.apache.ibatis.annotations.Param
 import org.apache.ibatis.annotations.Result
@@ -74,6 +75,67 @@ interface ScheduleExecutionLogMapper : BaseMapper<ScheduleExecutionLogEntity> {
         """
     )
     fun appendHandleLog(@Param("id") id: Long, @Param("chunk") chunk: String): Int
+
+    /** 查询待回收的僵尸运行中日志（按触发时间升序）。 */
+    @Select(
+        """
+        SELECT id, job_id, target_address
+        FROM infra_schedule_execution_log
+        WHERE status = 'RUNNING'
+          AND trigger_time <= #{staleBeforeTriggerTime}
+        ORDER BY trigger_time ASC, id ASC
+        LIMIT #{limit}
+        """
+    )
+    @Results(
+        value = [
+            Result(property = "id", column = "id"),
+            Result(property = "jobId", column = "job_id"),
+            Result(property = "targetAddress", column = "target_address")
+        ]
+    )
+    fun findStaleRunningCandidates(
+        @Param("staleBeforeTriggerTime") staleBeforeTriggerTime: Long,
+        @Param("limit") limit: Int
+    ): List<StaleRunningLogRef>
+
+    /** 将指定 ID 且仍为 RUNNING 的日志回收为 LOST。 */
+    @Update(
+        """
+        UPDATE infra_schedule_execution_log
+        SET status = 'LOST',
+            finish_time = #{now},
+            message = #{message},
+            duration_millis = #{now} - trigger_time
+        WHERE id = #{id}
+          AND status = 'RUNNING'
+        """
+    )
+    fun markLostIfRunning(
+        @Param("id") id: Long,
+        @Param("now") now: Long,
+        @Param("message") message: String
+    ): Int
+
+    /** 将指定任务触发批次下仍 RUNNING 的日志标记为 FAILED。 */
+    @Update(
+        """
+        UPDATE infra_schedule_execution_log
+        SET status = 'FAILED',
+            finish_time = #{finishTime},
+            message = #{message},
+            duration_millis = #{finishTime} - trigger_time
+        WHERE job_id = #{jobId}
+          AND trigger_time = #{triggerTime}
+          AND status = 'RUNNING'
+        """
+    )
+    fun failRunningByJobAndTrigger(
+        @Param("jobId") jobId: Long,
+        @Param("triggerTime") triggerTime: Long,
+        @Param("message") message: String,
+        @Param("finishTime") finishTime: Long
+    ): Int
 }
 
 /** 执行器心跳的 MyBatis-Flex Mapper。 */

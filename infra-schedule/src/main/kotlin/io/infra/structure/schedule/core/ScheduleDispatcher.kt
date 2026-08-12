@@ -21,6 +21,10 @@ class ScheduleDispatcher(
             )
         }
         if (properties.dispatcherEnabled) {
+            scheduleService.reapStaleRunningLogs(
+                properties.staleRunningLogMillis,
+                properties.staleRunningLogBatchSize
+            )
             scheduleService.dispatchDueJobs(properties.dispatchBatchSize, properties.dispatchMaxPages)
         }
     }

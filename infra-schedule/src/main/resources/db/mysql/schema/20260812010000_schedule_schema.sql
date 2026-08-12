@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS infra_schedule_execution_log (
     duration_millis BIGINT NULL COMMENT '实际执行耗时毫秒',
     PRIMARY KEY (id),
     KEY idx_infra_schedule_log_job (job_id, trigger_time),
-    KEY idx_infra_schedule_log_trigger (trigger_time)
+    KEY idx_infra_schedule_log_trigger (trigger_time),
+    KEY idx_infra_schedule_log_status_trigger (status, trigger_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='任务执行审计日志表';
 
 CREATE TABLE IF NOT EXISTS infra_schedule_executor (
