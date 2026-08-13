@@ -37,17 +37,17 @@ open class ScheduleJobEntity(
     open var retryIntervalMillis: Long = 1_000,
     /** 单次执行最长允许秒数，0 表示无限制。 */
     open var timeoutSeconds: Long = 0,
-    /** 下一次应触发时间。 */
+    /** 下一次定时计划应触发的 Unix 毫秒时间戳；停用任务时为空。 */
     open var nextTriggerAt: Long? = null,
-    /** 最近一次定时触发时间。 */
+    /** 最近一次已推进到 Outbox 的定时计划触发时间（Unix 毫秒）。 */
     open var lastTriggerAt: Long? = null,
     /** 持有当前调度租约的节点 ID。 */
     open var claimOwner: String? = null,
-    /** 租约失效时间。 */
+    /** 当前任务领取租约的 Unix 毫秒失效时间；到期后其他 Admin 可重新领取。 */
     open var claimUntil: Long? = null,
-    /** 创建时间。 */
+    /** 任务定义创建时的 Unix 毫秒时间戳。 */
     open var createTime: Long = 0,
-    /** 最近一次定义或调度状态更新时间。 */
+    /** 最近一次任务定义、状态或租约变更的 Unix 毫秒时间戳。 */
     open var updateTime: Long = 0
 )
 
@@ -61,9 +61,9 @@ open class ScheduleExecutionLogEntity(
     open var jobId: Long = 0,
     /** 实际处理本次任务的执行器数据库 ID。 */
     open var executorId: Long? = null,
-    /** 调度器发起本次任务的时间。 */
+    /** 本次远程投递尝试创建日志的 Unix 毫秒时间戳。 */
     open var triggerTime: Long = 0,
-    /** 处理结束时间。 */
+    /** 执行器确认结束、取消或回收为 LOST 的 Unix 毫秒时间戳；活跃状态时为空。 */
     open var finishTime: Long? = null,
     /** 执行状态枚举名称。 */
     open var status: String = "RUNNING",
@@ -89,19 +89,23 @@ open class ScheduleTriggerOutboxEntity(
     open var jobId: Long = 0,
     /** 本次计划触发时间。 */
     open var triggerTime: Long = 0,
+    /** 是否由管理员立即执行创建；暂停任务可继续投递此类记录。 */
+    open var manualTrigger: Boolean = false,
     /** 投递状态：PENDING / PROCESSING / DISPATCHED / CANCELLED。 */
     open var status: String = "PENDING",
     /** 当前投递租约持有节点。 */
     open var claimOwner: String? = null,
+    /** 本次领取的唯一租约令牌。 */
+    open var claimToken: String? = null,
     /** 当前投递租约失效时间。 */
     open var claimUntil: Long? = null,
     /** 已尝试投递次数。 */
     open var attemptCount: Int = 0,
     /** 最近一次投递错误。 */
     open var lastError: String? = null,
-    /** 创建时间。 */
+    /** Outbox 创建时的 Unix 毫秒时间戳。 */
     open var createTime: Long = 0,
-    /** 状态更新时间。 */
+    /** Outbox 状态、租约或退避时间最近一次变更的 Unix 毫秒时间戳。 */
     open var updateTime: Long = 0
 )
 
@@ -121,17 +125,18 @@ open class ScheduleExecutorEntity(
     open var addressMode: String = "AUTO_REGISTER",
     /** 是否允许该执行器继续接收调度请求。 */
     open var status: String = "ENABLED",
-    /** 最近一次收到心跳的时间。 */
+    /** 最近一次收到该分组任一实例心跳的 Unix 毫秒时间戳。 */
     open var lastHeartbeatTime: Long = 0,
-    /** 首次注册时间。 */
+    /** 执行器分组首次创建的 Unix 毫秒时间戳。 */
     open var createTime: Long = 0,
-    /** 最近一次心跳更新时间。 */
+    /** 配置或心跳最近一次更新的 Unix 毫秒时间戳。 */
     open var updateTime: Long = 0
 )
 
 /** 自动注册模式下的执行器实例地址登记。 */
 @Table("infra_schedule_executor_registry")
 open class ScheduleExecutorRegistryEntity(
+    /** 自动注册实例记录的数据库自增主键。 */
     @Id(keyType = KeyType.Auto)
     open var id: Long? = null,
     /** 所属执行器分组 ID。 */
@@ -140,7 +145,9 @@ open class ScheduleExecutorRegistryEntity(
     open var address: String = "",
     /** 该地址最近心跳时间。 */
     open var lastHeartbeatTime: Long = 0,
+    /** 该实例地址首次登记的 Unix 毫秒时间戳。 */
     open var createTime: Long = 0,
+    /** 地址记录最近一次心跳或状态变更的 Unix 毫秒时间戳。 */
     open var updateTime: Long = 0
 )
 
@@ -154,6 +161,7 @@ open class ScheduleRouteStatEntity(
     open var useCount: Int = 0,
     /** 最近一次被路由选中时间（毫秒）。 */
     open var lastRouteTime: Long = 0,
+    /** LFU/LRU 统计最近一次更新的 Unix 毫秒时间戳。 */
     open var updateTime: Long = 0
 )
 
@@ -165,5 +173,6 @@ open class ScheduleRouteCursorEntity(
     open var cursorKey: String = "",
     /** 累计轮询次数。 */
     open var cursorValue: Long = 0,
+    /** 轮询游标最近一次递增的 Unix 毫秒时间戳。 */
     open var updateTime: Long = 0
 )

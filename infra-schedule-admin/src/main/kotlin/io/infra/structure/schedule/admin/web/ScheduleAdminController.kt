@@ -66,11 +66,32 @@ class ScheduleAdminController(
         if (scheduleService.delete(id)) ResponseEntity.noContent().build() else ResponseEntity.notFound().build()
 
     @PostMapping(ScheduleWebPaths.JOB_TRIGGER)
-    fun trigger(@PathVariable id: Long): TriggerResponse = TriggerResponse(scheduleService.triggerNow(id))
+    fun trigger(@PathVariable id: Long): TriggerResponse {
+        val job = try {
+            scheduleService.job(id)
+        } catch (exception: IllegalStateException) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, exception.message)
+        }
+        val executorId = job.executorId
+            ?: throw ResponseStatusException(HttpStatus.CONFLICT, "任务未绑定执行器，无法立即执行")
+        if (executorRegistry.runnableNodes(executorId).isEmpty()) {
+            throw ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "执行器不可用：请确认执行器已启用，并已配置手动地址或完成实例心跳注册"
+            )
+        }
+        if (!scheduleService.triggerNow(id)) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "任务状态已变更，请刷新页面后重试")
+        }
+        return TriggerResponse(accepted = true)
+    }
 
     @PostMapping(ScheduleWebPaths.JOB_STATUS)
-    fun changeStatus(@PathVariable id: Long, @Valid @RequestBody request: JobStatusRequest) =
+    fun changeStatus(@PathVariable id: Long, @Valid @RequestBody request: JobStatusRequest) = try {
         scheduleService.setStatus(id, request.status)
+    } catch (exception: IllegalStateException) {
+        throw ResponseStatusException(HttpStatus.CONFLICT, exception.message ?: "任务状态变更冲突")
+    }
 
     @GetMapping(ScheduleWebPaths.JOB_LOGS)
     fun logs(
@@ -212,8 +233,11 @@ class ScheduleAdminController(
     }
 
     @PutMapping(ScheduleWebPaths.EXECUTOR_BY_ID)
-    fun updateExecutor(@PathVariable id: Long, @Valid @RequestBody request: ScheduleExecutorRequest): ExecutorHeartbeat =
+    fun updateExecutor(@PathVariable id: Long, @Valid @RequestBody request: ScheduleExecutorRequest): ExecutorHeartbeat = try {
         executorRegistry.updateExecutor(id, request.toDraft())
+    } catch (exception: IllegalArgumentException) {
+        throw ResponseStatusException(HttpStatus.CONFLICT, exception.message ?: "执行器配置冲突")
+    }
 
     @DeleteMapping(ScheduleWebPaths.EXECUTOR_BY_ID)
     fun deleteExecutor(@PathVariable id: Long): ResponseEntity<Unit> = try {
@@ -239,22 +263,38 @@ class ScheduleAdminController(
     }
 }
 
+/** 管理端创建或编辑任务的请求载荷；运行期领取状态不允许由页面直接提交。 */
 data class ScheduleJobRequest(
+    /** 管理后台展示的任务名称。 */
     @field:NotBlank val name: String,
+    /** 执行器应用内已注册的 Handler 名称。 */
     @field:NotBlank val handler: String,
+    /** 触发方式，决定使用 Cron 还是固定间隔。 */
     @field:NotNull val scheduleType: ScheduleType,
+    /** 目标执行器分组的数据库自增 ID。 */
     @field:NotNull val executorId: Long,
+    /** 原样透传给 Handler 的参数文本。 */
     val parameters: String = "",
+    /** Spring 六段 Cron 表达式，仅 CRON 类型生效。 */
     val cron: String? = null,
+    /** 固定间隔毫秒数，仅 FIXED_RATE 类型生效。 */
     val fixedRateMillis: Long? = null,
+    /** 初始调度状态；保存不会改变既有任务的运行状态。 */
     val status: JobStatus = JobStatus.DISABLED,
+    /** 分组内执行器地址选择策略。 */
     val routeStrategy: RouteStrategy = RouteStrategy.FAILOVER,
+    /** 同一执行器内该任务发生重叠时的处理策略。 */
     val blockStrategy: BlockStrategy = BlockStrategy.SERIAL,
+    /** 是否为长期运行任务；影响丢弃触发时是否保留跳过日志。 */
     val resident: Boolean = false,
+    /** Handler 明确失败时允许的额外调用次数。 */
     @field:Min(0) val maxRetryCount: Int = 0,
+    /** 同一次触发的两次明确失败调用之间等待的毫秒数。 */
     @field:Min(0) val retryIntervalMillis: Long = 1_000,
+    /** 单次 Handler 调用最长秒数；0 交由系统级默认上限控制。 */
     @field:Min(0) val timeoutSeconds: Long = 0
 ) {
+    /** 转换为不含 ID、时间和租约字段的领域草稿。 */
     fun toDraft() = ScheduleJobDraft(
         name = name, executorGroup = "default", executorId = executorId, handler = handler, parameters = parameters,
         scheduleType = scheduleType, cron = cron, fixedRateMillis = fixedRateMillis, status = status,
@@ -263,28 +303,50 @@ data class ScheduleJobRequest(
     )
 }
 
-data class JobStatusRequest(@field:NotNull val status: JobStatus)
+/** 修改任务定时调度启停状态的请求。 */
+data class JobStatusRequest(
+    /** ENABLED 启动后续定时触发；DISABLED 停止后续定时触发，但不禁止手动执行。 */
+    @field:NotNull val status: JobStatus
+)
 
+/** 自动注册地址模式下由执行器周期性上报的心跳载荷。 */
 data class ExecutorHeartbeatRequest(
+    /** 执行器全局唯一分组标识。 */
     @field:NotBlank val executorGroup: String = "default",
+    /** 仅用于页面展示的执行器名称。 */
     @field:NotBlank val executorName: String,
+    /** 当前实例对 Admin 可访问的地址；可为空以支持本地执行器。 */
     val address: String? = null
 )
 
+/** 执行器优雅下线时的通知载荷。 */
 data class ExecutorOfflineRequest(
+    /** 要下线的执行器分组标识。 */
     @field:NotBlank val executorGroup: String,
+    /** 非空时只剔除该实例地址；为空时剔除分组全部自动注册地址。 */
     val address: String? = null
 )
 
-data class ExecutorStatusRequest(@field:NotNull val status: ExecutorStatus)
+/** 修改执行器是否可被路由的请求。 */
+data class ExecutorStatusRequest(
+    /** DISABLED 时仍允许心跳，但新任务不再路由到该执行器。 */
+    @field:NotNull val status: ExecutorStatus
+)
 
+/** 管理端创建或编辑执行器分组的请求载荷。 */
 data class ScheduleExecutorRequest(
+    /** 全局唯一分组标识，对应任务配置中的执行器选择项。 */
     @field:NotBlank val executorGroup: String,
+    /** 仅用于管理页面展示的名称，可重复。 */
     @field:NotBlank val executorName: String,
+    /** 手动地址模式的固定地址列表；自动模式由心跳维护。 */
     val address: String? = null,
+    /** 地址由管理员配置，或由执行器心跳自动注册。 */
     @field:NotNull val addressMode: ExecutorAddressMode = ExecutorAddressMode.AUTO_REGISTER,
+    /** 是否允许分组参与后续任务路由。 */
     @field:NotNull val status: ExecutorStatus = ExecutorStatus.ENABLED
 ) {
+    /** 转换为领域层可持久化的执行器草稿。 */
     fun toDraft() = ScheduleExecutorDraft(
         executorGroup,
         executorName,
@@ -294,18 +356,36 @@ data class ScheduleExecutorRequest(
     )
 }
 
-data class TriggerResponse(val accepted: Boolean)
+/** 手动触发入队结果。 */
+data class TriggerResponse(
+    /** true 表示已写入可靠 Outbox；不代表 Handler 已开始或已成功。 */
+    val accepted: Boolean
+)
 
-data class CancelExecutionResponse(val cancelled: Boolean)
+/** 单次执行终止请求结果。 */
+data class CancelExecutionResponse(
+    /** true 表示已进入取消确认链路或已完成，不代表远端 Handler 已立即退出。 */
+    val cancelled: Boolean
+)
 
-data class NextTriggersResponse(val times: List<Long>)
+/** 下次计划触发时间预览。 */
+data class NextTriggersResponse(
+    /** 按升序排列的 Unix 毫秒时间戳列表。 */
+    val times: List<Long>
+)
 
+/** 根据尚未保存的页面配置预览未来触发时间的请求。 */
 data class SchedulePreviewRequest(
+    /** 需要预览的触发方式。 */
     @field:NotNull val scheduleType: ScheduleType,
+    /** CRON 类型使用的 Spring 六段 Cron 表达式。 */
     val cron: String? = null,
+    /** FIXED_RATE 类型使用的固定间隔毫秒数。 */
     val fixedRateMillis: Long? = null,
+    /** 希望返回的未来时间数量，服务端会限制有效范围。 */
     @field:Min(1) val count: Int = 10
 ) {
+    /** 以占位任务构造可供时间计算器校验的领域草稿。 */
     fun toDraft() = ScheduleJobDraft(
         name = "preview",
         handler = "preview",

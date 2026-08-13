@@ -15,7 +15,9 @@ import kotlin.random.Random
 
 /** 带数据库主键的可调度执行器，供执行日志关联执行器 ID 与目标地址。 */
 data class RoutedExecutor(
+    /** 执行器分组在数据库中的自增 ID，用于执行日志关联与任务引用校验。 */
     val dbId: Long,
+    /** 实际接收 run/cancel/beat 请求的本地或 HTTP 执行器客户端。 */
     val executor: ScheduleExecutor,
     /** 执行器访问地址，本地执行时可能为空。 */
     val address: String? = null,
@@ -75,6 +77,7 @@ class ExecutorRegistry(
     fun activeRouted(executorGroup: String): List<RoutedExecutor> {
         val now = System.currentTimeMillis()
         return heartbeatRepository.list(executorGroup, now, heartbeatTimeoutMillis)
+            // 数据库查询负责过滤超时自动注册实例；这里再次排除人工禁用的执行器分组。
             .filter { it.status == ExecutorStatus.ENABLED }
             .flatMap { expandAddresses(it, now) }
             .sortedWith(compareBy({ it.dbId }, { it.address ?: "" }))
@@ -106,6 +109,7 @@ class ExecutorRegistry(
     fun runnableNodes(id: Long): List<RoutedExecutor> {
         val heartbeat = heartbeatRepository.findById(id) ?: return emptyList()
         if (heartbeat.status != ExecutorStatus.ENABLED) return emptyList()
+        // 手动地址即使没有心跳也可调用；自动注册地址的过期过滤在 expandAddresses 中执行。
         return expandAddresses(heartbeat, System.currentTimeMillis())
     }
 

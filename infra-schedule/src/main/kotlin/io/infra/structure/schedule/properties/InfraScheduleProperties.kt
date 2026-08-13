@@ -19,7 +19,7 @@ class InfraScheduleProperties {
     var workerThreads: Int = 8
     /** 工作线程已满时允许在内存中等待的触发数量，超过后由 Outbox 留待后续重试。 */
     var workerQueueCapacity: Int = 1_000
-    /** 当前调度节点唯一 ID；集群部署时应配置为稳定且互不重复的值。 */
+    /** 当前调度节点标识前缀；集群部署时应配置为稳定且互不重复的值，实际租约 owner 会追加进程随机 token。 */
     var schedulerId: String = "schedule-${UUID.randomUUID()}"
     /**
      * 运行中日志超过该时长（按 trigger_time）后进入回收候选。

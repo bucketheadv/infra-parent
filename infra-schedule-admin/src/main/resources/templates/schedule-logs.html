@@ -75,6 +75,8 @@
                             <option value="LOST">已丢失</option>
                             <option value="QUEUED">排队中</option>
                             <option value="RUNNING">运行中</option>
+                            <option value="CANCELLING">取消确认中</option>
+                            <option value="TIMING_OUT">超时确认中</option>
                         </select>
                     </label>
                     <label>每页条数
@@ -154,7 +156,7 @@
     </div>
 </dialog>
 
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="toast" id="toast" role="status" aria-live="polite" popover="manual"></div>
 <script th:src="@{/schedule-admin/dashboard.js(v=${#dates.createNow().time})}"></script>
 </body>
 </html>

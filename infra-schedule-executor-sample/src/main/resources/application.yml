@@ -10,7 +10,7 @@ infra:
     enabled: true
     executor:
       enabled: true
-      name: ${SCHEDULE_EXECUTOR_NAME:infra-schedule-executor-sample}
+      name: ${SCHEDULE_EXECUTOR_NAME:样例执行器}
       group: ${SCHEDULE_EXECUTOR_GROUP:infra-schedule-executor-sample}
       # 必须是调度中心能访问到的地址；分机部署时不要用 127.0.0.1。
       address: ${SCHEDULE_EXECUTOR_ADDRESS:http://127.0.0.1:18081}

@@ -38,9 +38,21 @@
         </header>
 
         <section class="metrics metrics-3" aria-label="执行器概览">
-            <article class="metric"><span>全部执行器</span><strong th:text="${executorCount}">0</strong></article>
-            <article class="metric"><span>已启用</span><strong th:text="${enabledExecutorCount}">0</strong></article>
-            <article class="metric"><span>在线</span><strong th:text="${onlineExecutorCount}">0</strong></article>
+            <article class="metric metric-total">
+                <div class="metric-top"><div class="metric-heading"><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5h10M8 12h10M8 18.5h10M4.5 5.5h.01M4.5 12h.01M4.5 18.5h.01"/></svg></span><span class="metric-label">全部执行器</span></div><span class="metric-index" aria-hidden="true">01</span></div>
+                <div class="metric-value"><strong th:text="${executorCount}">0</strong><span>组</span></div>
+                <p class="metric-note"><i aria-hidden="true"></i>已登记执行器分组</p><span class="metric-state">资源总览</span>
+            </article>
+            <article class="metric metric-started">
+                <div class="metric-top"><div class="metric-heading"><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9.5 7 6 5-6 5V7Z"/><path d="M5 4.5v15M19 4.5v15"/></svg></span><span class="metric-label">已启用</span></div><span class="metric-index" aria-hidden="true">02</span></div>
+                <div class="metric-value"><strong th:text="${enabledExecutorCount}">0</strong><span>组</span></div>
+                <p class="metric-note"><i aria-hidden="true"></i>允许参与任务路由</p><span class="metric-state">可路由</span>
+            </article>
+            <article class="metric metric-online">
+                <div class="metric-top"><div class="metric-heading"><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4.5" y="5" width="15" height="14" rx="2"/><path d="M8 9h.01M8 13h.01M12 9h4M12 13h4"/></svg></span><span class="metric-label">在线</span></div><span class="metric-index" aria-hidden="true">03</span></div>
+                <div class="metric-value"><strong th:text="${onlineExecutorCount}">0</strong><span>组</span></div>
+                <p class="metric-note"><i aria-hidden="true"></i>心跳状态正常</p><span class="metric-state">健康</span>
+            </article>
         </section>
 
         <section class="panel executor-panel" id="executor-section" aria-labelledby="executors-heading">
@@ -91,7 +103,7 @@
     </div>
 </dialog>
 
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="toast" id="toast" role="status" aria-live="polite" popover="manual"></div>
 <script th:src="@{/schedule-admin/dashboard.js(v=${#dates.createNow().time})}"></script>
 </body>
 </html>

@@ -5,6 +5,7 @@ import io.infra.structure.schedule.admin.core.HttpScheduleExecutorClientFactory
 import io.infra.structure.schedule.admin.core.ScheduleDispatcher
 import io.infra.structure.schedule.admin.service.ScheduleService
 import io.infra.structure.schedule.admin.web.ScheduleAdminAccessInterceptor
+import io.infra.structure.schedule.admin.web.ScheduleAdminApiExceptionHandler
 import io.infra.structure.schedule.admin.web.ScheduleAdminController
 import io.infra.structure.schedule.admin.web.ScheduleAdminWebConfigurer
 import io.infra.structure.schedule.autoconfigure.InfraScheduleAutoConfiguration
@@ -65,10 +66,14 @@ class InfraScheduleAdminAutoConfiguration {
     @ConditionalOnMissingBean(name = ["infraScheduleAttemptExecutor"])
     fun infraScheduleAttemptExecutor(): ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
 
-    /** Outbox 工作线程执行期间的短周期租约续约器。 */
+    /**
+     * Outbox 工作线程执行期间的短周期租约续约器。
+     * 多线程隔离慢 SQL / 短暂锁等待，单个续约阻塞不得拖延所有在途 Outbox 的租约。
+     */
     @Bean(destroyMethod = "shutdown")
     @ConditionalOnMissingBean(name = ["infraScheduleOutboxLeaseExecutor"])
-    fun infraScheduleOutboxLeaseExecutor(): ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
+    fun infraScheduleOutboxLeaseExecutor(properties: InfraScheduleProperties): ScheduledExecutorService =
+        Executors.newScheduledThreadPool(properties.workerThreads.coerceIn(2, 32))
 
     /** 为到期扫描、慢速执行器探活和历史清理提供隔离的有界定时线程池。 */
     @Bean(destroyMethod = "shutdown")
@@ -150,6 +155,11 @@ class InfraScheduleAdminAutoConfiguration {
         executorRegistry: ExecutorRegistry,
         properties: InfraScheduleProperties
     ) = ScheduleAdminController(scheduleService, executorRegistry, properties)
+
+    /** 注册管理 API 的冲突错误转换，保证 starter 接入方也能获得可读 409 原因。 */
+    @Bean
+    @ConditionalOnMissingBean
+    fun scheduleAdminApiExceptionHandler() = ScheduleAdminApiExceptionHandler()
 
     @Bean
     @ConditionalOnMissingBean

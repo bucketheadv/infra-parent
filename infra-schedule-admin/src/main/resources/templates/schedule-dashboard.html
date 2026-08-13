@@ -38,10 +38,26 @@
         </header>
 
         <section class="metrics" aria-label="调度概览">
-            <article class="metric"><span>全部任务</span><strong th:text="${jobCount}">0</strong></article>
-            <article class="metric"><span>运行中</span><strong th:text="${enabledJobCount}">0</strong></article>
-            <article class="metric"><span>已暂停</span><strong th:text="${disabledJobCount}">0</strong></article>
-            <article class="metric"><span>在线执行器</span><strong th:text="${executorCount}">0</strong></article>
+            <article class="metric metric-total">
+                <div class="metric-top"><div class="metric-heading"><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5h10M8 12h10M8 18.5h10M4.5 5.5h.01M4.5 12h.01M4.5 18.5h.01"/></svg></span><span class="metric-label">全部任务</span></div><span class="metric-index" aria-hidden="true">01</span></div>
+                <div class="metric-value"><strong th:text="${jobCount}">0</strong><span>项</span></div>
+                <p class="metric-note"><i aria-hidden="true"></i>已纳入调度中心</p><span class="metric-state">任务总览</span>
+            </article>
+            <article class="metric metric-started">
+                <div class="metric-top"><div class="metric-heading"><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9.5 7 6 5-6 5V7Z"/><path d="M5 4.5v15M19 4.5v15"/></svg></span><span class="metric-label">已启动</span></div><span class="metric-index" aria-hidden="true">02</span></div>
+                <div class="metric-value"><strong th:text="${enabledJobCount}">0</strong><span>项</span></div>
+                <p class="metric-note"><i aria-hidden="true"></i>定时调度生效中</p><span class="metric-state">运行中</span>
+            </article>
+            <article class="metric metric-stopped">
+                <div class="metric-top"><div class="metric-heading"><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2"/></svg></span><span class="metric-label">已停止</span></div><span class="metric-index" aria-hidden="true">03</span></div>
+                <div class="metric-value"><strong th:text="${disabledJobCount}">0</strong><span>项</span></div>
+                <p class="metric-note"><i aria-hidden="true"></i>可手动执行或启动</p><span class="metric-state">待启动</span>
+            </article>
+            <article class="metric metric-online">
+                <div class="metric-top"><div class="metric-heading"><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4.5" y="5" width="15" height="14" rx="2"/><path d="M8 9h.01M8 13h.01M12 9h4M12 13h4"/></svg></span><span class="metric-label">在线执行器</span></div><span class="metric-index" aria-hidden="true">04</span></div>
+                <div class="metric-value"><strong th:text="${executorCount}">0</strong><span>台</span></div>
+                <p class="metric-note"><i aria-hidden="true"></i>心跳可用于任务路由</p><span class="metric-state">心跳正常</span>
+            </article>
         </section>
 
         <section class="panel task-panel" aria-labelledby="jobs-heading">
@@ -51,6 +67,8 @@
                     <p id="job-count-label">正在加载任务</p>
                 </div>
                 <div class="toolbar">
+                    <label class="executor-filter"><span class="sr-only">按执行器筛选</span><select id="job-executor-filter" aria-label="按执行器筛选"><option value="">全部执行器</option></select></label>
+                    <label class="status-filter"><span class="sr-only">按任务状态筛选</span><select id="job-status-filter" aria-label="按任务状态筛选"><option value="">全部状态</option><option value="ENABLED">已启动</option><option value="DISABLED">已停止</option></select></label>
                     <label class="search-field"><span class="sr-only">搜索任务</span><input id="job-search" type="search" placeholder="搜索任务或处理器"></label>
                     <button class="icon-button" type="button" id="refresh-button" title="刷新任务列表" aria-label="刷新任务列表">↻</button>
                 </div>
@@ -164,7 +182,7 @@
     </div>
 </dialog>
 
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="toast" id="toast" role="status" aria-live="polite" popover="manual"></div>
 <script th:src="@{/schedule-admin/dashboard.js(v=${#dates.createNow().time})}"></script>
 </body>
 </html>

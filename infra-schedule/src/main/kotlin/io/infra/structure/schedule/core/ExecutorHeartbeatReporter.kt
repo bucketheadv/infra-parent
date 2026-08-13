@@ -68,13 +68,18 @@ class ExecutorHeartbeatReporter(
 
 /** 上报到管理端的最小执行器注册载荷。 */
 private data class ExecutorPresenceReport(
+    /** 心跳所属的全局唯一执行器分组。 */
     val executorGroup: String,
+    /** 仅供管理页面展示的执行器名称。 */
     val executorName: String,
+    /** 当前进程可被 Admin 回调的服务地址。 */
     val address: String?
 )
 
 /** 执行器主动离线上报载荷。 */
 private data class ExecutorOfflineReport(
+    /** 要注销的执行器分组。 */
     val executorGroup: String,
+    /** 非空时仅注销当前实例地址。 */
     val address: String? = null
 )

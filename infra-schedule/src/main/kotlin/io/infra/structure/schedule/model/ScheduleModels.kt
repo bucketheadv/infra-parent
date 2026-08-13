@@ -36,19 +36,19 @@ enum class BlockStrategy {
  * 旧库值 `ROUND_ROBIN` / `BROADCAST` 读取时兼容映射为 [ROUND] / [SHARDING_BROADCAST]。
  */
 enum class RouteStrategy {
-    /** 第一个 */
+    /** 按稳定排序选择第一个可用地址。 */
     FIRST,
-    /** 最后一个 */
+    /** 按稳定排序选择最后一个可用地址。 */
     LAST,
-    /** 轮询 */
+    /** 使用 MySQL 共享游标轮询，Admin 集群共享路由进度。 */
     ROUND,
-    /** 随机 */
+    /** 从当前可用地址中随机选择一个。 */
     RANDOM,
-    /** 一致性 HASH */
+    /** 按任务 ID 在原始地址的一致性哈希环上选择节点，尽量减少节点变化造成的迁移。 */
     CONSISTENT_HASH,
-    /** 最不经常使用 */
+    /** 选择共享 MySQL 统计中累计被选择次数最少的节点。 */
     LEAST_FREQUENTLY_USED,
-    /** 最近最久未使用 */
+    /** 选择共享 MySQL 统计中最长时间未被选择的节点。 */
     LEAST_RECENTLY_USED,
     /** 故障转移：按序探活，选第一个心跳成功的节点 */
     FAILOVER,
@@ -85,11 +85,16 @@ enum class ExecutionStatus {
     TIMEOUT,
     /** 管理员主动终止执行。 */
     CANCELLED,
+    /** 已请求取消，尚待执行器确认退出；该状态仍会参与僵尸探活。 */
+    CANCELLING,
+    /** 已因超时请求终止，尚待执行器确认退出；确认后收口为 [TIMEOUT]。 */
+    TIMING_OUT,
     /** 长时间停留在运行中被调度中心回收（节点崩溃或执行丢失）。 */
     LOST;
 
     /** 排队或执行中，尚未到终态。 */
-    fun isActive(): Boolean = this == QUEUED || this == RUNNING
+    fun isActive(): Boolean = this == QUEUED || this == RUNNING ||
+        this == CANCELLING || this == TIMING_OUT
 }
 
 /** 调度触发 Outbox 的投递状态。 */
@@ -241,13 +246,18 @@ data class JobExecutionResult(
     /** 被阻塞策略丢弃（DISCARD_LATER）时为 true。 */
     val discarded: Boolean = false,
     /** 被覆盖或主动终止时为 true。 */
-    val cancelled: Boolean = false
+    val cancelled: Boolean = false,
+    /**
+     * 调度中心未能确认执行器是否收到请求，例如连接中断、读超时或 5xx。
+     * 旧尝试可能仍在执行，必须保留活跃日志供精确取消和僵尸探活，不能直接收口为失败。
+     */
+    val uncertain: Boolean = false
 ) {
     companion object {
         /** 构造成功结果；[message] 为可选返回值，由调度侧拼进日志。 */
         fun success(message: String? = null) = JobExecutionResult(true, message)
-        /** 构造失败结果。 */
-        fun failure(message: String) = JobExecutionResult(false, message)
+        /** 构造失败结果；[uncertain] 表示 HTTP 结果未知而非处理器明确返回失败。 */
+        fun failure(message: String, uncertain: Boolean = false) = JobExecutionResult(false, message, uncertain = uncertain)
         /** 构造被阻塞策略丢弃的结果。 */
         fun discarded(message: String) = JobExecutionResult(false, message, discarded = true)
         /** 构造被取消 / 覆盖的结果。 */
@@ -297,7 +307,7 @@ data class JobExecutionLog(
     val jobId: Long,
     /** 实际执行的执行器数据库 ID；未分发时为 null。 */
     val executorId: Long?,
-    /** 任务被触发的时间。 */
+    /** 本条执行日志对应投递尝试开始的时间；原始计划触发时间保存在 Outbox 和 [JobExecutionContext]。 */
     val triggerTime: Long,
     /** 执行结束时间；运行中时为 null。 */
     val finishTime: Long? = null,
@@ -327,11 +337,17 @@ data class ScheduleTriggerOutbox(
     val jobId: Long,
     /** 本次计划触发时间。 */
     val triggerTime: Long,
+    /** 是否由管理员立即执行创建；暂停任务仅允许此类触发继续投递。 */
+    val manualTrigger: Boolean = false,
     /** 当前投递状态。 */
     val status: TriggerOutboxStatus = TriggerOutboxStatus.PENDING,
     /** 当前投递租约持有调度节点。 */
     val claimOwner: String? = null,
-    /** 当前投递租约失效时间。 */
+    /** 本次领取的唯一租约令牌；同一节点重复领取时用于隔离旧工作线程。 */
+    val claimToken: String? = null,
+    /**
+     * `PROCESSING` 时为当前投递租约失效时间；`PENDING` 时为下次允许领取的重试时间。
+     */
     val claimUntil: Long? = null,
     /** 已尝试投递次数。 */
     val attemptCount: Int = 0,
@@ -360,7 +376,7 @@ data class ExecutorHeartbeat(
     val addressMode: ExecutorAddressMode = ExecutorAddressMode.AUTO_REGISTER,
     /** 执行器是否允许接收新的调度请求。 */
     val status: ExecutorStatus = ExecutorStatus.ENABLED,
-    /** 最近心跳时间。 */
+    /** 最近一次成功上报心跳的 Unix 毫秒时间戳，用于自动注册地址的在线判定。 */
     val lastHeartbeatTime: Long,
 )
 

@@ -57,7 +57,20 @@ class HttpScheduleExecutor(
             Thread.currentThread().interrupt()
             return JobExecutionResult.cancelled("任务已被终止")
         }
-        JobExecutionResult.failure("调用执行器 $id 失败: ${describeHttpError(exception)}")
+        // 只有传输中断与服务端 5xx 可能发生在 Handler 已开始之后；4xx 是执行器明确拒绝，
+        // 必须按确定失败处理，不能让认证/参数错误伪装成“未知执行”。
+        JobExecutionResult.failure(
+            "调用执行器 $id 失败: ${describeHttpError(exception)}",
+            uncertain = isDeliveryUncertain(exception)
+        )
+    }
+
+    /** 4xx 已明确未受理；连接/读超时、无响应和 5xx 均可能在服务端已开始执行后发生。 */
+    private fun isDeliveryUncertain(exception: Exception): Boolean {
+        val response = generateSequence(exception as Throwable) { it.cause }
+            .filterIsInstance<RestClientResponseException>()
+            .firstOrNull()
+        return response == null || response.statusCode.is5xxServerError
     }
 
     private fun describeHttpError(exception: Exception): String {

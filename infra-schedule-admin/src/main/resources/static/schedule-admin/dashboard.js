@@ -46,7 +46,7 @@
             let message = body || `请求失败（${response.status}）`;
             try {
                 const json = JSON.parse(body);
-                message = json.message || json.error || message;
+                message = json.detail || json.message || json.error || message;
             } catch (_ignored) {
                 /* 非 JSON 错误体，沿用原文 */
             }
@@ -106,6 +106,8 @@
         SKIPPED: "跳过",
         QUEUED: "排队中",
         RUNNING: "运行中",
+        CANCELLING: "取消确认中",
+        TIMING_OUT: "超时确认中",
         CANCELLED: "已终止",
         LOST: "已丢失"
     });
@@ -201,13 +203,21 @@
         return true;
     }
 
-    /** 以短暂提示反馈写操作结果。 */
+    /** 以高层级提示反馈写操作结果；错误信息保留更久，避免被用户错过。 */
     function showToast(message, isError = false) {
         clearTimeout(toastTimer);
         toast.textContent = message;
         toast.classList.toggle("error", isError);
         toast.classList.add("visible");
-        toastTimer = setTimeout(() => toast.classList.remove("visible"), 2600);
+        if (typeof toast.showPopover === "function" && !toast.matches(":popover-open")) {
+            toast.showPopover();
+        }
+        toastTimer = setTimeout(() => {
+            toast.classList.remove("visible");
+            if (typeof toast.hidePopover === "function" && toast.matches(":popover-open")) {
+                toast.hidePopover();
+            }
+        }, isError ? 7000 : 3200);
     }
 
     /**
@@ -264,6 +274,8 @@
         const jobsBody = document.querySelector("#jobs-body");
         const emptyState = document.querySelector("#empty-state");
         const searchInput = document.querySelector("#job-search");
+        const executorFilter = document.querySelector("#job-executor-filter");
+        const statusFilter = document.querySelector("#job-status-filter");
         const jobDialog = document.querySelector("#job-dialog");
         const logsDialog = document.querySelector("#logs-dialog");
         const nextTriggersDialog = document.querySelector("#next-triggers-dialog");
@@ -310,9 +322,15 @@
 
         function filteredJobs() {
             const keyword = searchInput.value.trim().toLowerCase();
-            if (!keyword) return jobs;
-            return jobs.filter(job => [job.name, job.handler, executorName(job.executorId), job.executorId, job.id]
-                .some(value => String(value || "").toLowerCase().includes(keyword)));
+            const executorId = executorFilter.value;
+            const status = statusFilter.value;
+            return jobs.filter(job => {
+                const matchesExecutor = !executorId || Number(job.executorId) === Number(executorId);
+                const matchesStatus = !status || job.status === status;
+                const matchesKeyword = !keyword || [job.name, job.handler, executorName(job.executorId), job.executorId, job.id]
+                    .some(value => String(value || "").toLowerCase().includes(keyword));
+                return matchesExecutor && matchesStatus && matchesKeyword;
+            });
         }
 
         function renderJobs() {
@@ -323,10 +341,10 @@
                     <td><strong>${escapeHtml(job.handler)}</strong><span class="cell-detail">执行器：${escapeHtml(executorName(job.executorId))}</span></td>
                     <td><span class="schedule-text">${escapeHtml(scheduleDescription(job))}</span><span class="cell-detail">${escapeHtml(strategyLabel(job))}</span></td>
                     <td><span class="schedule-text">${formatTime(job.nextTriggerAt)}</span></td>
-                    <td><span class="status ${job.status === "DISABLED" ? "disabled" : "online"}">${job.status === "ENABLED" ? "已启用" : "已暂停"}</span></td>
+                    <td><span class="status ${job.status === "DISABLED" ? "disabled" : "online"}">${job.status === "ENABLED" ? "已启动" : "已停止"}</span></td>
                     <td><div class="row-actions">
                         <button type="button" class="action-btn action-run" data-action="trigger" data-id="${escapeHtml(job.id)}">执行</button>
-                        <button type="button" class="action-btn ${job.status === "ENABLED" ? "action-pause" : "action-enable"}" data-action="toggle" data-id="${escapeHtml(job.id)}">${job.status === "ENABLED" ? "暂停" : "启用"}</button>
+                        <button type="button" class="action-btn ${job.status === "ENABLED" ? "action-pause" : "action-enable"}" data-action="toggle" data-id="${escapeHtml(job.id)}">${job.status === "ENABLED" ? "停止" : "启动"}</button>
                         <button type="button" class="action-btn action-edit" data-action="edit" data-id="${escapeHtml(job.id)}">编辑</button>
                         <button type="button" class="action-btn action-next" data-action="next" data-id="${escapeHtml(job.id)}">下次</button>
                         <button type="button" class="action-btn action-logs" data-action="logs" data-id="${escapeHtml(job.id)}">日志</button>
@@ -345,8 +363,18 @@
 
         async function loadExecutors() {
             executors = await request(SchedulePaths.executors);
+            populateExecutorFilter();
             const online = executors.filter(executor => isExecutorOnline(executor)).length;
             document.querySelectorAll(".metric strong")[3].textContent = String(online);
+        }
+
+        /** 用已登记执行器更新任务列表筛选项，并保留仍存在的当前选择。 */
+        function populateExecutorFilter() {
+            const selectedId = executorFilter.value;
+            executorFilter.innerHTML = `<option value="">全部执行器</option>${executors.map(executor =>
+                `<option value="${escapeHtml(executor.id)}">#${escapeHtml(executor.id)} · ${escapeHtml(executor.executorName)}（${escapeHtml(executor.executorGroup)}）</option>`
+            ).join("")}`;
+            executorFilter.value = executors.some(executor => String(executor.id) === selectedId) ? selectedId : "";
         }
 
         function updateMetrics() {
@@ -407,7 +435,7 @@
                 parameters: form.get("parameters").trim(),
                 cron: scheduleType === "CRON" ? form.get("cron").trim() : null,
                 fixedRateMillis: scheduleType === "FIXED_RATE" ? Number(form.get("fixedRateMillis")) : null,
-                // 保存只落配置，不自动启动；启停仅通过「启用 / 暂停」按钮切换。
+                // 保存只落配置，不自动启动；启动/停止仅通过任务行操作切换。
                 status: existing?.status || "DISABLED",
                 routeStrategy: form.get("routeStrategy"),
                 blockStrategy: form.get("blockStrategy"),
@@ -541,14 +569,15 @@
                         confirmLabel: "立即执行"
                     });
                     if (!confirmed) return;
-                    await request(SchedulePaths.trigger(job.id), { method: "POST", body: "{}" });
+                    const result = await request(SchedulePaths.trigger(job.id), { method: "POST", body: "{}" });
+                    if (!result?.accepted) throw new Error("任务未被调度中心接收，请刷新页面后重试");
                     showToast("任务已提交执行");
                 } else if (button.dataset.action === "toggle") {
                     await request(SchedulePaths.status(job.id), {
                         method: "POST",
                         body: JSON.stringify({ status: job.status === "ENABLED" ? "DISABLED" : "ENABLED" })
                     });
-                    showToast(job.status === "ENABLED" ? "任务已暂停" : "任务已启用");
+                    showToast(job.status === "ENABLED" ? "任务已停止定时调度" : "任务已启动定时调度");
                 }
                 await loadJobs();
                 updateMetrics();
@@ -577,6 +606,8 @@
         document.querySelector("#create-job-button").addEventListener("click", () => openJobDialog().catch(error => showToast(error.message, true)));
         document.querySelector("#refresh-button").addEventListener("click", () => Promise.all([loadJobs(), loadExecutors()]).then(() => { renderJobs(); updateMetrics(); showToast("任务列表已刷新"); }).catch(error => showToast(error.message, true)));
         searchInput.addEventListener("input", renderJobs);
+        executorFilter.addEventListener("change", renderJobs);
+        statusFilter.addEventListener("change", renderJobs);
         document.querySelector("#schedule-type").addEventListener("change", toggleScheduleFields);
         document.querySelector("#preview-cron-next").addEventListener("click", () => previewCronNextTriggers());
         document.querySelectorAll("[data-close-dialog]").forEach(button => button.addEventListener("click", () => jobDialog.close()));

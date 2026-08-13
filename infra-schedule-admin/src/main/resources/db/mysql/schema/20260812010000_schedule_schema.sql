@@ -42,15 +42,18 @@ CREATE TABLE IF NOT EXISTS infra_schedule_execution_log (
     PRIMARY KEY (id),
     KEY idx_infra_schedule_log_job (job_id, trigger_time),
     KEY idx_infra_schedule_log_trigger (trigger_time),
-    KEY idx_infra_schedule_log_status_trigger (status, trigger_time)
+    KEY idx_infra_schedule_log_status_trigger (status, trigger_time),
+    KEY idx_infra_schedule_log_cleanup (finish_time, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='任务执行审计日志表';
 
 CREATE TABLE IF NOT EXISTS infra_schedule_trigger_outbox (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '可靠触发记录主键',
     job_id BIGINT NOT NULL COMMENT '所属任务主键',
     trigger_time BIGINT NOT NULL COMMENT '本次计划或手动触发时间戳毫秒',
+    manual_trigger TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否管理员立即执行触发',
     status VARCHAR(16) NOT NULL COMMENT '投递状态：PENDING/PROCESSING/DISPATCHED/CANCELLED',
     claim_owner VARCHAR(128) NULL COMMENT '当前投递租约持有节点',
+    claim_token CHAR(36) NULL COMMENT '本次投递领取唯一令牌，防止过期工作线程误操作新租约',
     claim_until BIGINT NULL COMMENT '投递租约失效时间戳毫秒',
     attempt_count INT NOT NULL DEFAULT 0 COMMENT '已尝试投递次数',
     last_error VARCHAR(1000) NULL COMMENT '最近一次投递失败原因',
@@ -58,7 +61,8 @@ CREATE TABLE IF NOT EXISTS infra_schedule_trigger_outbox (
     update_time BIGINT NOT NULL COMMENT '状态更新时间戳毫秒',
     PRIMARY KEY (id),
     KEY idx_infra_schedule_outbox_pending (status, claim_until, id),
-    KEY idx_infra_schedule_outbox_job (job_id, status)
+    KEY idx_infra_schedule_outbox_job (job_id, status),
+    KEY idx_infra_schedule_outbox_cleanup (status, update_time, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='可靠任务触发 Outbox 表';
 
 CREATE TABLE IF NOT EXISTS infra_schedule_executor (
