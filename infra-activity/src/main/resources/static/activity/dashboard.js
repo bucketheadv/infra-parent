@@ -28,6 +28,12 @@
         document.getElementById("personal-settings-dialog").showModal();
     });
 
+    document.querySelectorAll("dialog").forEach((dialog) => {
+        dialog.addEventListener("click", (event) => {
+            if (event.target === dialog) dialog.close("cancel");
+        });
+    });
+
     try {
         applyTheme(window.localStorage.getItem(THEME_STORAGE_KEY) || "emerald");
     } catch (_) {

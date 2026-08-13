@@ -159,7 +159,7 @@
                     <p id="activity-form-status" class="editor-status">正在创建新的活动配置。</p>
                     <label>活动名称<input name="name" required placeholder="夏日会员活动"></label>
                     <div class="field-grid activity-status-grid"><label>活动模板<select name="templateId" id="activity-template-select" required></select></label><label>活动状态<select name="status"><option value="DRAFT">草稿</option><option value="ACTIVE">已启用</option></select></label><label>上下线状态<select name="onlineStatus"><option value="OFFLINE">已下线</option><option value="ONLINE">已上线</option></select></label></div>
-                    <section class="activity-validity" aria-label="活动有效期"><div class="builder-heading"><h4>活动有效期</h4><label class="check-field"><input id="activity-valid-forever" name="validForever" type="checkbox">永久有效</label></div><div id="activity-validity-fields" class="field-grid" hidden><label>开始时间<input name="validStartTime" type="datetime-local" step="1"></label><label>结束时间<input name="validEndTime" type="datetime-local" step="1"></label></div></section>
+                    <section class="activity-validity" aria-label="活动有效期"><div class="builder-heading"><h4>活动有效期</h4><label class="check-field"><input id="activity-valid-forever" name="validForever" type="checkbox">永久有效</label></div><div id="activity-validity-fields" class="field-grid" hidden><label>开始时间<input name="validStartTime" type="datetime-local" step="1" lang="en-CA"></label><label>结束时间<input name="validEndTime" type="datetime-local" step="1" lang="en-CA"></label></div></section>
                     <div id="activity-dynamic-fields" class="dynamic-fields"><p class="empty-state">请选择一个活动模板。</p></div>
                     <button class="primary-button" type="submit">保存活动配置</button>
                 </form>
@@ -205,7 +205,7 @@
         <label class="check-field"><input id="activity-debug-mode" name="debugMode" type="checkbox">启用调试模式</label>
         <div id="activity-debug-fields" class="debug-fields" hidden>
             <label>用户 ID 白名单<textarea id="activity-debug-user-ids" name="debugUserIds" rows="3" inputmode="numeric" placeholder="多个用户 ID 请使用逗号或换行分隔"></textarea></label>
-            <label>强制指定时间<input id="activity-debug-force-time" name="debugForceTime" type="datetime-local" step="1"></label>
+            <label>强制指定时间<input id="activity-debug-force-time" name="debugForceTime" type="datetime-local" step="1" lang="en-CA"></label>
         </div>
         <footer class="confirm-dialog-actions"><button id="cancel-activity-debug" class="secondary-button" type="button">取消</button><button class="primary-button" type="submit">确认配置</button></footer>
     </form>

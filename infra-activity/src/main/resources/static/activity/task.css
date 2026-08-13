@@ -63,3 +63,43 @@
 .cron-preview-content.is-error { color: var(--danger-text); }
 @media (max-width: 950px) { .task-grid { grid-template-columns: 1fr; } .task-binding-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .task-binding-guide ul { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .section-heading, .task-binding-toolbar, .runtime-task { align-items: stretch; flex-direction: column; } .section-heading, .task-binding-guide { display: grid; grid-template-columns: 1fr; } .section-heading > label { width: 100%; } .task-binding-grid, .trigger-config { grid-template-columns: 1fr; } .runtime-actions { flex-wrap: wrap; } .task-definition-card { align-items: stretch; flex-direction: column; } .task-definition-actions { justify-content: flex-end; } }
+
+/* Runtime surfaces follow the refreshed console language. */
+.task-grid { gap: 1.25rem; }
+.task-definition-card, .task-binding, .runtime-task, .execution-panel { border-color: var(--line); border-radius: .7rem; box-shadow: 0 .35rem 1rem rgba(23,35,59,.035); }
+.task-definition-card:hover { border-color: #c8d7f4; box-shadow: 0 .55rem 1.3rem rgba(23,35,59,.08); }
+.task-binding-guide { border-color: #cbd9f6; border-left-color: var(--teal); border-radius: .7rem; background: var(--teal-pale); }
+.task-binding-guide h3 { color: var(--teal-deep); }
+.task-binding-guide li { border-color: #d8e3fb; color: var(--teal-text); border-radius: .45rem; background: rgba(255,255,255,.82); }
+.task-section { margin-top: 2.35rem; padding-top: 1.8rem; border-top-color: var(--line); }
+.section-heading > label { color: var(--ink-soft); }
+.task-binding-toolbar { border-color: #dbe3ef; border-radius: .6rem; background: #fbfcff; }
+.task-binding { border-left-color: var(--teal); }
+.binding-order { color: var(--teal-text); background: var(--teal-soft); }
+.trigger-config { border-color: #d6e0f0; border-radius: .5rem; background: #f8faff; }
+.runtime-task { padding: 1rem 1.1rem; }
+.runtime-task h3 { color: var(--ink); }
+.status-chip { border-radius: .4rem; }
+.execution-panel { background: #fbfcff; }
+.execution-record { border-color: #e3e9f2; border-left-color: #bbc7da; border-radius: .4rem; }
+.runtime-actions .secondary-button { border-color: #c7c6f8; color: #4338ca; background: #f1f1ff; }
+.runtime-actions .secondary-button:hover { border-color: #4f46e5; color: #fff; background: #4f46e5; }
+.runtime-actions .primary-button { background: #0f9f75; box-shadow: 0 .3rem .75rem rgba(15,159,117,.2); }
+.runtime-actions .primary-button:hover { background: #087858; box-shadow: 0 .35rem .9rem rgba(15,159,117,.27); }
+.task-definition-delete { border-color: #f2c2cc; color: #b8324a; background: #fff0f3; }
+.task-definition-delete:hover { border-color: #dc4c64; color: #fff; background: #dc4c64; }
+
+.task-definition-edit,
+.task-definition-delete,
+.runtime-actions .secondary-button,
+.runtime-actions .primary-button {
+    box-shadow: 0 1px 1px rgba(23,35,59,.025);
+}
+.task-definition-edit { border-color: #b9cbed; color: #2457aa; background: #fff; }
+.task-definition-edit:hover { border-color: #8facdc; color: #1f478f; background: #f5f8ff; }
+.task-definition-delete { border-color: #e5b9c2; color: #b33c52; background: #fff; }
+.task-definition-delete:hover { border-color: #cf7b8c; color: #9f2f45; background: #fff7f8; }
+.runtime-actions .secondary-button { border-color: #c9c4e8; color: #55418e; background: #fff; }
+.runtime-actions .secondary-button:hover { border-color: #a99bd4; color: #49357d; background: #faf8ff; }
+.runtime-actions .primary-button { border: 1px solid #a7d8c6; color: #167255; background: #fff; box-shadow: 0 1px 1px rgba(23,35,59,.025); }
+.runtime-actions .primary-button:hover { border-color: #72ba9f; color: #0d644a; background: #f3fbf7; box-shadow: none; }

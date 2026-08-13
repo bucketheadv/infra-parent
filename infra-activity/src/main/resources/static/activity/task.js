@@ -56,6 +56,12 @@
     const manualTriggerDialog = document.getElementById("task-manual-trigger-dialog");
     const manualTriggerForm = document.getElementById("task-manual-trigger-form");
     let pendingManualTriggerTaskId = null;
+    document.querySelectorAll("dialog").forEach((dialog) => {
+        dialog.addEventListener("click", (event) => {
+            if (event.target === dialog) dialog.close("cancel");
+        });
+    });
+    manualTriggerDialog.addEventListener("close", () => { pendingManualTriggerTaskId = null; });
     // 使用站内确认弹窗替代浏览器原生确认框，清晰说明操作影响。
     const confirmAction = (action, destructive = false) => new Promise((resolve) => {
         const closeHandler = () => {

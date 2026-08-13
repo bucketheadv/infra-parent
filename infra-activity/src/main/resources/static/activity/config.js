@@ -54,6 +54,30 @@
         }
     };
 
+    // 原生 dialog 的点击目标为自身时，表示用户点击了蒙层而非弹窗内容。
+    document.querySelectorAll("dialog").forEach((dialog) => {
+        dialog.addEventListener("click", (event) => {
+            if (event.target === dialog) dialog.close("cancel");
+        });
+    });
+
+    // 原生日期控件的右侧通常是空白区域：仅点击该区域时主动打开选择器，
+    // 避免点击年月日分段时重复弹出或抢占原生编辑行为。
+    document.addEventListener("pointerdown", (event) => {
+        const input = event.target.closest?.('input[type="date"], input[type="datetime-local"]');
+        if (!input || input.disabled || input.readOnly || typeof input.showPicker !== "function") return;
+        const rect = input.getBoundingClientRect();
+        const offsetX = event.clientX - rect.left;
+        if (offsetX < rect.width * .48) return;
+        event.preventDefault();
+        input.focus({ preventScroll: true });
+        try {
+            input.showPicker();
+        } catch (_) {
+            // 已经打开或浏览器不允许重复调用时，保留原生控件行为。
+        }
+    }, true);
+
     const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", "\"": "&quot;"
     })[character]);
@@ -760,9 +784,11 @@
                 .join("")}</select>`;
             return;
         }
+        const isDateType = type === "DATE" || type === "DATE_TIME";
         const inputType = type === "NUMBER" ? "number" : type === "DATE" ? "date" : type === "DATE_TIME" ? "datetime-local" : "text";
         const inputStep = type === "DATE_TIME" ? ' step="1"' : "";
-        defaultField.innerHTML = `默认值<input class="node-default" type="${inputType}"${inputStep} value="${escapeHtml(currentDefault)}" placeholder="可选">`;
+        const language = isDateType ? ' lang="en-CA"' : "";
+        defaultField.innerHTML = `默认值<input class="node-default" type="${inputType}"${inputStep}${language} value="${escapeHtml(currentDefault)}" placeholder="可选">`;
     };
 
     // 渲染模板中已添加组件的顺序和单项必填设置。
@@ -1312,9 +1338,11 @@
                 : String(value ?? field.defaultValue ?? "").split(",").filter(Boolean);
             control = `<select data-field-key="${escapeHtml(fieldKey)}" ${required} multiple size="${Math.min(Math.max(field.options.length, 2), 5)}">${field.options.map((option) => `<option value="${escapeHtml(option.value)}" ${selectedValues.includes(option.value) ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}</select>`;
         } else {
+            const isDateType = field.type === "DATE" || field.type === "DATE_TIME";
             const inputType = field.type === "NUMBER" ? "number" : field.type === "DATE" ? "date" : field.type === "DATE_TIME" ? "datetime-local" : "text";
             const inputStep = field.type === "DATE_TIME" ? ' step="1"' : "";
-            control = `<input type="${inputType}"${inputStep} ${common} value="${defaultValue}">`;
+            const language = isDateType ? ' lang="en-CA"' : "";
+            control = `<input type="${inputType}"${inputStep}${language} ${common} value="${defaultValue}">`;
         }
         const children = field.children.map((child) => renderDynamicField(child, resolveChildFieldKey(child, field, fieldKey), values)).join("");
         return `<div class="dynamic-field" style="--depth:${field.depth}"><label>${label}${control}</label>${children}</div>`;
