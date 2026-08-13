@@ -15,8 +15,10 @@ class InfraScheduleProperties {
     var dispatchBatchSize: Int = 100
     /** 单轮扫描最多领取的页数，避免到期任务过多时长期占用调度线程。 */
     var dispatchMaxPages: Int = 10
-    /** 用于编排任务执行的工作线程数量。 */
+    /** 用于编排任务执行的最大并发工作线程数。 */
     var workerThreads: Int = 8
+    /** 工作线程已满时允许在内存中等待的触发数量，超过后由 Outbox 留待后续重试。 */
+    var workerQueueCapacity: Int = 1_000
     /** 当前调度节点唯一 ID；集群部署时应配置为稳定且互不重复的值。 */
     var schedulerId: String = "schedule-${UUID.randomUUID()}"
     /**
@@ -26,6 +28,20 @@ class InfraScheduleProperties {
     var staleRunningLogMillis: Long = 600_000
     /** 单轮最多回收的僵尸运行中日志条数。 */
     var staleRunningLogBatchSize: Int = 100
+    /** 任务未显式配置超时时的系统级最大执行时间（毫秒），0 表示不额外限制。 */
+    var maxExecutionMillis: Long = 3_600_000
+    /** COVER_EARLY 等待旧执行线程确认退出的最长时间（毫秒）。 */
+    var coverEarlyWaitMillis: Long = 5_000
+    /** 已结束执行日志保留时间（毫秒），0 表示不自动清理。 */
+    var executionLogRetentionMillis: Long = 2_592_000_000L
+    /** 单轮历史日志清理条数。 */
+    var executionLogCleanupBatchSize: Int = 1_000
+    /** 已投递或已取消 Outbox 记录保留时间（毫秒），0 表示不自动清理。 */
+    var triggerOutboxRetentionMillis: Long = 2_592_000_000L
+    /** 单轮已完成 Outbox 清理条数。 */
+    var triggerOutboxCleanupBatchSize: Int = 1_000
+    /** 调度扫描、僵尸回收与清理使用的定时线程数。 */
+    var schedulerThreads: Int = 4
     /** 本地执行器注册和健康检查配置。 */
     var executor: ExecutorProperties = ExecutorProperties()
     /** 管理 REST 接口暴露配置。 */
@@ -55,6 +71,8 @@ class InfraScheduleProperties {
         var heartbeatIntervalMillis: Long = 10_000
         /** 超过该时间未上报的执行器会被视为离线。 */
         var heartbeatTimeoutMillis: Long = 30_000
+        /** 执行器在调度中心暂不可用时，内存中最多缓冲的业务日志行数。 */
+        var handleLogMaxBufferedLines: Int = 20_000
     }
 
     /** 管理端接口安全开关。 */

@@ -92,6 +92,18 @@ enum class ExecutionStatus {
     fun isActive(): Boolean = this == QUEUED || this == RUNNING
 }
 
+/** 调度触发 Outbox 的投递状态。 */
+enum class TriggerOutboxStatus {
+    /** 已在领取任务的事务中写入，等待调度节点投递。 */
+    PENDING,
+    /** 某调度节点正在投递，租约超时后可由其他节点接管。 */
+    PROCESSING,
+    /** 已提交给本节点的执行工作线程；执行审计日志另行记录最终结果。 */
+    DISPATCHED,
+    /** 对应任务已删除或被禁用，不再投递。 */
+    CANCELLED
+}
+
 /** 执行器在调度中心中的可用状态。 */
 enum class ExecutorStatus {
     /** 执行器可参与任务路由和执行。 */
@@ -212,7 +224,12 @@ data class JobExecutionContext(
     /** 对应执行日志主键；执行器按此 ID 跟踪并支持远程终止。 */
     val logId: Long? = null,
     /** 阻塞策略；由执行器 JobThread 解释，默认单机串行。 */
-    val blockStrategy: BlockStrategy = BlockStrategy.SERIAL
+    val blockStrategy: BlockStrategy = BlockStrategy.SERIAL,
+    /**
+     * 调度中心允许本次调用持续的最长时间（毫秒）。
+     * 执行器 HTTP 客户端据此设置不短于该值的响应超时，避免网络层先于任务超时中断调用。
+     */
+    val executionTimeoutMillis: Long = 0
 )
 
 /** 任务处理器返回给调度器的执行结果。 */
@@ -296,6 +313,34 @@ data class JobExecutionLog(
     val targetAddress: String? = null,
     /** 本次实际执行耗时（毫秒）。 */
     val durationMillis: Long? = null
+)
+
+/**
+ * 可靠触发 Outbox 记录。
+ *
+ * 它与任务下次触发时间在同一数据库事务中写入；调度节点重启后，过期租约会让其他节点重新领取。
+ */
+data class ScheduleTriggerOutbox(
+    /** 数据库自增主键。 */
+    val id: Long = 0,
+    /** 对应任务主键。 */
+    val jobId: Long,
+    /** 本次计划触发时间。 */
+    val triggerTime: Long,
+    /** 当前投递状态。 */
+    val status: TriggerOutboxStatus = TriggerOutboxStatus.PENDING,
+    /** 当前投递租约持有调度节点。 */
+    val claimOwner: String? = null,
+    /** 当前投递租约失效时间。 */
+    val claimUntil: Long? = null,
+    /** 已尝试投递次数。 */
+    val attemptCount: Int = 0,
+    /** 最近一次投递失败原因。 */
+    val lastError: String? = null,
+    /** 创建时间。 */
+    val createTime: Long,
+    /** 最近一次状态更新时间。 */
+    val updateTime: Long
 )
 
 /** 执行器上报的存活信息。 */

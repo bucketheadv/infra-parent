@@ -17,14 +17,21 @@ import io.infra.structure.schedule.repository.RouteCursorRepository
 import io.infra.structure.schedule.repository.RouteNodeStatRepository
 import io.infra.structure.schedule.repository.ScheduleExecutionLogRepository
 import io.infra.structure.schedule.repository.ScheduleJobRepository
+import io.infra.structure.schedule.repository.ScheduleTriggerOutboxRepository
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.scheduling.annotation.EnableScheduling
+import org.springframework.scheduling.TaskScheduler
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 /**
  * 调度中心自动配置：任务扫描、管理 REST、远程执行器客户端。
@@ -42,12 +49,35 @@ class InfraScheduleAdminAutoConfiguration {
 
     @Bean(destroyMethod = "shutdown")
     @ConditionalOnMissingBean(name = ["infraScheduleWorkerExecutor"])
-    fun infraScheduleWorkerExecutor(): ExecutorService =
-        Executors.newVirtualThreadPerTaskExecutor()
+    fun infraScheduleWorkerExecutor(properties: InfraScheduleProperties): ExecutorService {
+        val threads = properties.workerThreads.coerceIn(1, 256)
+        return ThreadPoolExecutor(
+            threads,
+            threads,
+            0L,
+            TimeUnit.MILLISECONDS,
+            LinkedBlockingQueue(properties.workerQueueCapacity.coerceIn(1, 100_000)),
+            ThreadPoolExecutor.AbortPolicy()
+        )
+    }
 
     @Bean(destroyMethod = "shutdown")
     @ConditionalOnMissingBean(name = ["infraScheduleAttemptExecutor"])
     fun infraScheduleAttemptExecutor(): ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
+
+    /** Outbox 工作线程执行期间的短周期租约续约器。 */
+    @Bean(destroyMethod = "shutdown")
+    @ConditionalOnMissingBean(name = ["infraScheduleOutboxLeaseExecutor"])
+    fun infraScheduleOutboxLeaseExecutor(): ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
+
+    /** 为到期扫描、慢速执行器探活和历史清理提供隔离的有界定时线程池。 */
+    @Bean(destroyMethod = "shutdown")
+    @ConditionalOnMissingBean(name = ["taskScheduler"])
+    fun taskScheduler(properties: InfraScheduleProperties): TaskScheduler =
+        ThreadPoolTaskScheduler().apply {
+            poolSize = properties.schedulerThreads.coerceIn(3, 16)
+            setThreadNamePrefix("infra-schedule-timer-")
+        }
 
     @Bean
     @ConditionalOnMissingBean
@@ -75,13 +105,15 @@ class InfraScheduleAdminAutoConfiguration {
         clientFactory: ScheduleExecutorClientFactory,
         properties: InfraScheduleProperties,
         routeStatRepository: RouteNodeStatRepository,
-        routeCursorRepository: RouteCursorRepository
+        routeCursorRepository: RouteCursorRepository,
+        jobRepository: ScheduleJobRepository
     ) = ExecutorRegistry(
         heartbeatRepository,
         properties.executor.heartbeatTimeoutMillis,
         clientFactory,
         routeStatRepository,
-        routeCursorRepository
+        routeCursorRepository,
+        jobRepository::countByExecutorId
     )
 
     @Bean
@@ -89,15 +121,18 @@ class InfraScheduleAdminAutoConfiguration {
     fun scheduleService(
         jobRepository: ScheduleJobRepository,
         logRepository: ScheduleExecutionLogRepository,
+        triggerOutboxRepository: ScheduleTriggerOutboxRepository,
         executorRegistry: ExecutorRegistry,
         @Qualifier("infraScheduleWorkerExecutor") workerExecutor: ExecutorService,
         @Qualifier("infraScheduleAttemptExecutor") attemptExecutor: ExecutorService,
+        @Qualifier("infraScheduleOutboxLeaseExecutor") outboxLeaseExecutor: ScheduledExecutorService,
         taskTracker: ExecutorTaskTracker,
         cancelClient: HttpScheduleCancelClient,
         properties: InfraScheduleProperties
     ) = ScheduleService(
-        jobRepository, logRepository, executorRegistry, workerExecutor, attemptExecutor,
-        taskTracker, cancelClient, properties.claimLeaseMillis, properties.schedulerId
+        jobRepository, logRepository, triggerOutboxRepository, executorRegistry, workerExecutor, attemptExecutor,
+        taskTracker, cancelClient, properties.claimLeaseMillis, properties.schedulerId,
+        properties.maxExecutionMillis, outboxLeaseExecutor
     )
 
     @Bean

@@ -15,19 +15,25 @@ import io.infra.structure.schedule.model.JobExecutionLog
 import io.infra.structure.schedule.model.JobStatus
 import io.infra.structure.schedule.model.RouteStrategy
 import io.infra.structure.schedule.model.ScheduleJob
+import io.infra.structure.schedule.model.ScheduleTriggerOutbox
 import io.infra.structure.schedule.model.ScheduleType
+import io.infra.structure.schedule.model.TriggerOutboxStatus
 import io.infra.structure.schedule.admin.persistence.entity.ScheduleExecutionLogEntity
 import io.infra.structure.schedule.admin.persistence.entity.ScheduleJobEntity
+import io.infra.structure.schedule.admin.persistence.entity.ScheduleTriggerOutboxEntity
 import io.infra.structure.schedule.admin.persistence.mapper.ScheduleExecutionLogMapper
 import io.infra.structure.schedule.admin.persistence.mapper.ScheduleJobMapper
+import io.infra.structure.schedule.admin.persistence.mapper.ScheduleTriggerOutboxMapper
 import io.infra.structure.schedule.repository.ScheduleExecutionLogRepository
 import io.infra.structure.schedule.repository.ScheduleJobRepository
+import io.infra.structure.schedule.repository.ScheduleTriggerOutboxRepository
 import io.infra.structure.schedule.repository.StaleRunningLogRef
 import org.springframework.transaction.annotation.Transactional
 
 /** 基于 MyBatis-Flex 的任务仓储，领取操作通过条件更新提供跨节点互斥。 */
 open class FlexScheduleJobRepository(
-    private val jobMapper: ScheduleJobMapper
+    private val jobMapper: ScheduleJobMapper,
+    private val outboxMapper: ScheduleTriggerOutboxMapper
 ) : ScheduleJobRepository {
     override fun save(job: ScheduleJob): ScheduleJob {
         val entity = job.toEntity()
@@ -45,6 +51,8 @@ open class FlexScheduleJobRepository(
     override fun findAll(): List<ScheduleJob> = jobMapper.query {
         orderBy(ScheduleJobEntity::name.column, true)
     }.map(ScheduleJobEntity::toModel)
+
+    override fun countByExecutorId(executorId: Long): Long = jobMapper.countByExecutorId(executorId)
 
     override fun delete(id: Long): Boolean = jobMapper.deleteById(id) > 0
 
@@ -98,6 +106,21 @@ open class FlexScheduleJobRepository(
         ScheduleJobEntity::updateTime set updateTime
         where((ScheduleJobEntity::id eq id) and (ScheduleJobEntity::claimOwner eq owner))
     } > 0
+
+    @Transactional
+    override fun completeScheduleAndEnqueue(
+        id: Long,
+        owner: String,
+        lastTriggerAt: Long,
+        nextTriggerAt: Long,
+        outbox: ScheduleTriggerOutbox,
+        updateTime: Long
+    ): Boolean {
+        val advanced = completeSchedule(id, owner, lastTriggerAt, nextTriggerAt, updateTime)
+        if (!advanced) return false
+        outboxMapper.insert(outbox.toEntity())
+        return true
+    }
 }
 
 /** 基于 MyBatis-Flex 的执行日志仓储；支持运行中记录的终态回写。 */
@@ -117,6 +140,8 @@ class FlexScheduleExecutionLogRepository(
         require(log.id > 0) { "更新执行日志需要有效主键" }
         logMapper.update(log.toEntity(), false)
     }
+
+    override fun delete(id: Long): Boolean = logMapper.deleteById(id) > 0
 
     override fun updateIfRunning(log: JobExecutionLog): Boolean {
         require(log.id > 0) { "更新执行日志需要有效主键" }
@@ -162,8 +187,8 @@ class FlexScheduleExecutionLogRepository(
             )
         } > 0
 
-    override fun appendHandleLog(logId: Long, chunk: String): Boolean =
-        logMapper.appendHandleLog(logId, chunk) > 0
+    /** 追加执行器上报的业务日志。 */
+    override fun appendHandleLog(logId: Long, chunk: String): Boolean = logMapper.appendHandleLog(logId, chunk) > 0
 
     override fun findStaleRunningCandidates(staleBeforeTriggerTime: Long, limit: Int): List<StaleRunningLogRef> =
         logMapper.findStaleRunningCandidates(staleBeforeTriggerTime, limit.coerceAtLeast(1))
@@ -219,6 +244,9 @@ class FlexScheduleExecutionLogRepository(
         })
     }
 
+    override fun deleteFinishedBefore(finishTimeBefore: Long, limit: Int): Int =
+        logMapper.deleteFinishedBefore(finishTimeBefore, limit.coerceIn(1, 10_000))
+
     private fun buildLogQueryConditions(query: ExecutionLogQuery) = buildList {
         query.jobId?.let { add(ScheduleExecutionLogEntity::jobId eq it) }
         query.executorId?.let { add(ScheduleExecutionLogEntity::executorId eq it) }
@@ -226,6 +254,103 @@ class FlexScheduleExecutionLogRepository(
         query.triggerTimeFrom?.let { add(ScheduleExecutionLogEntity::triggerTime ge it) }
         query.triggerTimeTo?.let { add(ScheduleExecutionLogEntity::triggerTime le it) }
     }
+}
+
+/**
+ * MySQL Outbox 仓储。
+ *
+ * 类必须为 open：`claimPending` 使用 Spring 事务切面，需要由 CGLIB 创建代理。
+ */
+open class FlexScheduleTriggerOutboxRepository(
+    private val outboxMapper: ScheduleTriggerOutboxMapper
+) : ScheduleTriggerOutboxRepository {
+    override fun enqueue(outbox: ScheduleTriggerOutbox): ScheduleTriggerOutbox {
+        val entity = outbox.toEntity()
+        outboxMapper.insert(entity)
+        return entity.toModel()
+    }
+
+    @Transactional
+    override fun claimPending(now: Long, limit: Int, leaseMillis: Long, owner: String): List<ScheduleTriggerOutbox> {
+        val candidates = outboxMapper.lockPendingPage(now, limit.coerceIn(1, 1_000))
+        return candidates.mapNotNull { candidate ->
+            val claimed = update<ScheduleTriggerOutboxEntity> {
+                ScheduleTriggerOutboxEntity::status set TriggerOutboxStatus.PROCESSING.name
+                ScheduleTriggerOutboxEntity::claimOwner set owner
+                ScheduleTriggerOutboxEntity::claimUntil set now + leaseMillis
+                ScheduleTriggerOutboxEntity::attemptCount set candidate.attemptCount + 1
+                ScheduleTriggerOutboxEntity::updateTime set now
+                where(
+                    (ScheduleTriggerOutboxEntity::id eq candidate.id) and
+                        ((ScheduleTriggerOutboxEntity::status eq TriggerOutboxStatus.PENDING.name)
+                            .or(
+                                (ScheduleTriggerOutboxEntity::status eq TriggerOutboxStatus.PROCESSING.name) and
+                                    (ScheduleTriggerOutboxEntity::claimUntil le now)
+                            ))
+                )
+            } > 0
+            if (claimed) candidate.toModel().copy(
+                status = TriggerOutboxStatus.PROCESSING,
+                claimOwner = owner,
+                claimUntil = now + leaseMillis,
+                attemptCount = candidate.attemptCount + 1,
+                updateTime = now
+            ) else null
+        }
+    }
+
+    /** 仅在工作线程完成本次处理后确认投递，避免接收任务后进程崩溃造成静默丢失。 */
+    override fun markDispatched(id: Long, owner: String, now: Long): Boolean = update<ScheduleTriggerOutboxEntity> {
+        ScheduleTriggerOutboxEntity::status set TriggerOutboxStatus.DISPATCHED.name
+        ScheduleTriggerOutboxEntity::claimOwner set null
+        ScheduleTriggerOutboxEntity::claimUntil set null
+        ScheduleTriggerOutboxEntity::lastError set null
+        ScheduleTriggerOutboxEntity::updateTime set now
+        where(
+            (ScheduleTriggerOutboxEntity::id eq id) and
+                (ScheduleTriggerOutboxEntity::status eq TriggerOutboxStatus.PROCESSING.name) and
+                (ScheduleTriggerOutboxEntity::claimOwner eq owner)
+        )
+    } > 0
+
+    override fun renewClaim(id: Long, owner: String, claimUntil: Long, now: Long): Boolean =
+        update<ScheduleTriggerOutboxEntity> {
+            ScheduleTriggerOutboxEntity::claimUntil set claimUntil
+            ScheduleTriggerOutboxEntity::updateTime set now
+            where(
+                (ScheduleTriggerOutboxEntity::id eq id) and
+                    (ScheduleTriggerOutboxEntity::status eq TriggerOutboxStatus.PROCESSING.name) and
+                    (ScheduleTriggerOutboxEntity::claimOwner eq owner)
+            )
+        } > 0
+
+    override fun releaseForRetry(id: Long, owner: String, error: String, now: Long): Boolean = update<ScheduleTriggerOutboxEntity> {
+        ScheduleTriggerOutboxEntity::status set TriggerOutboxStatus.PENDING.name
+        ScheduleTriggerOutboxEntity::claimOwner set null
+        ScheduleTriggerOutboxEntity::claimUntil set null
+        ScheduleTriggerOutboxEntity::lastError set error.take(1_000)
+        ScheduleTriggerOutboxEntity::updateTime set now
+        where(
+            (ScheduleTriggerOutboxEntity::id eq id) and
+                (ScheduleTriggerOutboxEntity::status eq TriggerOutboxStatus.PROCESSING.name) and
+                (ScheduleTriggerOutboxEntity::claimOwner eq owner)
+        )
+    } > 0
+
+    override fun cancelPendingByJobId(jobId: Long, now: Long): Int = update<ScheduleTriggerOutboxEntity> {
+        ScheduleTriggerOutboxEntity::status set TriggerOutboxStatus.CANCELLED.name
+        ScheduleTriggerOutboxEntity::claimOwner set null
+        ScheduleTriggerOutboxEntity::claimUntil set null
+        ScheduleTriggerOutboxEntity::updateTime set now
+        where(
+            (ScheduleTriggerOutboxEntity::jobId eq jobId) and
+                ((ScheduleTriggerOutboxEntity::status eq TriggerOutboxStatus.PENDING.name)
+                    .or(ScheduleTriggerOutboxEntity::status eq TriggerOutboxStatus.PROCESSING.name))
+        )
+    }
+
+    override fun deleteCompletedBefore(updateTimeBefore: Long, limit: Int): Int =
+        outboxMapper.deleteCompletedBefore(updateTimeBefore, limit.coerceIn(1, 10_000))
 }
 
 private fun ScheduleJob.toEntity() = ScheduleJobEntity(
@@ -258,4 +383,16 @@ private fun ScheduleExecutionLogEntity.toModel() = JobExecutionLog(
     id = id ?: 0, jobId = jobId, executorId = executorId, triggerTime = triggerTime, finishTime = finishTime,
     status = ExecutionStatus.valueOf(status), retryCount = retryCount, message = message, handleLog = handleLog,
     targetAddress = targetAddress, durationMillis = durationMillis
+)
+
+private fun ScheduleTriggerOutbox.toEntity() = ScheduleTriggerOutboxEntity(
+    id = id.takeIf { it > 0 }, jobId = jobId, triggerTime = triggerTime, status = status.name,
+    claimOwner = claimOwner, claimUntil = claimUntil, attemptCount = attemptCount, lastError = lastError,
+    createTime = createTime, updateTime = updateTime
+)
+
+private fun ScheduleTriggerOutboxEntity.toModel() = ScheduleTriggerOutbox(
+    id = id ?: 0, jobId = jobId, triggerTime = triggerTime, status = TriggerOutboxStatus.valueOf(status),
+    claimOwner = claimOwner, claimUntil = claimUntil, attemptCount = attemptCount, lastError = lastError,
+    createTime = createTime, updateTime = updateTime
 )

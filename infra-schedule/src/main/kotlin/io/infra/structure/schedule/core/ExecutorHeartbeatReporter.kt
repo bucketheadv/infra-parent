@@ -11,31 +11,29 @@ import java.time.Duration
 
 /**
  * 将当前执行器存活状态定时上报给调度中心，并在进程关闭时主动上报离线。
- * 配置了 [InfraScheduleProperties.Executor.adminAddress] 时走 HTTP；否则仅操作本地注册表。
+ * 心跳和离线状态只通过 HTTP 上报 MySQL 调度中心，不在执行器进程内保存调度状态。
  */
 class ExecutorHeartbeatReporter(
-    private val properties: InfraScheduleProperties,
-    private val executorRegistry: ExecutorRegistry
+    private val properties: InfraScheduleProperties
 ) : DisposableBean {
     private val logger = LoggerFactory.getLogger(javaClass)
-    private val adminBaseUrl = properties.executor.adminAddress?.takeIf { it.isNotBlank() }?.removeSuffix("/")
-    private val client = adminBaseUrl?.let { baseUrl ->
-        RestClient.builder()
-            .baseUrl(baseUrl)
-            .requestFactory(SimpleClientHttpRequestFactory().apply {
-                setConnectTimeout(Duration.ofMillis(properties.executor.connectTimeoutMillis))
-                setReadTimeout(Duration.ofMillis(properties.executor.readTimeoutMillis))
-            })
-            .build()
-    }
+    private val adminBaseUrl = requireNotNull(properties.executor.adminAddress?.takeIf { it.isNotBlank() }) {
+        "执行器必须配置 infra.schedule.executor.admin-address"
+    }.removeSuffix("/")
+    private val client = RestClient.builder()
+        .baseUrl(adminBaseUrl)
+        .requestFactory(SimpleClientHttpRequestFactory().apply {
+            setConnectTimeout(Duration.ofMillis(properties.executor.connectTimeoutMillis))
+            setReadTimeout(Duration.ofMillis(properties.executor.readTimeoutMillis))
+        })
+        .build()
 
     /** 发送当前执行器分组、展示名称和服务地址；网络失败仅影响本次心跳。 */
     @Scheduled(fixedDelayString = $$"${infra.schedule.executor.heartbeat-interval-millis:10000}")
     fun report() {
-        val remote = client ?: return
         val token = properties.executor.accessToken?.takeIf { it.isNotBlank() }
         runCatching {
-            val request = remote.post()
+            val request = client.post()
                 .uri(ScheduleWebPaths.EXECUTOR_HEARTBEAT)
                 .body(
                     ExecutorPresenceReport(
@@ -54,14 +52,9 @@ class ExecutorHeartbeatReporter(
         if (!properties.executor.enabled) return
         val group = properties.executor.group
         val address = properties.executor.address
-        val remote = client
-        if (remote == null) {
-            runCatching { executorRegistry.markOffline(group, address) }
-            return
-        }
         val token = properties.executor.accessToken?.takeIf { it.isNotBlank() }
         runCatching {
-            val request = remote.post()
+            val request = client.post()
                 .uri(ScheduleWebPaths.EXECUTOR_OFFLINE)
                 .body(ExecutorOfflineReport(executorGroup = group, address = address))
             if (properties.executor.authEnabled) request.header(SCHEDULE_ACCESS_TOKEN_HEADER, token ?: "")

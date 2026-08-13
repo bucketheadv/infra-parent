@@ -4,7 +4,6 @@ import io.infra.structure.schedule.api.ScheduleLogAppender
 import io.infra.structure.schedule.model.ExecutionStatus
 import io.infra.structure.schedule.model.JobExecutionResult
 import io.infra.structure.schedule.properties.InfraScheduleProperties
-import io.infra.structure.schedule.repository.ScheduleExecutionLogRepository
 import io.infra.structure.schedule.web.ScheduleWebPaths
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.DisposableBean
@@ -14,44 +13,72 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.web.client.RestClient
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 缓冲 [io.infra.structure.schedule.api.ScheduleLogHelper] 写出的业务日志，并异步上报。
  *
- * - 配置了 `adminAddress` 时 HTTP POST 到调度中心；
- * - 否则直接写入本地 [ScheduleExecutionLogRepository]（同进程调度+执行场景）。
+ * 所有执行状态和业务日志均通过 HTTP 上报调度中心，由调度中心 MySQL 统一持久化。
  */
 class ScheduleLogReporter(
-    private val properties: InfraScheduleProperties,
-    private val localRepository: ScheduleExecutionLogRepository
+    private val properties: InfraScheduleProperties
 ) : ScheduleLogAppender, DisposableBean {
     private val logger = LoggerFactory.getLogger(javaClass)
-    private val buffers = ConcurrentHashMap<Long, ConcurrentLinkedQueue<String>>()
+    /** 每个日志 ID 独占一个队列锁；空队列会连同锁一起移除，避免长期执行后泄漏。 */
+    private val buffers = ConcurrentHashMap<Long, LogBuffer>()
     private val bufferedLines = AtomicInteger()
-    private val adminBaseUrl = properties.executor.adminAddress?.takeIf { it.isNotBlank() }?.removeSuffix("/")
-    private val client = adminBaseUrl?.let { baseUrl ->
-        RestClient.builder()
-            .baseUrl(baseUrl)
+    private val maxBufferedLines = properties.executor.handleLogMaxBufferedLines.coerceIn(1_000, 1_000_000)
+    private val adminBaseUrl = requireNotNull(properties.executor.adminAddress?.takeIf { it.isNotBlank() }) {
+        "执行器必须配置 infra.schedule.executor.admin-address，调度状态统一由 MySQL 调度中心维护"
+    }.removeSuffix("/")
+    private val client = RestClient.builder()
+            .baseUrl(adminBaseUrl)
             .requestFactory(SimpleClientHttpRequestFactory().apply {
                 setConnectTimeout(Duration.ofMillis(properties.executor.connectTimeoutMillis))
                 setReadTimeout(Duration.ofMillis(minOf(properties.executor.readTimeoutMillis, 5_000L)))
             })
             .build()
-    }
 
     override fun offer(logId: Long, line: String) {
-        buffers.computeIfAbsent(logId) { ConcurrentLinkedQueue() }.add(line)
-        if (bufferedLines.incrementAndGet() >= BATCH_SIZE) {
+        if (!reserveLine()) {
+            logger.warn("执行过程日志缓冲已达上限，丢弃新日志行: logId={}, max={}", logId, maxBufferedLines)
+            return
+        }
+        // 追加与 flush 共用同一对象锁：flush 删除空缓冲期间，追加方会检测映射是否仍有效并重试，
+        // 不会把新批次写进已从 Map 移除的旧队列。
+        while (true) {
+            val buffer = buffers.computeIfAbsent(logId) { LogBuffer() }
+            var accepted = false
+            synchronized(buffer) {
+                if (buffers[logId] === buffer) {
+                    buffer.queue.addLast(LogBatch(lines = listOf(line)))
+                    accepted = true
+                }
+            }
+            if (accepted) break
+        }
+        if (bufferedLines.get() >= BATCH_SIZE) {
             flushAll()
         }
     }
 
     override fun flush(logId: Long) {
-        val lines = drain(logId)
-        if (lines.isEmpty()) return
-        publish(logId, lines)
+        val buffer = buffers[logId] ?: return
+        synchronized(buffer) {
+            // 此缓冲可能刚被上一轮 flush 清空并从 Map 移除；不能处理过期对象。
+            if (buffers[logId] !== buffer) return
+            while (true) {
+                val batch = buffer.queue.pollFirst() ?: break
+                bufferedLines.addAndGet(-batch.lines.size)
+                if (!publish(logId, batch)) {
+                    buffer.queue.addFirst(batch)
+                    bufferedLines.addAndGet(batch.lines.size)
+                    return
+                }
+            }
+            buffers.remove(logId, buffer)
+        }
     }
 
     /** 定时刷出缓冲，降低对调度中心的请求频率。 */
@@ -63,23 +90,14 @@ class ScheduleLogReporter(
     /** 通知调度中心：该日志已离开队列、开始执行 handler（QUEUED → RUNNING）。 */
     fun markStarted(logId: Long, message: String = "执行中") {
         if (logId <= 0) return
-        val remote = client
-        if (remote != null) {
-            runCatching {
-                postJson(
-                    remote,
-                    ScheduleWebPaths.EXECUTOR_LOG_STARTED.replace("{id}", logId.toString()),
-                    LogStartedRequest(message = message)
-                )
-            }.onFailure { exception ->
-                logger.warn("上报执行开始失败: logId={}, error={}", logId, exception.message)
-            }
-            return
-        }
         runCatching {
-            localRepository.markRunningIfQueued(logId, message)
+            postJson(
+                client,
+                ScheduleWebPaths.EXECUTOR_LOG_STARTED.replace("{id}", logId.toString()),
+                LogStartedRequest(message = message)
+            )
         }.onFailure { exception ->
-            logger.warn("本地标记执行开始失败: logId={}, error={}", logId, exception.message)
+            logger.warn("上报执行开始失败: logId={}, error={}", logId, exception.message)
         }
     }
 
@@ -96,34 +114,11 @@ class ScheduleLogReporter(
             cancelled = result.cancelled,
             durationMillis = durationMillis
         )
-        val remote = client
-        if (remote != null) {
-            runCatching {
-                postJson(remote, ScheduleWebPaths.EXECUTOR_LOG_FINISH.replace("{id}", logId.toString()), request)
-            }.onFailure { exception ->
-                logger.warn("上报执行结束失败: logId={}, error={}", logId, exception.message)
-            }
-            return
-        }
         runCatching {
-            applyLocalFinish(logId, request)
+            postJson(client, ScheduleWebPaths.EXECUTOR_LOG_FINISH.replace("{id}", logId.toString()), request)
         }.onFailure { exception ->
-            logger.warn("本地标记执行结束失败: logId={}, error={}", logId, exception.message)
+            logger.warn("上报执行结束失败: logId={}, error={}", logId, exception.message)
         }
-    }
-
-    private fun applyLocalFinish(logId: Long, request: LogFinishRequest) {
-        val current = localRepository.findById(logId) ?: return
-        if (!current.status.isActive()) return
-        val status = finishStatus(request)
-        localRepository.updateIfRunning(
-            current.copy(
-                finishTime = System.currentTimeMillis(),
-                status = status,
-                message = finishMessage(request),
-                durationMillis = request.durationMillis
-            )
-        )
     }
 
     private fun postJson(remote: RestClient, path: String, body: Any) {
@@ -146,6 +141,7 @@ class ScheduleLogReporter(
     companion object {
         private const val BATCH_SIZE = 32
 
+        /** 将执行器回调结果映射为持久化的日志终态。 */
         fun finishStatus(request: LogFinishRequest): ExecutionStatus = when {
             request.discarded -> ExecutionStatus.SKIPPED
             request.cancelled -> ExecutionStatus.CANCELLED
@@ -153,55 +149,49 @@ class ScheduleLogReporter(
             else -> ExecutionStatus.FAILED
         }
 
+        /** 生成管理端可直接展示的执行结果说明。 */
         fun finishMessage(request: LogFinishRequest): String = when {
             request.discarded -> request.message ?: "丢弃后续调度"
             request.cancelled -> request.message ?: "任务执行被取消"
-            request.success -> {
-                val value = request.message?.takeIf { it.isNotBlank() }
-                if (value == null) "执行成功" else "执行成功：$value"
-            }
+            request.success -> request.message?.takeIf { it.isNotBlank() }?.let { "执行成功：$it" } ?: "执行成功"
             else -> request.message ?: "任务处理器返回失败"
         }
     }
 
-    private fun drain(logId: Long): List<String> {
-        val queue = buffers[logId] ?: return emptyList()
-        val lines = ArrayList<String>()
-        while (true) {
-            val line = queue.poll() ?: break
-            lines += line
-            bufferedLines.decrementAndGet()
+    /** 返回 false 时调用方把失败批次放回队首，避免日志上报乱序。 */
+    private fun publish(logId: Long, batch: LogBatch): Boolean {
+        if (batch.lines.isEmpty()) return true
+        return runCatching {
+            val token = properties.executor.accessToken?.takeIf { it.isNotBlank() }
+            val request = client.post()
+                .uri(ScheduleWebPaths.EXECUTOR_LOG_HANDLE_APPEND.replace("{id}", logId.toString()))
+                .body(HandleLogAppendRequest(lines = batch.lines))
+            if (properties.executor.authEnabled) {
+                request.header(SCHEDULE_ACCESS_TOKEN_HEADER, token ?: "")
+            }
+            request.retrieve().toBodilessEntity()
+            true
+        }.getOrElse { exception ->
+            logger.warn("上报业务执行日志失败: logId={}, error={}", logId, exception.message)
+            false
         }
-        if (queue.isEmpty()) {
-            buffers.remove(logId, queue)
-        }
-        return lines
     }
 
-    private fun publish(logId: Long, lines: List<String>) {
-        val chunk = lines.joinToString(separator = "")
-        if (chunk.isEmpty()) return
-        val remote = client
-        if (remote != null) {
-            runCatching {
-                val token = properties.executor.accessToken?.takeIf { it.isNotBlank() }
-                val request = remote.post()
-                    .uri(ScheduleWebPaths.EXECUTOR_LOG_HANDLE_APPEND.replace("{id}", logId.toString()))
-                    .body(HandleLogAppendRequest(lines = lines))
-                if (properties.executor.authEnabled) {
-                    request.header(SCHEDULE_ACCESS_TOKEN_HEADER, token ?: "")
-                }
-                request.retrieve().toBodilessEntity()
-            }.onFailure { exception ->
-                logger.warn("上报业务执行日志失败: logId={}, error={}", logId, exception.message)
-            }
-            return
+    /** 原子预占一行缓冲容量，避免多个 Handler 并发越过上限。 */
+    private fun reserveLine(): Boolean {
+        while (true) {
+            val current = bufferedLines.get()
+            if (current >= maxBufferedLines) return false
+            if (bufferedLines.compareAndSet(current, current + 1)) return true
         }
-        runCatching {
-            localRepository.appendHandleLog(logId, chunk)
-        }.onFailure { exception ->
-            logger.warn("本地写入业务执行日志失败: logId={}, error={}", logId, exception.message)
-        }
+    }
+
+    /** 同一日志的一个待上报批次。 */
+    private data class LogBatch(val lines: List<String>)
+
+    /** 同一执行日志的待上报批次队列及其互斥锁。 */
+    private class LogBuffer {
+        val queue = ConcurrentLinkedDeque<LogBatch>()
     }
 }
 

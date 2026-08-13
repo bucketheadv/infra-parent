@@ -18,6 +18,15 @@ infra:
     dispatch-batch-size: 100
     dispatch-max-pages: 10
     claim-lease-millis: 60000
+    worker-threads: 8
+    worker-queue-capacity: 1000
+    max-execution-millis: 3600000
+    cover-early-wait-millis: 5000
+    execution-log-retention-millis: 2592000000
+    execution-log-cleanup-batch-size: 1000
+    trigger-outbox-retention-millis: 2592000000
+    trigger-outbox-cleanup-batch-size: 1000
+    scheduler-threads: 4
     executor:
       enabled: false
       auth-enabled: ${SCHEDULE_EXECUTOR_AUTH_ENABLED:false}

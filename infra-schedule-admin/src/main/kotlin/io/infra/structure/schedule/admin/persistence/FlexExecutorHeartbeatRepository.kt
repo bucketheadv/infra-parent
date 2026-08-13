@@ -26,22 +26,10 @@ class FlexExecutorHeartbeatRepository(
 ) : ExecutorHeartbeatRepository {
     override fun heartbeat(heartbeat: ExecutorHeartbeat) {
         val now = heartbeat.lastHeartbeatTime.takeIf { it > 0 } ?: System.currentTimeMillis()
-        val existing = findExecutorEntityByGroup(heartbeat.executorGroup)
-        val addressMode = existing?.addressMode ?: ExecutorAddressMode.AUTO_REGISTER.name
-        val entity = ScheduleExecutorEntity(
-            id = existing?.id,
-            executorGroup = heartbeat.executorGroup,
-            executorName = existing?.executorName?.takeIf { it.isNotBlank() } ?: heartbeat.executorName,
-            address = if (addressMode == ExecutorAddressMode.MANUAL.name) existing?.address else existing?.address,
-            addressMode = addressMode,
-            status = existing?.status ?: ExecutorStatus.ENABLED.name,
-            lastHeartbeatTime = now,
-            createTime = existing?.createTime ?: now,
-            updateTime = now
-        )
-        if (existing == null) executorMapper.insert(entity) else executorMapper.update(entity)
-        val executorId = entity.id ?: findExecutorEntityByGroup(heartbeat.executorGroup)?.id ?: return
-        if (addressMode == ExecutorAddressMode.AUTO_REGISTER.name) {
+        executorMapper.upsertHeartbeat(heartbeat.executorGroup, heartbeat.executorName, now)
+        val existing = findExecutorEntityByGroup(heartbeat.executorGroup) ?: return
+        val executorId = existing.id ?: return
+        if (existing.addressMode == ExecutorAddressMode.AUTO_REGISTER.name) {
             val address = heartbeat.address?.trim()?.takeIf { it.isNotBlank() }
             if (address != null) upsertRegistry(executorId, address, now)
             refreshAutoAddresses(executorId, now)
@@ -96,7 +84,8 @@ class FlexExecutorHeartbeatRepository(
             where(
                 (ScheduleExecutorEntity::executorGroup eq executorGroup) and
                     (ScheduleExecutorEntity::status eq ExecutorStatus.ENABLED.name) and
-                    (ScheduleExecutorEntity::lastHeartbeatTime ge now - timeoutMillis)
+                    ((ScheduleExecutorEntity::addressMode eq ExecutorAddressMode.MANUAL.name)
+                        .or(ScheduleExecutorEntity::lastHeartbeatTime ge now - timeoutMillis))
             )
         }.map(ScheduleExecutorEntity::toModel)
 
@@ -150,35 +139,14 @@ class FlexExecutorHeartbeatRepository(
         }
     }
 
-    override fun delete(id: Long): Boolean {
-        clearRegistry(id)
-        return executorMapper.deleteById(id) > 0
+    override fun deleteIfUnreferenced(id: Long): Boolean {
+        val deleted = executorMapper.deleteIfUnreferenced(id) > 0
+        if (deleted) clearRegistry(id)
+        return deleted
     }
 
     private fun upsertRegistry(executorId: Long, address: String, now: Long) {
-        val existing = registryMapper.query {
-            where(
-                (ScheduleExecutorRegistryEntity::executorId eq executorId) and
-                    (ScheduleExecutorRegistryEntity::address eq address)
-            )
-        }.firstOrNull()
-        if (existing == null) {
-            registryMapper.insert(
-                ScheduleExecutorRegistryEntity(
-                    executorId = executorId,
-                    address = address,
-                    lastHeartbeatTime = now,
-                    createTime = now,
-                    updateTime = now
-                )
-            )
-        } else {
-            update<ScheduleExecutorRegistryEntity> {
-                ScheduleExecutorRegistryEntity::lastHeartbeatTime set now
-                ScheduleExecutorRegistryEntity::updateTime set now
-                where(ScheduleExecutorRegistryEntity::id eq existing.id)
-            }
-        }
+        registryMapper.upsertRegistry(executorId, address, now)
     }
 
     private fun refreshAutoAddresses(

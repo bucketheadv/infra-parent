@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class ExecutorTaskTracker(
     private val handlerRegistry: HandlerRegistry,
+    private val coverEarlyWaitMillis: Long = 5_000L,
     private val onExecutionStarted: (JobExecutionContext) -> Unit = {},
     private val onExecutionFinished: (JobExecutionContext, JobExecutionResult, Long) -> Unit = { _, _, _ -> }
 ) {
@@ -52,7 +53,9 @@ class ExecutorTaskTracker(
                             jobId,
                             context.logId
                         )
-                        jobThread.stopForCover(reason)
+                        if (!jobThread.stopForCover(reason, coverEarlyWaitMillis)) {
+                            return JobExecutionResult.failure("COVER_EARLY 等待旧任务退出超时，拒绝并发执行")
+                        }
                         jobThreads.remove(jobId, jobThread)
                         jobThread = null
                     }

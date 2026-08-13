@@ -32,7 +32,9 @@ class ExecutorRegistry(
     private val heartbeatTimeoutMillis: Long,
     private val clientFactory: ScheduleExecutorClientFactory? = null,
     private val routeStatRepository: RouteNodeStatRepository,
-    private val routeCursorRepository: RouteCursorRepository
+    private val routeCursorRepository: RouteCursorRepository,
+    /** 查询执行器是否仍被任务引用，防止管理端删除后留下不可路由任务。 */
+    private val jobReferenceCounter: (Long) -> Long = { 0L }
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val executors = ConcurrentHashMap<String, ScheduleExecutor>()
@@ -153,8 +155,13 @@ class ExecutorRegistry(
     /** 删除执行器登记配置。 */
     fun deleteExecutor(id: Long): Boolean {
         val executor = heartbeatRepository.findById(id) ?: return false
+        check(jobReferenceCounter(id) == 0L) { "执行器仍被任务引用，不能删除: $id" }
+        // 持久化层还会以 SQL 条件再次校验，覆盖“检查后恰有任务新建”的并发窗口。
+        if (!heartbeatRepository.deleteIfUnreferenced(id)) {
+            throw IllegalStateException("执行器仍被任务引用，不能删除: $id")
+        }
         executors.remove(executor.executorGroup)
-        return heartbeatRepository.delete(id)
+        return true
     }
 
     /** 设置执行器启停状态。 */

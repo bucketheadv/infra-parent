@@ -25,6 +25,7 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -202,16 +203,24 @@ class ScheduleAdminController(
     fun allExecutors(): List<ExecutorHeartbeat> = executorRegistry.registeredExecutors()
 
     @PostMapping(ScheduleWebPaths.EXECUTORS)
-    fun createExecutor(@Valid @RequestBody request: ScheduleExecutorRequest): ExecutorHeartbeat =
+    fun createExecutor(@Valid @RequestBody request: ScheduleExecutorRequest): ExecutorHeartbeat = try {
         executorRegistry.createExecutor(request.toDraft())
+    } catch (exception: IllegalArgumentException) {
+        throw ResponseStatusException(HttpStatus.CONFLICT, exception.message)
+    } catch (exception: DataIntegrityViolationException) {
+        throw ResponseStatusException(HttpStatus.CONFLICT, "执行器分组已存在: ${request.executorGroup}")
+    }
 
     @PutMapping(ScheduleWebPaths.EXECUTOR_BY_ID)
     fun updateExecutor(@PathVariable id: Long, @Valid @RequestBody request: ScheduleExecutorRequest): ExecutorHeartbeat =
         executorRegistry.updateExecutor(id, request.toDraft())
 
     @DeleteMapping(ScheduleWebPaths.EXECUTOR_BY_ID)
-    fun deleteExecutor(@PathVariable id: Long): ResponseEntity<Unit> =
+    fun deleteExecutor(@PathVariable id: Long): ResponseEntity<Unit> = try {
         if (executorRegistry.deleteExecutor(id)) ResponseEntity.noContent().build() else ResponseEntity.notFound().build()
+    } catch (exception: IllegalStateException) {
+        throw ResponseStatusException(HttpStatus.CONFLICT, exception.message)
+    }
 
     @GetMapping(ScheduleWebPaths.EXECUTOR_NODES)
     fun executorNodes(@PathVariable group: String) = executorRegistry.registeredExecutors(group)

@@ -17,8 +17,10 @@ import io.infra.structure.schedule.model.JobStatus
 import io.infra.structure.schedule.model.RouteStrategy
 import io.infra.structure.schedule.model.ScheduleJob
 import io.infra.structure.schedule.model.ScheduleJobDraft
+import io.infra.structure.schedule.model.ScheduleTriggerOutbox
 import io.infra.structure.schedule.repository.ScheduleExecutionLogRepository
 import io.infra.structure.schedule.repository.ScheduleJobRepository
+import io.infra.structure.schedule.repository.ScheduleTriggerOutboxRepository
 import io.infra.structure.schedule.repository.StaleRunningLogRef
 import org.slf4j.LoggerFactory
 import java.util.concurrent.CancellationException
@@ -27,18 +29,23 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
 
 /** 编排任务定义、分布式领取、执行器分发、重试与下一次触发时间推进。 */
 class ScheduleService(
     private val jobRepository: ScheduleJobRepository,
     private val logRepository: ScheduleExecutionLogRepository,
+    private val triggerOutboxRepository: ScheduleTriggerOutboxRepository,
     private val executorRegistry: ExecutorRegistry,
     private val workerExecutor: ExecutorService,
     private val attemptExecutor: ExecutorService,
     private val taskTracker: ExecutorTaskTracker,
     private val cancelClient: HttpScheduleCancelClient,
     private val claimLeaseMillis: Long,
-    private val schedulerId: String
+    private val schedulerId: String,
+    private val maxExecutionMillis: Long,
+    private val outboxLeaseExecutor: ScheduledExecutorService
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     /** 调度侧等待执行器返回的 Future，按日志 ID 可中断。 */
@@ -70,6 +77,8 @@ class ScheduleService(
             )
         )
         jobRepository.clearClaim(id)
+        // 编辑后的待执行触发没有稳定的任务版本快照，必须撤销，避免按新配置执行旧触发。
+        triggerOutboxRepository.cancelPendingByJobId(id, now)
         return saved
     }
 
@@ -90,11 +99,37 @@ class ScheduleService(
         )
         val saved = jobRepository.save(updated)
         jobRepository.clearClaim(id)
+        if (status == JobStatus.DISABLED) {
+            triggerOutboxRepository.cancelPendingByJobId(id, now)
+        }
         return saved
     }
 
-    /** 删除持久化任务定义。 */
-    fun delete(id: Long): Boolean = jobRepository.delete(id)
+    /** 删除任务前取消未投递触发与活跃执行，避免删除后仍继续运行。 */
+    fun delete(id: Long): Boolean {
+        if (jobRepository.findById(id) == null) return false
+        val now = System.currentTimeMillis()
+        while (true) {
+            val activeLogs = logRepository.findActiveByJobId(id, 1_000)
+            if (activeLogs.isEmpty()) break
+            activeLogs.forEach { log ->
+                // 先用条件更新收口该日志，下一页查询不会反复取得相同的 1000 条记录。
+                // 仅更新成功的记录才向执行器发送取消，避免终态任务被误中断。
+                if (logRepository.updateIfRunning(log.copy(
+                        status = ExecutionStatus.CANCELLED,
+                        message = "任务已删除，执行已取消",
+                        finishTime = now
+                    ))
+                ) {
+                    attemptFutures.remove(log.id)?.cancel(true)
+                    killExecutorTask(log)
+                }
+            }
+            if (activeLogs.size < 1_000) break
+        }
+        triggerOutboxRepository.cancelPendingByJobId(id, now)
+        return jobRepository.delete(id)
+    }
 
     /** 返回管理端可见的全部任务。 */
     fun jobs(): List<ScheduleJob> = jobRepository.findAll()
@@ -157,11 +192,19 @@ class ScheduleService(
         return ScheduleCalculator.nextTriggerTimes(job, System.currentTimeMillis(), count.coerceIn(1, 100))
     }
 
-    /** 忽略任务的定时计划，立即异步提交一次手动执行（不推进 cron）。 */
+    /** 忽略任务的定时计划，写入可靠 Outbox 后立即异步执行（不推进 cron）。 */
     fun triggerNow(id: Long): Boolean {
         val job = requireJob(id)
-        reconcileActiveLogs(job.id)
-        submit(job, System.currentTimeMillis())
+        if (job.status != JobStatus.ENABLED) return false
+        val now = System.currentTimeMillis()
+        triggerOutboxRepository.enqueue(
+            ScheduleTriggerOutbox(
+                jobId = job.id,
+                triggerTime = now,
+                createTime = now,
+                updateTime = now
+            )
+        )
         return true
     }
 
@@ -259,15 +302,54 @@ class ScheduleService(
             val claimed = jobRepository.claimDueJobs(now, pageSize.coerceAtLeast(1), claimLeaseMillis, schedulerId)
             claimed.forEach { job ->
                 val triggerTime = job.nextTriggerAt ?: now
-                if (!completeSchedule(job, triggerTime)) {
+                if (!completeScheduleAndEnqueue(job, triggerTime)) {
                     logger.warn("推进调度进度失败（租约可能已丢失）: jobId={}", job.id)
                     return@forEach
                 }
-                reconcileActiveLogs(job.id)
-                submit(job, triggerTime)
             }
             if (claimed.size < pageSize) return
         }
+    }
+
+    /** 从可靠 Outbox 领取已提交触发并交给本节点工作线程。 */
+    fun dispatchTriggerOutbox(pageSize: Int, maxPages: Int) {
+        val now = System.currentTimeMillis()
+        repeat(maxPages.coerceAtLeast(1)) {
+            val claimed = triggerOutboxRepository.claimPending(now, pageSize.coerceIn(1, 1_000), claimLeaseMillis, schedulerId)
+            claimed.forEach { outbox ->
+                val job = jobRepository.findById(outbox.jobId)
+                if (job == null || job.status != JobStatus.ENABLED) {
+                    triggerOutboxRepository.cancelPendingByJobId(outbox.jobId, System.currentTimeMillis())
+                    return@forEach
+                }
+                if (submit(job, outbox)) {
+                    Unit
+                } else {
+                    triggerOutboxRepository.releaseForRetry(
+                        outbox.id, schedulerId, "调度工作线程拒绝执行", System.currentTimeMillis()
+                    )
+                }
+            }
+            if (claimed.size < pageSize) return
+        }
+    }
+
+    /** 分批清理超过保留期且已终态的日志。 */
+    fun cleanupFinishedLogs(retentionMillis: Long, batchSize: Int): Int {
+        if (retentionMillis <= 0) return 0
+        return logRepository.deleteFinishedBefore(
+            System.currentTimeMillis() - retentionMillis,
+            batchSize.coerceIn(1, 10_000)
+        )
+    }
+
+    /** 分批清理已投递或已取消的历史 Outbox，避免可靠投递表无限增长。 */
+    fun cleanupCompletedOutbox(retentionMillis: Long, batchSize: Int): Int {
+        if (retentionMillis <= 0) return 0
+        return triggerOutboxRepository.deleteCompletedBefore(
+            System.currentTimeMillis() - retentionMillis,
+            batchSize.coerceIn(1, 10_000)
+        )
     }
 
     /**
@@ -275,7 +357,8 @@ class ScheduleService(
      *
      * 无论是否常驻，都会先向目标节点按 logId 探活：
      * - 仍在跑或排队：跳过
-     * - 明确不在跑 / 节点不可达：标记 LOST
+     * - 明确不在跑：标记 LOST
+     * - 节点不可达或协议未知：保留记录，等待后续探活确认
      *
      * 回收只改日志状态，不会 kill 执行进程。
      */
@@ -288,10 +371,10 @@ class ScheduleService(
             limit = batchSize.coerceIn(1, 1_000)
         )
         if (candidates.isEmpty()) return 0
-        val message = "执行日志超时回收（目标进程已不存在或节点不可达，阈值 ${threshold}ms）"
+        val message = "执行日志超时回收（已确认目标进程不存在，阈值 ${threshold}ms）"
         var reaped = 0
         for (candidate in candidates) {
-            if (isLogStillAlive(candidate.id, candidate.targetAddress)) {
+            if (probeLogState(candidate.id, candidate.targetAddress) != false) {
                 continue
             }
             if (logRepository.markLostIfActive(candidate.id, now, message)) {
@@ -305,38 +388,11 @@ class ScheduleService(
     }
 
     /**
-     * 每次调度前对该任务全部 QUEUED/RUNNING 日志探活，回收不可观测的僵尸记录。
-     */
-    private fun reconcileActiveLogs(jobId: Long): Int {
-        val actives = logRepository.findActiveByJobId(jobId, 100)
-        if (actives.isEmpty()) return 0
-        val now = System.currentTimeMillis()
-        val message = "调度前探活回收（目标进程已不存在或节点不可达）"
-        var reaped = 0
-        for (log in actives) {
-            if (isLogStillAlive(log.id, log.targetAddress)) {
-                continue
-            }
-            attemptFutures.remove(log.id)?.cancel(true)
-            if (logRepository.markLostIfActive(log.id, now, message)) {
-                reaped++
-                logger.warn(
-                    "调度前回收僵尸日志: jobId={}, logId={}, status={}, target={}",
-                    jobId,
-                    log.id,
-                    log.status,
-                    log.targetAddress
-                )
-            }
-        }
-        return reaped
-    }
-
-    /**
      * 查询目标节点上该 logId 是否仍在执行或排队。
      * 远程走执行器 `/running`；本地查 [ExecutorTaskTracker] 与调度侧 attempt Future。
      */
-    private fun isLogStillAlive(logId: Long, targetAddress: String?): Boolean {
+    /** true=确认活跃，false=确认不存在，null=网络/协议未知，未知状态必须保守保留。 */
+    private fun probeLogState(logId: Long, targetAddress: String?): Boolean? {
         if (attemptFutures[logId]?.isDone == false) return true
         val probeUrl = resolveExecutorProbeUrl(targetAddress)
         if (probeUrl == null) {
@@ -346,8 +402,8 @@ class ScheduleService(
             true -> true
             false -> false
             null -> {
-                logger.warn("探活执行器不可达，视为日志不可观测: logId={}, target={}", logId, probeUrl)
-                false
+                logger.warn("探活执行器不可达，保留活跃日志等待下次确认: logId={}, target={}", logId, probeUrl)
+                null
             }
         }
     }
@@ -359,35 +415,101 @@ class ScheduleService(
     }
 
     /** 异步提交一次触发；阻塞策略由执行器 JobThread 解释。 */
-    private fun submit(job: ScheduleJob, triggerTime: Long) {
-        workerExecutor.execute {
+    private fun submit(job: ScheduleJob, outbox: ScheduleTriggerOutbox): Boolean = try {
+        workerExecutor.execute(worker@{
+            val lease = OutboxLease(outbox)
+            // 领取后排队期间可能接近租约边界；工作线程实际开始前先续租，失败则不再发起远程调用。
+            if (!lease.renewNow()) {
+                logger.warn("Outbox 投递租约已丢失，跳过执行: outboxId={}, jobId={}", outbox.id, outbox.jobId)
+                return@worker
+            }
+            val renewal = renewOutboxClaim(lease)
             try {
-                execute(job, triggerTime)
+                if (lease.lost) return@worker
+                execute(job, outbox.triggerTime, lease::renewNow)
+                if (!lease.lost && !triggerOutboxRepository.markDispatched(
+                        outbox.id, schedulerId, System.currentTimeMillis()
+                    )) {
+                    logger.warn("Outbox 投递完成但确认租约已丢失: outboxId={}, jobId={}", outbox.id, outbox.jobId)
+                }
             } catch (exception: Exception) {
                 val message = exception.cause?.message ?: exception.message ?: exception.javaClass.simpleName
                 val closed = logRepository.failRunningByJobAndTrigger(
                     jobId = job.id,
-                    triggerTime = triggerTime,
+                    triggerTime = outbox.triggerTime,
                     message = "任务执行异常: $message",
                     finishTime = System.currentTimeMillis()
                 )
                 if (closed == 0) {
-                    appendFailed(job, null, triggerTime, "任务执行异常: $message")
+                    appendFailed(job, null, outbox.triggerTime, "任务执行异常: $message")
                 }
+                if (!lease.lost) {
+                    triggerOutboxRepository.releaseForRetry(
+                        outbox.id, schedulerId, "调度执行异常: $message", System.currentTimeMillis()
+                    )
+                }
+            } finally {
+                renewal.cancel(false)
             }
+        })
+        true
+    } catch (exception: java.util.concurrent.RejectedExecutionException) {
+        logger.error("调度工作线程拒绝任务: jobId={}, triggerTime={}", job.id, outbox.triggerTime, exception)
+        false
+    }
+
+    /** 在本节点处理触发期间续租；节点在真正开始前崩溃时，原租约自然过期并可被其他节点恢复。 */
+    private inner class OutboxLease(private val outbox: ScheduleTriggerOutbox) {
+        @Volatile var lost: Boolean = false
+
+        /**
+         * 在每个即将发起的远程调用前续租并确认本次 token 仍有效。
+         * 这样任务被停用、删除或更新而撤销 Outbox 后，工作线程不会继续开始新的投递。
+         */
+        fun renewNow(): Boolean {
+            if (lost) return false
+            val now = System.currentTimeMillis()
+            val renewed = triggerOutboxRepository.renewClaim(outbox.id, schedulerId, now + claimLeaseMillis, now)
+            if (!renewed) {
+                lost = true
+                logger.warn("Outbox 投递租约已丢失: outboxId={}, jobId={}", outbox.id, outbox.jobId)
+            }
+            return renewed
         }
     }
 
+    /** 续约失败即标记本工作线程失去所有权，禁止进入新的远程调用或重试。 */
+    private fun renewOutboxClaim(lease: OutboxLease): ScheduledFuture<*> {
+        val periodMillis = (claimLeaseMillis / 3).coerceAtLeast(1_000L)
+        return outboxLeaseExecutor.scheduleAtFixedRate({
+            lease.renewNow()
+        }, periodMillis, periodMillis, TimeUnit.MILLISECONDS)
+    }
+
     /** 选择执行器并构造对应的执行上下文。 */
-    private fun execute(job: ScheduleJob, triggerTime: Long) {
-        val route = resolveExecutors(job)
+    private fun execute(job: ScheduleJob, triggerTime: Long, isLeaseHeld: () -> Boolean) {
+        // Outbox 领取和工作线程实际开始之间，任务可能已停用、删除或被编辑。
+        // 以数据库中的当前定义为准，避免撤销后仍产生业务副作用。
+        val currentJob = jobRepository.findById(job.id)
+        if (currentJob == null || currentJob.status != JobStatus.ENABLED) {
+            logger.info("跳过已删除或已停用任务的待投递触发: jobId={}, triggerTime={}", job.id, triggerTime)
+            return
+        }
+        val route = resolveExecutors(currentJob)
         if (route.executors.isEmpty()) {
-            val target = job.executorId?.let { "执行器: $it" } ?: "分组: ${job.executorGroup}"
-            appendFailed(job, null, triggerTime, route.failureReason ?: "没有可用执行器，$target")
+            val target = currentJob.executorId?.let { "执行器: $it" } ?: "分组: ${currentJob.executorGroup}"
+            appendFailed(currentJob, null, triggerTime, route.failureReason ?: "没有可用执行器，$target")
             return
         }
         route.executors.forEachIndexed { index, routed ->
-            executeWithRetry(job, routed, triggerTime, shardIndex = index, shardTotal = route.executors.size)
+            if (!isLeaseHeld()) {
+                logger.warn("Outbox 租约已丢失，停止后续执行器投递: jobId={}, triggerTime={}", job.id, triggerTime)
+                return
+            }
+            executeWithRetry(
+                currentJob, routed, triggerTime, shardIndex = index, shardTotal = route.executors.size,
+                isLeaseHeld = isLeaseHeld
+            )
         }
     }
 
@@ -478,7 +600,8 @@ class ScheduleService(
         routed: RoutedExecutor,
         triggerTime: Long,
         shardIndex: Int = 0,
-        shardTotal: Int = 1
+        shardTotal: Int = 1,
+        isLeaseHeld: () -> Boolean = { true }
     ): AttemptOutcome {
         val storageTarget = routed.address?.takeIf { it.isNotBlank() } ?: "本地"
         val runningLog = logRepository.append(
@@ -495,6 +618,16 @@ class ScheduleService(
         var lastTarget: String? = storageTarget
         var lastDurationMs: Long? = null
         for (attempt in 0..job.maxRetryCount) {
+            if (!isLeaseHeld()) {
+                finishLog(
+                    runningLog,
+                    status = ExecutionStatus.CANCELLED,
+                    retryCount = attempt,
+                    message = "Outbox 投递租约已丢失，已停止后续调用",
+                    targetAddress = lastTarget
+                )
+                return AttemptOutcome.Cancelled
+            }
             var future: Future<io.infra.structure.schedule.model.JobExecutionResult>? = null
             val startedAt = System.currentTimeMillis()
             try {
@@ -509,14 +642,16 @@ class ScheduleService(
                             shardIndex = shardIndex,
                             shardTotal = shardTotal,
                             logId = runningLog.id,
-                            blockStrategy = job.blockStrategy
+                            blockStrategy = job.blockStrategy,
+                            executionTimeoutMillis = effectiveExecutionTimeoutMillis(job)
                         )
                     )
                 }
                 attemptFutures[runningLog.id] = future
                 val result = try {
-                    if (job.timeoutSeconds > 0) {
-                        future.get(job.timeoutSeconds, TimeUnit.SECONDS)
+                    val timeoutMillis = effectiveExecutionTimeoutMillis(job)
+                    if (timeoutMillis > 0) {
+                        future.get(timeoutMillis, TimeUnit.MILLISECONDS)
                     } else {
                         future.get()
                     }
@@ -536,6 +671,10 @@ class ScheduleService(
                     return AttemptOutcome.Success
                 }
                 if (result.discarded) {
+                    if (job.resident) {
+                        logRepository.delete(runningLog.id)
+                        return AttemptOutcome.Cancelled
+                    }
                     finishLog(
                         runningLog,
                         status = ExecutionStatus.SKIPPED,
@@ -567,7 +706,7 @@ class ScheduleService(
             } catch (_: TimeoutException) {
                 future?.cancel(true)
                 killExecutorTask(runningLog)
-                lastMessage = "任务执行超时（${job.timeoutSeconds} 秒）"
+                lastMessage = "任务执行超时（${effectiveExecutionTimeoutMillis(job)} 毫秒）"
                 lastTarget = storageTarget
                 lastDurationMs = System.currentTimeMillis() - startedAt
                 finishLog(
@@ -618,6 +757,16 @@ class ScheduleService(
                 lastDurationMs = System.currentTimeMillis() - startedAt
             }
             if (attempt < job.maxRetryCount) {
+                if (!isLeaseHeld()) {
+                    finishLog(
+                        runningLog,
+                        status = ExecutionStatus.CANCELLED,
+                        retryCount = attempt,
+                        message = "Outbox 投递租约已丢失，已停止后续重试",
+                        targetAddress = lastTarget
+                    )
+                    return AttemptOutcome.Cancelled
+                }
                 if (isLogNoLongerRunning(runningLog.id)) {
                     return AttemptOutcome.Cancelled
                 }
@@ -692,7 +841,8 @@ class ScheduleService(
      * 仅由持有租约的节点推进下一次计划，防止租约过期的旧节点覆盖新节点状态。
      * 只更新调度进度字段，避免全量 save 把并发修改的 cron 等定义写回旧值。
      */
-    private fun completeSchedule(job: ScheduleJob, triggerTime: Long): Boolean {
+    /** 在推进任务下次触发时间的同一事务中写入 Outbox，消除进程崩溃导致的触发丢失窗口。 */
+    private fun completeScheduleAndEnqueue(job: ScheduleJob, triggerTime: Long): Boolean {
         val current = jobRepository.findById(job.id) ?: return false
         if (current.status == JobStatus.DISABLED) {
             jobRepository.releaseClaim(job.id, schedulerId)
@@ -702,7 +852,26 @@ class ScheduleService(
         val now = System.currentTimeMillis()
         val base = current.nextTriggerAt ?: triggerTime
         val next = ScheduleCalculator.nextFutureTriggerAt(current, base, now)
-        return jobRepository.completeSchedule(job.id, schedulerId, triggerTime, next, now)
+        return jobRepository.completeScheduleAndEnqueue(
+            id = job.id,
+            owner = schedulerId,
+            lastTriggerAt = triggerTime,
+            nextTriggerAt = next,
+            outbox = ScheduleTriggerOutbox(
+                jobId = job.id,
+                triggerTime = triggerTime,
+                createTime = now,
+                updateTime = now
+            ),
+            updateTime = now
+        )
+    }
+
+    /** 显式任务超时优先；未设置时使用系统上限，避免 Future 无期限阻塞。 */
+    private fun effectiveExecutionTimeoutMillis(job: ScheduleJob): Long = when {
+        job.timeoutSeconds > 0 -> job.timeoutSeconds.coerceAtMost(Long.MAX_VALUE / 1_000) * 1_000
+        maxExecutionMillis > 0 -> maxExecutionMillis
+        else -> 0
     }
 
     private fun appendFailed(

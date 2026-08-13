@@ -79,6 +79,32 @@ open class ScheduleExecutionLogEntity(
     open var durationMillis: Long? = null
 )
 
+/** 可靠触发 Outbox：任务推进计划后，由独立投递循环可靠发送给执行器。 */
+@Table("infra_schedule_trigger_outbox")
+open class ScheduleTriggerOutboxEntity(
+    /** 数据库自增主键。 */
+    @Id(keyType = KeyType.Auto)
+    open var id: Long? = null,
+    /** 对应任务主键。 */
+    open var jobId: Long = 0,
+    /** 本次计划触发时间。 */
+    open var triggerTime: Long = 0,
+    /** 投递状态：PENDING / PROCESSING / DISPATCHED / CANCELLED。 */
+    open var status: String = "PENDING",
+    /** 当前投递租约持有节点。 */
+    open var claimOwner: String? = null,
+    /** 当前投递租约失效时间。 */
+    open var claimUntil: Long? = null,
+    /** 已尝试投递次数。 */
+    open var attemptCount: Int = 0,
+    /** 最近一次投递错误。 */
+    open var lastError: String? = null,
+    /** 创建时间。 */
+    open var createTime: Long = 0,
+    /** 状态更新时间。 */
+    open var updateTime: Long = 0
+)
+
 /** 执行器分组表映射，语义对齐 xxl-job 的 JobGroup（appname + title）。 */
 @Table("infra_schedule_executor")
 open class ScheduleExecutorEntity(

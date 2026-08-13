@@ -22,18 +22,23 @@ class HttpScheduleExecutor(
     override val group: String,
     private val address: String,
     private val accessToken: String?,
-    connectTimeoutMillis: Long,
-    readTimeoutMillis: Long
+    private val connectTimeoutMillis: Long,
+    private val readTimeoutMillis: Long
 ) : ScheduleExecutor {
-    private val client = RestClient.builder()
-        .baseUrl(address.removeSuffix("/"))
-        .requestFactory(SimpleClientHttpRequestFactory().apply {
-            setConnectTimeout(Duration.ofMillis(connectTimeoutMillis))
-            setReadTimeout(Duration.ofMillis(readTimeoutMillis))
-        })
-        .build()
-
     override fun execute(context: JobExecutionContext): JobExecutionResult = try {
+        // /run 是同步协议；网络读超时不能早于调度器为本次任务设定的执行上限，
+        // 否则任务仍在执行器运行时会被误判失败并按重试策略重复投递。
+        val effectiveReadTimeout = maxOf(
+            readTimeoutMillis,
+            context.executionTimeoutMillis.coerceAtMost(Long.MAX_VALUE - HTTP_TIMEOUT_BUFFER_MILLIS) + HTTP_TIMEOUT_BUFFER_MILLIS
+        )
+        val client = RestClient.builder()
+            .baseUrl(address.removeSuffix("/"))
+            .requestFactory(SimpleClientHttpRequestFactory().apply {
+                setConnectTimeout(Duration.ofMillis(connectTimeoutMillis))
+                setReadTimeout(Duration.ofMillis(effectiveReadTimeout))
+            })
+            .build()
         val request = client.post()
             .uri(ScheduleWebPaths.EXECUTOR_RUN)
             .contentType(MediaType.APPLICATION_JSON)
@@ -68,6 +73,11 @@ class HttpScheduleExecutor(
             return exception.message ?: exception.javaClass.simpleName
         }
         return exception.message ?: exception.javaClass.simpleName
+    }
+
+    private companion object {
+        /** 为执行器完成最终日志回调预留的网络缓冲。 */
+        const val HTTP_TIMEOUT_BUFFER_MILLIS = 5_000L
     }
 }
 

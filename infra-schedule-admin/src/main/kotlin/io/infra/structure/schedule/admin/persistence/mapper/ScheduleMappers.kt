@@ -7,6 +7,7 @@ import io.infra.structure.schedule.admin.persistence.entity.ScheduleExecutorRegi
 import io.infra.structure.schedule.admin.persistence.entity.ScheduleRouteCursorEntity
 import io.infra.structure.schedule.admin.persistence.entity.ScheduleRouteStatEntity
 import io.infra.structure.schedule.admin.persistence.entity.ScheduleJobEntity
+import io.infra.structure.schedule.admin.persistence.entity.ScheduleTriggerOutboxEntity
 import io.infra.structure.schedule.repository.StaleRunningLogRef
 import org.apache.ibatis.annotations.Mapper
 import org.apache.ibatis.annotations.Param
@@ -14,10 +15,15 @@ import org.apache.ibatis.annotations.Result
 import org.apache.ibatis.annotations.Results
 import org.apache.ibatis.annotations.Select
 import org.apache.ibatis.annotations.Update
+import org.apache.ibatis.annotations.Delete
+import org.apache.ibatis.annotations.Insert
 
 /** 调度任务定义的 MyBatis-Flex Mapper。 */
 @Mapper
 interface ScheduleJobMapper : BaseMapper<ScheduleJobEntity> {
+    /** 统计仍绑定到指定执行器的任务，用于后台删除前的友好提示。 */
+    @Select("SELECT COUNT(*) FROM infra_schedule_job WHERE executor_id = #{executorId}")
+    fun countByExecutorId(@Param("executorId") executorId: Long): Long
     /**
      * 在当前事务中锁定一页到期任务。
      *
@@ -138,15 +144,131 @@ interface ScheduleExecutionLogMapper : BaseMapper<ScheduleExecutionLogEntity> {
         @Param("message") message: String,
         @Param("finishTime") finishTime: Long
     ): Int
+
+    /** 按批删除已终态的历史日志，避免一次性删除造成长事务和锁等待。 */
+    @Delete(
+        """
+        DELETE FROM infra_schedule_execution_log
+        WHERE finish_time IS NOT NULL
+          AND finish_time < #{finishTimeBefore}
+          AND status NOT IN ('QUEUED', 'RUNNING')
+        ORDER BY id ASC
+        LIMIT #{limit}
+        """
+    )
+    fun deleteFinishedBefore(
+        @Param("finishTimeBefore") finishTimeBefore: Long,
+        @Param("limit") limit: Int
+    ): Int
+}
+
+/** 可靠触发 Outbox Mapper。 */
+@Mapper
+interface ScheduleTriggerOutboxMapper : BaseMapper<ScheduleTriggerOutboxEntity> {
+    /** 锁定一页待投递或租约过期的触发记录，调用方必须处于事务中。 */
+    @Select(
+        """
+        SELECT *
+        FROM infra_schedule_trigger_outbox
+        WHERE status = 'PENDING'
+           OR (status = 'PROCESSING' AND claim_until IS NOT NULL AND claim_until <= #{now})
+        ORDER BY id ASC
+        LIMIT #{pageSize}
+        FOR UPDATE SKIP LOCKED
+        """
+    )
+    @Results(
+        value = [
+            Result(property = "jobId", column = "job_id"),
+            Result(property = "triggerTime", column = "trigger_time"),
+            Result(property = "claimOwner", column = "claim_owner"),
+            Result(property = "claimUntil", column = "claim_until"),
+            Result(property = "attemptCount", column = "attempt_count"),
+            Result(property = "lastError", column = "last_error"),
+            Result(property = "createTime", column = "create_time"),
+            Result(property = "updateTime", column = "update_time")
+        ]
+    )
+    fun lockPendingPage(@Param("now") now: Long, @Param("pageSize") pageSize: Int): List<ScheduleTriggerOutboxEntity>
+
+    /** 分批删除已确认投递或已取消的历史记录，活跃租约不在清理范围内。 */
+    @Delete(
+        """
+        DELETE FROM infra_schedule_trigger_outbox
+        WHERE status IN ('DISPATCHED', 'CANCELLED')
+          AND update_time < #{updateTimeBefore}
+        ORDER BY id ASC
+        LIMIT #{limit}
+        """
+    )
+    fun deleteCompletedBefore(
+        @Param("updateTimeBefore") updateTimeBefore: Long,
+        @Param("limit") limit: Int
+    ): Int
 }
 
 /** 执行器心跳的 MyBatis-Flex Mapper。 */
 @Mapper
-interface ScheduleExecutorMapper : BaseMapper<ScheduleExecutorEntity>
+interface ScheduleExecutorMapper : BaseMapper<ScheduleExecutorEntity> {
+    /**
+     * 心跳创建分组或刷新已有分组的存活时间。
+     * 使用 MySQL upsert 消除多 Admin 节点同时收到首个心跳时的唯一键竞争。
+     */
+    @Insert(
+        """
+        INSERT INTO infra_schedule_executor (
+            executor_group, executor_name, address, address_mode, status,
+            last_heartbeat_time, create_time, update_time
+        ) VALUES (
+            #{executorGroup}, #{executorName}, NULL, 'AUTO_REGISTER', 'ENABLED',
+            #{now}, #{now}, #{now}
+        )
+        ON DUPLICATE KEY UPDATE
+            executor_name = IF(executor_name = '', VALUES(executor_name), executor_name),
+            last_heartbeat_time = VALUES(last_heartbeat_time),
+            update_time = VALUES(update_time)
+        """
+    )
+    fun upsertHeartbeat(
+        @Param("executorGroup") executorGroup: String,
+        @Param("executorName") executorName: String,
+        @Param("now") now: Long
+    ): Int
+
+    /** 执行器删除需要同时确认不存在引用它的任务，避免检查后新建任务的并发窗口。 */
+    @Delete(
+        """
+        DELETE executor
+        FROM infra_schedule_executor executor
+        WHERE executor.id = #{id}
+          AND NOT EXISTS (
+              SELECT 1 FROM infra_schedule_job job WHERE job.executor_id = executor.id
+          )
+        """
+    )
+    fun deleteIfUnreferenced(@Param("id") id: Long): Int
+}
 
 /** 执行器实例地址注册表 Mapper。 */
 @Mapper
-interface ScheduleExecutorRegistryMapper : BaseMapper<ScheduleExecutorRegistryEntity>
+interface ScheduleExecutorRegistryMapper : BaseMapper<ScheduleExecutorRegistryEntity> {
+    /** 心跳地址登记使用原子 Upsert，避免多个 Admin 同时接收首心跳时撞唯一键。 */
+    @Insert(
+        """
+        INSERT INTO infra_schedule_executor_registry (
+            executor_id, address, last_heartbeat_time, create_time, update_time
+        ) VALUES (#{executorId}, #{address}, #{now}, #{now}, #{now})
+        ON DUPLICATE KEY UPDATE
+            last_heartbeat_time = VALUES(last_heartbeat_time),
+            update_time = VALUES(update_time)
+        """
+    )
+    fun upsertRegistry(
+        @Param("executorId") executorId: Long,
+        @Param("address") address: String,
+        @Param("now") now: Long
+    ): Int
+}
 
 /** 路由 LFU/LRU 统计 Mapper。 */
 @Mapper

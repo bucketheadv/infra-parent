@@ -51,10 +51,18 @@ internal class ExecutorJobThread(
     fun offer(ticket: TriggerTicket): Boolean = !toStop.get() && queue.offer(ticket)
 
     /** 停止线程：清空队列并中断当前 handler。 */
-    fun stopForCover(reason: String) {
+    /** 请求中断并等待线程退出；未确认退出时禁止新线程启动。 */
+    fun stopForCover(reason: String, waitMillis: Long): Boolean {
         toStop.set(true)
         drainQueue(JobExecutionResult.cancelled(reason))
         interrupt()
+        return try {
+            join(waitMillis.coerceAtLeast(1))
+            !isAlive
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
     }
 
     /**
