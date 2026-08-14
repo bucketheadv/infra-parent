@@ -331,7 +331,7 @@
         if (empty) empty.hidden = true;
         body.innerHTML = groups.map(function (group) {
             return "<tr>" +
-                "<td><a class='job-name' href='/consumer-groups/detail?name=" + encodeURIComponent(group) + "'>" + escapeHtml(group) + "</a></td>" +
+                "<td><a class='job-name topic-consumer-name' href='/consumer-groups/detail?name=" + encodeURIComponent(group) + "'>" + escapeHtml(group) + "</a></td>" +
                 "</tr>";
         }).join("");
     }
@@ -442,12 +442,13 @@
         }
         if (empty) empty.hidden = true;
         body.innerHTML = progress.map(function (p) {
-            const lag = Math.max(0, (p.brokerOffset || 0) - (p.clientOffset || 0));
+            const consumerOffset = p.consumerOffset ?? 0;
+            const lag = p.diff ?? Math.max(0, (p.brokerOffset || 0) - consumerOffset);
             return "<tr>" +
                 "<td>" + escapeHtml(p.topic) + "</td>" +
                 "<td class='mono'>" + escapeHtml(p.brokerName) + "</td>" +
                 "<td>" + p.queueId + "</td>" +
-                "<td>" + p.clientOffset + "</td>" +
+                "<td>" + consumerOffset + "</td>" +
                 "<td>" + p.brokerOffset + "</td>" +
                 "<td>" + lag + "</td>" +
                 "<td>" + fmtTime(p.lastTimestamp) + "</td>" +
@@ -482,6 +483,7 @@
     function initMessageQuery() {
         const topicSelect = document.getElementById("query-topic");
         if (!topicSelect) return;
+        const sendTopicSelect = document.getElementById("send-topic");
         let topicMap = {};
 
         api("/topics").then(function (topics) {
@@ -494,7 +496,12 @@
 
             const preset = new URLSearchParams(window.location.search).get("topic");
             if (preset) topicSelect.value = preset;
+            if (sendTopicSelect) sendTopicSelect.value = topicSelect.value;
         }).catch(function (error) { toast(error.message, true); });
+
+        topicSelect.addEventListener("change", function () {
+            if (sendTopicSelect) sendTopicSelect.value = topicSelect.value;
+        });
 
         const end = new Date();
         const begin = new Date(end.getTime() - 3 * 24 * 60 * 60 * 1000);

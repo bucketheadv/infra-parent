@@ -50,6 +50,12 @@ data class RocketMQTopicView(
 data class RocketMQTopicDetail(
     /** Topic 名称。 */
     val topic: String,
+    /** 读队列数量。 */
+    val readQueueNums: Int,
+    /** 写队列数量。 */
+    val writeQueueNums: Int,
+    /** Topic 权限位。 */
+    val perm: Int,
     /** 承载该 Topic 的 Broker 名称列表。 */
     val brokers: List<String>,
     /** 各消息队列的位点信息。 */
@@ -96,8 +102,8 @@ data class RocketMQConsumerGroupDetail(
     val group: String,
     /** 消费者组是否在线。 */
     val online: Boolean,
-    /** 代表性在线客户端连接；离线时为空。 */
-    val connection: RocketMQConsumerConnectionView?,
+    /** 当前在线客户端连接列表。 */
+    val connections: List<RocketMQConsumerConnectionView>,
     /** 已订阅的 Topic 列表。 */
     val topics: List<String>,
     /** 各队列消费进度。 */
@@ -111,7 +117,9 @@ data class RocketMQConsumerConnectionView(
     /** 客户端编程语言。 */
     val language: String,
     /** 客户端唯一标识。 */
-    val clientId: String
+    val clientId: String,
+    /** 客户端网络地址。 */
+    val clientAddr: String
 )
 
 /** 单个队列的消费进度。 */

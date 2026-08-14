@@ -8,7 +8,6 @@ import io.infra.structure.rocketmq.admin.properties.RocketMQAdminProperties
 import io.infra.structure.rocketmq.admin.support.RocketMQAdminClient
 import io.infra.structure.rocketmq.admin.web.RocketMQAdminException
 import org.apache.rocketmq.remoting.protocol.admin.ConsumeStats
-import org.apache.rocketmq.remoting.protocol.body.Connection
 import org.apache.rocketmq.remoting.protocol.body.ConsumerConnection
 import org.springframework.stereotype.Service
 
@@ -41,14 +40,14 @@ class RocketMQConsumerGroupService(
 
     /** 单个消费组详情：在线连接、订阅 Topic 与各队列消费进度。 */
     fun consumerGroupDetail(group: String): RocketMQConsumerGroupDetail {
-        val connection = consumerConnection(group)
+        val connections = consumerConnections(group)
         val stats = consumeStats(group)
             ?: throw RocketMQAdminException("消费组不存在或尚未开始消费：$group")
         val offsetTable = stats.offsetTable
         return RocketMQConsumerGroupDetail(
             group = group,
-            online = connection != null,
-            connection = connection,
+            online = connections.isNotEmpty(),
+            connections = connections,
             topics = offsetTable.keys.map { it.topic }.distinct().sorted(),
             progress = offsetTable
                 .map { (queue, wrapper) ->
@@ -113,26 +112,25 @@ class RocketMQConsumerGroupService(
         null
     }
 
-    private fun consumerConnection(group: String): RocketMQConsumerConnectionView? = try {
+    private fun consumerConnections(group: String): List<RocketMQConsumerConnectionView> = try {
         client.execute { admin ->
             val connection: ConsumerConnection = admin.examineConsumerConnectionInfo(group)
-            val clients = connection.connectionSet.sortedBy { it.clientId }
-            if (clients.isEmpty()) {
-                null
-            } else {
-                val representative = clients.first()
-                RocketMQConsumerConnectionView(
-                    version = formatVersion(representative.version),
-                    language = representative.language?.let { it.name } ?: "-",
-                    clientId = clients.joinToString(", ") { it.clientId }
-                )
-            }
+            connection.connectionSet
+                .sortedBy { it.clientId }
+                .map { client ->
+                    RocketMQConsumerConnectionView(
+                        version = formatVersion(client.version),
+                        language = client.language?.name ?: "-",
+                        clientId = client.clientId ?: "-",
+                        clientAddr = client.clientAddr ?: "-"
+                    )
+                }
         }
     } catch (exception: Exception) {
-        null
+        emptyList()
     }
 
-    private fun isOnline(group: String): Boolean = consumerConnection(group) != null
+    private fun isOnline(group: String): Boolean = consumerConnections(group).isNotEmpty()
 
     private fun formatVersion(version: Int): String {
         if (version <= 0) return "-"

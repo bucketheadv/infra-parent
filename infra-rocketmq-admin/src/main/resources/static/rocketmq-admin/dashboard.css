@@ -928,6 +928,13 @@ th { color: #787894; background: #f7f6fc; }
 tbody tr:hover { background: #faf8ff; }
 td { color: #45465b; }
 .job-name { color: #3e4055; font-weight: 600; text-decoration: none; }
+#consumers-body .topic-consumer-name {
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
 a.job-name:hover { color: #6034d7; text-decoration: underline; text-decoration-color: #cbbdff; text-underline-offset: 3px; }
 
 .status.online { color: #087f68; background: #eafaf6; border-color: #bdece0; }

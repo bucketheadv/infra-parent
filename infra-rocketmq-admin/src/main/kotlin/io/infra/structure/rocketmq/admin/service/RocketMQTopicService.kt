@@ -53,8 +53,12 @@ class RocketMQTopicService(
         } catch (exception: Exception) {
             throw translate("无法获取 Topic 位点：$topic", exception)
         }
+        val config = topicConfigs(admin)[topic]
         RocketMQTopicDetail(
             topic = topic,
+            readQueueNums = config?.readQueueNums ?: 0,
+            writeQueueNums = config?.writeQueueNums ?: 0,
+            perm = config?.perm ?: 0,
             brokers = route.brokerDatas.map { it.brokerName }.distinct().sorted(),
             queueOffsets = stats.offsetTable
                 .map { (queue, offset) ->

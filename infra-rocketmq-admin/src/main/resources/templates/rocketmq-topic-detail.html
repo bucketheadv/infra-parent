@@ -16,30 +16,30 @@
         </div>
     </header>
 
-    <section class="metrics" aria-label="Topic 概览">
+    <section class="metrics dashboard-metrics topic-metrics" aria-label="Topic 概览">
         <article class="metric metric-total">
-            <div class="metric-top"><div class="metric-heading"><span class="metric-icon" aria-hidden="true">↔</span><span class="metric-label">读队列</span></div><span class="metric-index" aria-hidden="true">01</span></div>
-            <div class="metric-value"><strong id="read-queue-count">-</strong><span>个</span></div>
-            <p class="metric-note">队列分片读取容量</p>
-            <span class="metric-state">读队列数</span>
+            <div class="metric-flow"><span class="metric-symbol" aria-hidden="true">←</span><div><span class="metric-label">读取分片</span><span class="metric-route">Consumer · 队列拉取</span></div></div>
+            <div class="metric-reading"><strong id="read-queue-count">-</strong><span>个队列</span></div>
+            <div class="metric-footer"><p class="metric-note">消费端并行读取通道</p><span class="metric-state"><i></i>可读取</span></div>
+            <div class="metric-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
         </article>
         <article class="metric metric-started">
-            <div class="metric-top"><div class="metric-heading"><span class="metric-icon" aria-hidden="true">↔</span><span class="metric-label">写队列</span></div><span class="metric-index" aria-hidden="true">02</span></div>
-            <div class="metric-value"><strong id="write-queue-count">-</strong><span>个</span></div>
-            <p class="metric-note">队列分片写入容量</p>
-            <span class="metric-state">写队列数</span>
+            <div class="metric-flow"><span class="metric-symbol" aria-hidden="true">→</span><div><span class="metric-label">写入分片</span><span class="metric-route">Producer · 消息投递</span></div></div>
+            <div class="metric-reading"><strong id="write-queue-count">-</strong><span>个队列</span></div>
+            <div class="metric-footer"><p class="metric-note">生产端并行写入通道</p><span class="metric-state"><i></i>可写入</span></div>
+            <div class="metric-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
         </article>
         <article class="metric metric-stopped">
-            <div class="metric-top"><div class="metric-heading"><span class="metric-icon" aria-hidden="true">▣</span><span class="metric-label">权限</span></div><span class="metric-index" aria-hidden="true">03</span></div>
-            <div class="metric-value"><strong id="topic-perm">-</strong><span></span></div>
-            <p class="metric-note">读写权限标记</p>
-            <span class="metric-state">权限</span>
+            <div class="metric-flow"><span class="metric-symbol" aria-hidden="true">□</span><div><span class="metric-label">访问权限</span><span class="metric-route">Topic · 权限位控制</span></div></div>
+            <div class="metric-reading"><strong id="topic-perm">-</strong><span>当前策略</span></div>
+            <div class="metric-footer"><p class="metric-note">生产与消费访问范围</p><span class="metric-state"><i></i>已配置</span></div>
+            <div class="metric-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
         </article>
         <article class="metric metric-online">
-            <div class="metric-top"><div class="metric-heading"><span class="metric-icon" aria-hidden="true">◉</span><span class="metric-label">消费组</span></div><span class="metric-index" aria-hidden="true">04</span></div>
-            <div class="metric-value"><strong id="consumer-count">-</strong><span>个</span></div>
-            <p class="metric-note">订阅该主题的消费组</p>
-            <span class="metric-state">订阅消费组</span>
+            <div class="metric-flow"><span class="metric-symbol" aria-hidden="true">◎</span><div><span class="metric-label">订阅消费</span><span class="metric-route">Group · 消息处理</span></div></div>
+            <div class="metric-reading"><strong id="consumer-count">-</strong><span>个消费组</span></div>
+            <div class="metric-footer"><p class="metric-note">正在订阅该 Topic 的消费组</p><span class="metric-state"><i></i>已订阅</span></div>
+            <div class="metric-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
         </article>
     </section>
 
