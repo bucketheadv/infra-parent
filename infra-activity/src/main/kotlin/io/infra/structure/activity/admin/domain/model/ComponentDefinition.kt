@@ -20,6 +20,10 @@ data class ComponentNode(
     val type: ComponentNodeType,
     /** 是否要求在活动配置中填写有效值。 */
     val required: Boolean = false,
+    /** 当字段所在组件以数组挂载时，要求数组各项的值不能重复。 */
+    val uniqueInArray: Boolean = false,
+    /** 当前字段与其他字段之间的联动比较规则。 */
+    val linkRules: List<ComponentLinkRule> = emptyList(),
     /** 文本类输入框的提示内容。 */
     val placeholder: String? = null,
     /** 活动配置表单初次渲染时使用的默认值。 */
@@ -33,6 +37,22 @@ data class ComponentNode(
     /** 分组节点或复合节点包含的子字段。 */
     val children: List<ComponentNode> = emptyList()
 )
+
+/** 字段联动比较规则；targetKey 为当前组件定义内的字段路径。 */
+data class ComponentLinkRule(
+    val targetKey: String,
+    val operator: ComponentLinkOperator
+)
+
+/** 字段联动支持的比较运算符。 */
+enum class ComponentLinkOperator {
+    GREATER_THAN,
+    LESS_THAN,
+    EQUAL,
+    GREATER_OR_EQUAL,
+    LESS_OR_EQUAL,
+    NOT_EQUAL
+}
 
 /** 下拉选择节点的一项候选值。 */
 data class ComponentOption(

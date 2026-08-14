@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.mybatisflex.core.query.QueryWrapper
 import io.infra.structure.activity.admin.domain.model.ComponentDefinition
+import io.infra.structure.activity.admin.domain.model.ComponentLinkOperator
 import io.infra.structure.activity.admin.domain.model.ComponentNode
 import io.infra.structure.activity.admin.domain.model.ComponentNodeType
 import io.infra.structure.activity.admin.domain.model.ComponentReferenceMode
@@ -515,7 +516,8 @@ class ActivityConfigurationService(
         componentRequired: Boolean,
         parentPath: String = componentCode,
         depth: Int = 0,
-        referencedComponentIds: Set<Long> = emptySet()
+        referencedComponentIds: Set<Long> = emptySet(),
+        linkRootPath: String = componentCode
     ): List<ActivityFormField> = nodes.map { node ->
         val key = "$parentPath.${node.key}"
         val effectiveRequired = componentRequired || node.required
@@ -529,7 +531,8 @@ class ActivityConfigurationService(
                 componentRequired = effectiveRequired,
                 parentPath = key,
                 depth = depth + 1,
-                referencedComponentIds = referencedComponentIds + referencedComponentId
+                referencedComponentIds = referencedComponentIds + referencedComponentId,
+                linkRootPath = key
             )
         } else {
             flattenNodes(
@@ -538,7 +541,8 @@ class ActivityConfigurationService(
                 componentRequired = effectiveRequired,
                 parentPath = key,
                 depth = depth + 1,
-                referencedComponentIds = referencedComponentIds
+                referencedComponentIds = referencedComponentIds,
+                linkRootPath = linkRootPath
             )
         }
         ActivityFormField(
@@ -547,6 +551,8 @@ class ActivityConfigurationService(
             type = node.type,
             // 分组只承担层级展示职责，必填规则由其中的实际输入字段承担。
             required = node.type != ComponentNodeType.GROUP && effectiveRequired,
+            uniqueInArray = node.uniqueInArray,
+            linkRules = node.linkRules.map { rule -> rule.copy(targetKey = "$linkRootPath.${rule.targetKey}") },
             placeholder = node.placeholder,
             defaultValue = node.defaultValue,
             options = node.options,
@@ -560,12 +566,14 @@ class ActivityConfigurationService(
     private fun validateDefinition(definition: ComponentDefinition) {
         require(definition.nodes.isNotEmpty()) { "组件至少需要配置一个字段或子组件" }
         validateNodes(definition.nodes, "")
+        validateLinkRules(definition.nodes)
     }
 
     /** 校验模板可选的普通输入字段定义。 */
     private fun validateTemplateDefinition(definition: ComponentDefinition) {
         if (definition.nodes.isNotEmpty()) {
             validateNodes(definition.nodes, "")
+            validateLinkRules(definition.nodes)
         }
     }
 
@@ -679,6 +687,43 @@ class ActivityConfigurationService(
         }
     }
 
+    /** 联动字段只能指向同一份组件定义中的可比较输入项。 */
+    private fun validateLinkRules(nodes: List<ComponentNode>) {
+        val fields = linkedFieldPaths(nodes)
+        fields.forEach { (sourceKey, source) ->
+            require(source.linkRules.map { it.targetKey }.toSet().size == source.linkRules.size) {
+                "字段 $sourceKey 的联动目标不能重复"
+            }
+            if (source.linkRules.isEmpty()) return@forEach
+            require(source.type !in setOf(ComponentNodeType.GROUP, ComponentNodeType.COMPONENT, ComponentNodeType.PRIZE, ComponentNodeType.MULTI_SELECT)) {
+                "字段 $sourceKey 不能配置联动规则"
+            }
+            source.linkRules.forEach { rule ->
+                val target = fields[rule.targetKey]
+                require(target != null && rule.targetKey != sourceKey) { "字段 $sourceKey 的联动目标无效" }
+                require(target.type == source.type) { "字段 $sourceKey 的联动字段类型必须一致" }
+                if (rule.operator !in setOf(ComponentLinkOperator.EQUAL, ComponentLinkOperator.NOT_EQUAL)) {
+                    require(source.type in setOf(ComponentNodeType.NUMBER, ComponentNodeType.DATE, ComponentNodeType.DATE_TIME)) {
+                        "字段 $sourceKey 仅数字、日期和日期时间支持大小比较"
+                    }
+                }
+            }
+        }
+    }
+
+    private fun linkedFieldPaths(nodes: List<ComponentNode>): Map<String, ComponentNode> {
+        val fields = linkedMapOf<String, ComponentNode>()
+        fun visit(children: List<ComponentNode>, parentPath: String) {
+            children.forEach { node ->
+                val path = if (parentPath.isBlank()) node.key else "$parentPath.${node.key}"
+                fields[path] = node
+                visit(node.children, path)
+            }
+        }
+        visit(nodes, "")
+        return fields
+    }
+
     /** 校验子组件存在，且更新后不会形成组件引用闭环。 */
     private fun validateComponentReferences(componentId: Long?, definition: ComponentDefinition) {
         referencedComponentIds(definition.nodes).forEach { referencedId ->
@@ -743,6 +788,7 @@ class ActivityConfigurationService(
             if (field.required) {
                 require(indexes.isNotEmpty()) { "${field.label} 至少需要配置一个子组件" }
             }
+            validateUniqueArrayFields(field.children, field.key, key, indexes, values)
             indexes.forEach { index ->
                 field.children.forEach { child ->
                     validateFieldValue(child, nestedFieldKey(child, field.key, "$key.$index"), values, acceptedKeys)
@@ -753,6 +799,7 @@ class ActivityConfigurationService(
 
         acceptedKeys += key
         val value = values[key]
+        validateLinkedValues(field, key, values)
         if (field.type == ComponentNodeType.MULTI_SELECT) {
             val selectedValues = when (value) {
                 null -> emptyList()
@@ -777,6 +824,76 @@ class ActivityConfigurationService(
         }
     }
 
+    /** 校验当前字段与其联动目标的比较关系；空值交由各字段自身的必填规则处理。 */
+    private fun validateLinkedValues(field: ActivityFormField, key: String, values: Map<String, Any?>) {
+        field.linkRules.forEach { rule ->
+            val targetKey = resolveLinkedKey(field.key, key, rule.targetKey)
+            val left = values[key]?.toString()?.trim().orEmpty()
+            val right = values[targetKey]?.toString()?.trim().orEmpty()
+            if (left.isBlank() || right.isBlank()) return@forEach
+            val comparison = when (field.type) {
+                ComponentNodeType.NUMBER -> left.toBigDecimalOrNull()?.let { leftNumber ->
+                    right.toBigDecimalOrNull()?.let { rightNumber -> leftNumber.compareTo(rightNumber) }
+                }
+                ComponentNodeType.DATE -> runCatching { LocalDate.parse(left).compareTo(LocalDate.parse(right)) }.getOrNull()
+                ComponentNodeType.DATE_TIME -> runCatching { LocalDateTime.parse(left).compareTo(LocalDateTime.parse(right)) }.getOrNull()
+                else -> left.compareTo(right)
+            }
+            require(comparison != null && when (rule.operator) {
+                ComponentLinkOperator.GREATER_THAN -> comparison > 0
+                ComponentLinkOperator.LESS_THAN -> comparison < 0
+                ComponentLinkOperator.EQUAL -> comparison == 0
+                ComponentLinkOperator.GREATER_OR_EQUAL -> comparison >= 0
+                ComponentLinkOperator.LESS_OR_EQUAL -> comparison <= 0
+                ComponentLinkOperator.NOT_EQUAL -> comparison != 0
+            }) {
+                "${field.label} 不符合联动规则"
+            }
+        }
+    }
+
+    /** 将数组实例中的字段路径映射到同一实例下的联动目标路径。 */
+    private fun resolveLinkedKey(schemaFieldKey: String, actualFieldKey: String, schemaTargetKey: String): String {
+        val schemaParts = schemaFieldKey.split('.')
+        val actualParts = actualFieldKey.split('.')
+        val inserted = mutableMapOf<Int, MutableList<String>>()
+        var matched = 0
+        actualParts.forEach { part ->
+            if (matched < schemaParts.size && part == schemaParts[matched]) matched++
+            else if (part.toIntOrNull() != null) inserted.getOrPut(matched) { mutableListOf() }.add(part)
+        }
+        return schemaTargetKey.split('.').flatMapIndexed { index, part ->
+            (inserted[index].orEmpty()) + part
+        }.let { parts -> (parts + inserted[schemaTargetKey.split('.').size].orEmpty()).joinToString(".") }
+    }
+
+    /** 校验当前数组实例中声明为“数组内唯一”的字段，嵌套数组交给其自身的校验层处理。 */
+    private fun validateUniqueArrayFields(
+        fields: List<ActivityFormField>,
+        arrayFieldKey: String,
+        arrayKey: String,
+        indexes: Set<Int>,
+        values: Map<String, Any?>
+    ) {
+        fun visit(children: List<ActivityFormField>, schemaParentKey: String, parentKeys: List<String>) {
+            children.forEach { field ->
+                val resolvedKeys = parentKeys.map { parentKey -> nestedFieldKey(field, schemaParentKey, parentKey) }
+                if (field.uniqueInArray && field.type !in setOf(ComponentNodeType.GROUP, ComponentNodeType.COMPONENT, ComponentNodeType.PRIZE)) {
+                    val configuredValues = resolvedKeys.mapNotNull { resolvedKey ->
+                        values[resolvedKey]?.takeUnless(::isBlank)?.toString()
+                    }
+                    require(configuredValues.size == configuredValues.toSet().size) {
+                        "${field.label} 在 ${arrayKey.substringAfterLast('.')} 数组中不能重复"
+                    }
+                }
+                if (field.type == ComponentNodeType.GROUP || (field.type == ComponentNodeType.COMPONENT && !field.collection)) {
+                    visit(field.children, field.key, resolvedKeys)
+                }
+            }
+        }
+        visit(fields, arrayFieldKey, indexes.map { index -> "$arrayKey.$index" })
+    }
+
     /** 校验奖品组件的固定字段和扩展字段；装扮和礼物必须提供奖品 ID。 */
     private fun validatePrizeFieldValue(
         field: ActivityFormField,
@@ -795,6 +912,7 @@ class ActivityConfigurationService(
             } else if (field.required) {
                 require(indexes.isNotEmpty()) { "${field.label} 至少需要配置一个奖品" }
             }
+            validateUniqueArrayFields(field.children, field.key, key, indexes, values)
             indexes.forEach { index ->
                 validatePrizeFieldValue(
                     field.copy(collection = false, required = field.required || field.collectionSize != null),

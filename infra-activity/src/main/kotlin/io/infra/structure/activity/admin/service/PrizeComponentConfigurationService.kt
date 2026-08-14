@@ -3,6 +3,7 @@ package io.infra.structure.activity.admin.service
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.mybatisflex.core.query.QueryWrapper
 import io.infra.structure.activity.admin.domain.model.ComponentDefinition
+import io.infra.structure.activity.admin.domain.model.ComponentLinkOperator
 import io.infra.structure.activity.admin.domain.model.ComponentNode
 import io.infra.structure.activity.admin.domain.model.ComponentNodeType
 import io.infra.structure.activity.admin.domain.model.ComponentOption
@@ -112,6 +113,7 @@ class PrizeComponentConfigurationService(
             "奖品扩展的根字段键不能与固定奖品字段重复"
         }
         validateNodes(definition.nodes)
+        validateLinkRules(definition.nodes)
     }
 
     /** 递归校验扩展奖品字段节点。 */
@@ -143,6 +145,37 @@ class PrizeComponentConfigurationService(
             }
             validateNodes(node.children)
         }
+    }
+
+    /** 联动字段只能指向同一奖品扩展定义中的可比较输入项。 */
+    private fun validateLinkRules(nodes: List<ComponentNode>) {
+        val fields = linkedFieldPaths(nodes)
+        fields.forEach { (sourceKey, source) ->
+            require(source.linkRules.map { it.targetKey }.toSet().size == source.linkRules.size) { "字段 $sourceKey 的联动目标不能重复" }
+            require(source.linkRules.isEmpty() || source.type !in setOf(ComponentNodeType.GROUP, ComponentNodeType.COMPONENT, ComponentNodeType.PRIZE, ComponentNodeType.MULTI_SELECT)) {
+                "字段 $sourceKey 不能配置联动规则"
+            }
+            source.linkRules.forEach { rule ->
+                val target = fields[rule.targetKey]
+                require(target != null && rule.targetKey != sourceKey && target.type == source.type) { "字段 $sourceKey 的联动目标无效或类型不一致" }
+                if (rule.operator !in setOf(ComponentLinkOperator.EQUAL, ComponentLinkOperator.NOT_EQUAL)) {
+                    require(source.type in setOf(ComponentNodeType.NUMBER, ComponentNodeType.DATE, ComponentNodeType.DATE_TIME)) { "字段 $sourceKey 仅数字、日期和日期时间支持大小比较" }
+                }
+            }
+        }
+    }
+
+    private fun linkedFieldPaths(nodes: List<ComponentNode>): Map<String, ComponentNode> {
+        val fields = linkedMapOf<String, ComponentNode>()
+        fun visit(children: List<ComponentNode>, parentPath: String) {
+            children.forEach { node ->
+                val path = if (parentPath.isBlank()) node.key else "$parentPath.${node.key}"
+                fields[path] = node
+                visit(node.children, path)
+            }
+        }
+        visit(nodes, "")
+        return fields
     }
 
     /** 校验下拉候选项和默认值。 */

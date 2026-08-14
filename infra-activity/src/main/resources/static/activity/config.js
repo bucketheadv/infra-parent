@@ -147,6 +147,11 @@
         showNotice.timer = window.setTimeout(() => { notice.hidden = true; }, 5000);
     };
 
+    // 保存后动态字段会被重置，主动回到页面顶部，避免停留在此前展开配置留下的滚动位置。
+    const scrollToConfigurationTop = () => {
+        window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }));
+    };
+
     // 根据永久有效开关显示或隐藏活动的开始、结束时间输入框，并补齐当天默认时间。
     const syncValidityFields = () => {
         const form = document.getElementById("activity-form");
@@ -381,6 +386,64 @@
         return node;
     };
 
+    const linkOperatorOptions = [
+        ["GREATER_THAN", "大于"], ["LESS_THAN", "小于"], ["EQUAL", "等于"],
+        ["GREATER_OR_EQUAL", "大于等于"], ["LESS_OR_EQUAL", "小于等于"], ["NOT_EQUAL", "不等于"]
+    ];
+    const linkedTargetTypes = new Set(["TEXT", "TEXTAREA", "NUMBER", "DATE", "DATE_TIME", "SELECT"]);
+
+    const nodeChoices = (form, excludedNode = null) => {
+        const choices = [];
+        const visit = (container, parentPath = "") => {
+            Array.from(container.children)
+                .filter((element) => element.classList.contains("component-node"))
+                .forEach((node) => {
+                    const key = node.querySelector(".node-key").value.trim();
+                    if (!key) return;
+                    const path = parentPath ? `${parentPath}.${key}` : key;
+                    const type = node.querySelector(".node-type").value;
+                    if (node !== excludedNode && linkedTargetTypes.has(type)) {
+                        choices.push({ key: path, label: node.querySelector(".node-label").value.trim() || path });
+                    }
+                    if (type !== "COMPONENT") visit(node.querySelector(".child-nodes > .node-list"), path);
+                });
+        };
+        visit(form.querySelector(":scope > .node-builder > .node-list") || form.querySelector(".node-list"));
+        return choices;
+    };
+
+    const refreshLinkRuleChoices = (form) => {
+        if (!form) return;
+        form.querySelectorAll(".node-link-target").forEach((select) => {
+            const current = select.value || select.dataset.pendingTargetKey || "";
+            const source = select.closest(".component-node");
+            const choices = nodeChoices(form, source);
+            select.innerHTML = `<option value="">选择关联字段</option>${choices.map((choice) => `<option value="${escapeHtml(choice.key)}">${escapeHtml(choice.label)}（${escapeHtml(choice.key)}）</option>`).join("")}`;
+            if (choices.some((choice) => choice.key === current)) {
+                select.value = current;
+                delete select.dataset.pendingTargetKey;
+            } else {
+                select.value = "";
+                if (current) select.dataset.pendingTargetKey = current;
+            }
+        });
+    };
+
+    const addLinkRuleRow = (node, rule = {}) => {
+        const container = node.querySelector(".node-link-rules");
+        const targetKey = rule.targetKey || rule.target_key || "";
+        const operator = rule.operator || "EQUAL";
+        const row = document.createElement("div");
+        row.className = "node-link-rule";
+        row.innerHTML = `<select class="node-link-target" aria-label="关联字段"></select><select class="node-link-operator" aria-label="联动规则">${linkOperatorOptions.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select><button class="remove-link-rule" type="button" title="移除联动">×</button>`;
+        row.querySelector(".node-link-operator").value = operator;
+        container.appendChild(row);
+        row.querySelector(".node-link-target").dataset.pendingTargetKey = targetKey;
+        refreshLinkRuleChoices(node.closest("form"));
+    };
+
+    const definitionLinkRules = (definition) => definition.linkRules || definition.link_rules || [];
+
     // 将服务端返回的递归节点定义回填为可继续编辑的页面节点。
     const populateNode = (container, definition) => {
         const node = addNode(container);
@@ -388,6 +451,7 @@
         node.querySelector(".node-label").value = definition.label;
         node.querySelector(".node-type").value = definition.type;
         node.querySelector(".node-required").checked = definition.required;
+        node.querySelector(".node-unique").checked = definition.uniqueInArray === true;
         node.querySelector(".node-placeholder").value = definition.placeholder || "";
         node.querySelector(".node-options").value = (definition.options || [])
             .map((option) => `${option.value}:${option.label}`)
@@ -405,6 +469,7 @@
         if (definition.type !== "COMPONENT") {
             (definition.children || []).forEach((child) => populateNode(node.querySelector(".child-nodes > .node-list"), child));
         }
+        definitionLinkRules(definition).forEach((rule) => addLinkRuleRow(node, rule));
     };
 
     // 将奖励组件的字段定义回填为可编辑节点，结构与普通组件一致但不允许组件引用。
@@ -414,6 +479,7 @@
         node.querySelector(".node-label").value = definition.label;
         node.querySelector(".node-type").value = definition.type;
         node.querySelector(".node-required").checked = definition.required;
+        node.querySelector(".node-unique").checked = definition.uniqueInArray === true;
         node.querySelector(".node-placeholder").value = definition.placeholder || "";
         node.querySelector(".node-options").value = (definition.options || [])
             .map((option) => `${option.value}:${option.label}`)
@@ -427,6 +493,7 @@
             defaultField.value = definition.defaultValue || "";
         }
         (definition.children || []).forEach((child) => populateRewardNode(node.querySelector(".child-nodes > .node-list"), child));
+        definitionLinkRules(definition).forEach((rule) => addLinkRuleRow(node, rule));
     };
 
     // 恢复新建组件状态，并清空正在编辑的组件标识。
@@ -488,6 +555,7 @@
         form.enabled.checked = component.enabled;
         componentNodes.replaceChildren();
         component.definition.nodes.forEach((node) => populateNode(componentNodes, node));
+        refreshLinkRuleChoices(form);
         document.getElementById("component-form-title").textContent = "编辑组件";
         setEditorMode("component", component.id);
         document.getElementById("cancel-component-edit").hidden = false;
@@ -512,6 +580,7 @@
         rewardComponentNodes.replaceChildren();
         if (!form.directPrizeMount.checked) {
             component.definition.nodes.forEach((node) => populateRewardNode(rewardComponentNodes, node));
+            refreshLinkRuleChoices(form);
         }
         state.rewardComponentPrizeBindings = (component.prizes || []).map((prize) => ({
             prizeComponentId: prize.prizeComponentId || 1,
@@ -558,6 +627,7 @@
         form.enabled.checked = component.enabled;
         prizeComponentNodes.replaceChildren();
         component.definition.nodes.forEach((node) => populateRewardNode(prizeComponentNodes, node));
+        refreshLinkRuleChoices(form);
         document.getElementById("prize-component-form-title").textContent = "编辑奖品扩展";
         setEditorMode("prizeComponent", component.id);
         document.getElementById("cancel-prize-component-edit").hidden = false;
@@ -608,6 +678,7 @@
         }));
         templateNodes.replaceChildren();
         template.definition.nodes.forEach((node) => populateNode(templateNodes, node));
+        refreshLinkRuleChoices(form);
         document.getElementById("template-form-title").textContent = "编辑模板";
         setEditorMode("template", template.id);
         document.getElementById("cancel-template-edit").hidden = false;
@@ -724,6 +795,15 @@
                 label: element.querySelector(".node-label").value.trim(),
                 type,
                 required: element.querySelector(".node-required").checked,
+                uniqueInArray: element.querySelector(".node-unique").checked,
+                linkRules: linkedTargetTypes.has(type)
+                    ? Array.from(element.querySelectorAll(":scope > .node-link-rules-field .node-link-rule"))
+                        .map((rule) => ({
+                            targetKey: rule.querySelector(".node-link-target").value || rule.querySelector(".node-link-target").dataset.pendingTargetKey || "",
+                            operator: rule.querySelector(".node-link-operator").value
+                        }))
+                        .filter((rule) => rule.targetKey)
+                    : [],
                 placeholder: element.querySelector(".node-placeholder").value.trim() || null,
                 defaultValue,
                 options: type === "SELECT" || type === "MULTI_SELECT" ? parseOptions(element.querySelector(".node-options")) : [],
@@ -753,6 +833,8 @@
         const optionsField = node.querySelector(".node-options-field");
         const componentFields = node.querySelector(".node-component-fields");
         const defaultField = node.querySelector(".node-default-field");
+        const uniqueField = node.querySelector(".node-unique-field");
+        const linkRulesField = node.querySelector(".node-link-rules-field");
         const childNodes = node.querySelector(".child-nodes");
         const currentDefaults = Array.from(node.querySelector(".node-default")?.selectedOptions || []).map((option) => option.value);
         const currentDefault = currentDefaults[0] || node.querySelector(".node-default")?.value || "";
@@ -765,7 +847,13 @@
         childNodes.classList.toggle("is-hidden", type === "COMPONENT");
         defaultField.hidden = type === "GROUP" || type === "COMPONENT";
         defaultField.classList.toggle("is-hidden", type === "GROUP" || type === "COMPONENT");
+        uniqueField.hidden = type === "GROUP" || type === "COMPONENT";
+        uniqueField.classList.toggle("is-hidden", type === "GROUP" || type === "COMPONENT");
+        linkRulesField.hidden = !linkedTargetTypes.has(type);
+        linkRulesField.classList.toggle("is-hidden", !linkedTargetTypes.has(type));
+        if (!linkedTargetTypes.has(type)) linkRulesField.querySelector(".node-link-rules").replaceChildren();
         refreshComponentReferenceChoices();
+        refreshLinkRuleChoices(node.closest("form"));
         if (type === "GROUP" || type === "COMPONENT") {
             defaultField.innerHTML = '默认值<input class="node-default" value="">';
             return;
@@ -1324,19 +1412,21 @@
         }
         const required = field.required ? "required" : "";
         const label = `${escapeHtml(field.label)}${field.required ? " *" : ""}`;
+        const uniqueHint = field.uniqueInArray ? '<small class="field-hint">数组内唯一</small>' : "";
         const value = Object.prototype.hasOwnProperty.call(values, fieldKey) ? values[fieldKey] : field.defaultValue;
         const defaultValue = escapeHtml(value ?? "");
-        const common = `data-field-key="${escapeHtml(fieldKey)}" ${required} placeholder="${escapeHtml(field.placeholder || "")}"`;
+        const linkRules = (field.linkRules || []).map((rule) => ({ targetKey: rule.targetKey, operator: rule.operator }));
+        const common = `data-field-key="${escapeHtml(fieldKey)}" data-schema-field-key="${escapeHtml(field.key)}" data-field-label="${escapeHtml(field.label)}" ${field.uniqueInArray ? 'data-unique-in-array="true"' : ""} ${linkRules.length ? `data-link-rules="${escapeHtml(JSON.stringify(linkRules))}"` : ""} ${required} placeholder="${escapeHtml(field.placeholder || "")}"`;
         let control;
         if (field.type === "TEXTAREA") {
             control = `<textarea ${common} rows="3">${defaultValue}</textarea>`;
         } else if (field.type === "SELECT") {
-            control = `<select data-field-key="${escapeHtml(fieldKey)}" ${required}><option value="">请选择</option>${field.options.map((option) => `<option value="${escapeHtml(option.value)}" ${option.value === String(value ?? "") ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}</select>`;
+            control = `<select ${common}><option value="">请选择</option>${field.options.map((option) => `<option value="${escapeHtml(option.value)}" ${option.value === String(value ?? "") ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}</select>`;
         } else if (field.type === "MULTI_SELECT") {
             const selectedValues = Array.isArray(value)
                 ? value.map(String)
                 : String(value ?? field.defaultValue ?? "").split(",").filter(Boolean);
-            control = `<select data-field-key="${escapeHtml(fieldKey)}" ${required} multiple size="${Math.min(Math.max(field.options.length, 2), 5)}">${field.options.map((option) => `<option value="${escapeHtml(option.value)}" ${selectedValues.includes(option.value) ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}</select>`;
+            control = `<select ${common} multiple size="${Math.min(Math.max(field.options.length, 2), 5)}">${field.options.map((option) => `<option value="${escapeHtml(option.value)}" ${selectedValues.includes(option.value) ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}</select>`;
         } else {
             const isDateType = field.type === "DATE" || field.type === "DATE_TIME";
             const inputType = field.type === "NUMBER" ? "number" : field.type === "DATE" ? "date" : field.type === "DATE_TIME" ? "datetime-local" : "text";
@@ -1345,7 +1435,7 @@
             control = `<input type="${inputType}"${inputStep}${language} ${common} value="${defaultValue}">`;
         }
         const children = field.children.map((child) => renderDynamicField(child, resolveChildFieldKey(child, field, fieldKey), values)).join("");
-        return `<div class="dynamic-field" style="--depth:${field.depth}"><label>${label}${control}</label>${children}</div>`;
+        return `<div class="dynamic-field" style="--depth:${field.depth}"><label>${label}${control}${uniqueHint}</label>${children}</div>`;
     };
 
     // 根据字段路径在动态表单定义中定位子组件数组的结构。
@@ -1374,6 +1464,193 @@
             syncPrizeEditor(element);
             syncPrizeIconPreview(element);
         });
+    };
+
+    const resolveLinkedFieldKey = (schemaFieldKey, actualFieldKey, schemaTargetKey) => {
+        const schemaParts = schemaFieldKey.split(".");
+        const inserted = new Map();
+        let matched = 0;
+        actualFieldKey.split(".").forEach((part) => {
+            if (matched < schemaParts.length && part === schemaParts[matched]) matched += 1;
+            else if (/^\d+$/.test(part)) inserted.set(matched, [...(inserted.get(matched) || []), part]);
+        });
+        const targetParts = schemaTargetKey.split(".");
+        return targetParts.flatMap((part, index) => [...(inserted.get(index) || []), part])
+            .concat(inserted.get(targetParts.length) || [])
+            .join(".");
+    };
+
+    const linkOperatorLabels = {
+        GREATER_THAN: "大于", LESS_THAN: "小于", EQUAL: "等于",
+        GREATER_OR_EQUAL: "大于等于", LESS_OR_EQUAL: "小于等于", NOT_EQUAL: "不等于"
+    };
+    const compareLinkedValues = (source, target, operator) => {
+        const left = source.value.trim();
+        const right = target.value.trim();
+        if (!left || !right) return true;
+        let comparison;
+        if (source.type === "number") {
+            const leftNumber = Number(left);
+            const rightNumber = Number(right);
+            if (!Number.isFinite(leftNumber) || !Number.isFinite(rightNumber)) return false;
+            comparison = Math.sign(leftNumber - rightNumber);
+        } else if (source.type === "date" || source.type === "datetime-local") {
+            comparison = Math.sign(new Date(left).getTime() - new Date(right).getTime());
+        } else {
+            comparison = left.localeCompare(right);
+        }
+        return {
+            GREATER_THAN: comparison > 0, LESS_THAN: comparison < 0, EQUAL: comparison === 0,
+            GREATER_OR_EQUAL: comparison >= 0, LESS_OR_EQUAL: comparison <= 0, NOT_EQUAL: comparison !== 0
+        }[operator];
+    };
+
+    const clearLinkedValidationErrors = (root) => {
+        root.querySelectorAll(".field-link-validation-error").forEach((error) => error.remove());
+        root.querySelectorAll(".has-link-error").forEach((control) => control.classList.remove("has-link-error"));
+    };
+    const addLinkedValidationError = (control, message) => {
+        const field = control.closest(".dynamic-field") || control.closest("label") || control.parentElement;
+        if (!field) return;
+        const error = document.createElement("small");
+        error.className = "field-validation-error field-link-validation-error";
+        error.textContent = message;
+        field.append(error);
+        control.classList.add("has-link-error");
+    };
+    const validateLinkedFields = (form) => {
+        clearLinkedValidationErrors(form);
+        const controls = Array.from(form.querySelectorAll("[data-field-key]"));
+        const byKey = new Map(controls.map((control) => [control.dataset.fieldKey, control]));
+        let invalid = false;
+        controls.forEach((source) => {
+            if (!source.dataset.linkRules) return;
+            let rules = [];
+            try { rules = JSON.parse(source.dataset.linkRules); } catch (_) { return; }
+            rules.forEach((rule) => {
+                const targetKey = resolveLinkedFieldKey(source.dataset.schemaFieldKey, source.dataset.fieldKey, rule.targetKey);
+                const target = byKey.get(targetKey);
+                if (target && source.value.trim() && target.value.trim() && !compareLinkedValues(source, target, rule.operator)) {
+                    addLinkedValidationError(source, `联动条件不满足：${linkOperatorLabels[rule.operator] || "比较"} ${target.dataset.fieldLabel || "关联字段"}`);
+                    invalid = true;
+                }
+            });
+        });
+        return invalid;
+    };
+
+    const clearFieldValidationErrors = (root) => root.querySelectorAll?.(".field-validation-error").forEach((error) => error.remove());
+    const addFieldValidationError = (control, message) => {
+        const field = control.closest(".dynamic-field") || control.closest("label") || control.parentElement;
+        if (!field) return;
+        field.querySelector(".field-validation-error")?.remove();
+        const error = document.createElement("small");
+        error.className = "field-validation-error";
+        error.textContent = message;
+        field.append(error);
+        control.classList.add("has-validation-error");
+    };
+    const focusFirstInvalidField = (root) => {
+        const control = root.querySelector(".has-validation-error, .has-link-error, .has-unique-error");
+        if (!control) return;
+        window.requestAnimationFrame(() => {
+            control.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+            window.setTimeout(() => {
+                if (typeof control.focus === "function") control.focus({ preventScroll: true });
+            }, 220);
+        });
+    };
+    const clearUniqueValidationErrors = (root) => {
+        root.querySelectorAll(".field-unique-validation-error").forEach((error) => error.remove());
+        root.querySelectorAll(".has-unique-error").forEach((control) => control.classList.remove("has-unique-error"));
+    };
+    const addUniqueValidationError = (control) => {
+        const field = control.closest(".dynamic-field") || control.closest("label") || control.parentElement;
+        if (!field) return;
+        field.querySelector(".field-unique-validation-error")?.remove();
+        const error = document.createElement("small");
+        error.className = "field-validation-error field-unique-validation-error";
+        error.textContent = "该字段在数组内不能重复";
+        field.append(error);
+        control.classList.add("has-unique-error");
+    };
+    const validateUniqueArrayFieldsClient = (form) => {
+        clearUniqueValidationErrors(form);
+        let invalid = false;
+        form.querySelectorAll(".dynamic-component[data-component-field-key]").forEach((array) => {
+            const baseKey = array.dataset.componentFieldKey;
+            const valuesByField = new Map();
+            array.querySelectorAll('[data-unique-in-array="true"]').forEach((control) => {
+                const item = control.closest(".dynamic-component-item");
+                if (!item || item.closest(".dynamic-component") !== array) return;
+                const prefix = `${baseKey}.${item.dataset.arrayItemIndex}.`;
+                const relativeKey = control.dataset.fieldKey.startsWith(prefix)
+                    ? control.dataset.fieldKey.slice(prefix.length)
+                    : control.dataset.fieldKey;
+                const value = control.multiple
+                    ? Array.from(control.selectedOptions).map((option) => option.value).join(",")
+                    : control.value.trim();
+                if (!value) return;
+                const entries = valuesByField.get(relativeKey) || [];
+                entries.push({ control, value });
+                valuesByField.set(relativeKey, entries);
+            });
+            valuesByField.forEach((entries) => {
+                const seen = new Map();
+                entries.forEach((entry) => {
+                    if (!seen.has(entry.value)) seen.set(entry.value, entry);
+                    else {
+                        addUniqueValidationError(entry.control);
+                        addUniqueValidationError(seen.get(entry.value).control);
+                        invalid = true;
+                    }
+                });
+            });
+        });
+        return invalid;
+    };
+    const validateDynamicFields = (form) => {
+        clearFieldValidationErrors(form);
+        form.querySelectorAll(".has-validation-error").forEach((control) => control.classList.remove("has-validation-error"));
+        let invalid = false;
+        form.querySelectorAll("input, select, textarea").forEach((control) => {
+            if (control.type === "checkbox" || control.disabled || control.checkValidity()) return;
+            const message = control.validity.valueMissing
+                ? (control.multiple ? "至少选择一项" : "此项为必填项")
+                : control.type === "number" ? "请输入有效数字" : "请输入有效值";
+            addFieldValidationError(control, message);
+            invalid = true;
+        });
+        const validForever = form.validForever.checked;
+        if (!validForever) {
+            [form.validStartTime, form.validEndTime].forEach((control) => {
+                if (control.value) return;
+                addFieldValidationError(control, "请设置活动有效期");
+                invalid = true;
+            });
+        }
+        if (validateUniqueArrayFieldsClient(form)) invalid = true;
+        return invalid;
+    };
+
+    const showActivityValidationFailure = (form, error) => {
+        const message = String(error?.message || "保存失败，请检查输入内容。");
+        const duplicate = message.match(/^(.+?) 在 .+ 数组中不能重复$/);
+        const required = message.match(/^(.+?) 为必填项$/);
+        const invalidOption = message.match(/^(.+?) 的候选值无效$/);
+        const linked = message.match(/^(.+?) 不符合联动规则$/);
+        const label = duplicate?.[1] || required?.[1] || invalidOption?.[1] || linked?.[1];
+        if (label) {
+            const controls = Array.from(form.querySelectorAll("[data-field-label]")).filter((control) => control.dataset.fieldLabel === label);
+            controls.forEach((control) => addFieldValidationError(control,
+                duplicate ? "该字段在数组内不能重复" : linked ? "联动条件不满足" : required ? "此项为必填项" : "请选择有效选项"));
+            if (controls.length) {
+                focusFirstInvalidField(form);
+                showNotice("请检查输入框下方的提示。", true);
+                return;
+            }
+        }
+        showNotice("保存失败，请检查输入内容。", true);
     };
 
     const loadTemplateForm = async (values = {}, storedValues = false) => {
@@ -1778,8 +2055,15 @@
             if (target.classList.contains("add-child-node")) {
                 add(target.closest(".child-nodes").querySelector(".node-list"));
             }
+            if (target.classList.contains("add-link-rule")) {
+                addLinkRuleRow(target.closest(".component-node"));
+            }
+            if (target.classList.contains("remove-link-rule")) {
+                target.closest(".node-link-rule").remove();
+            }
             if (target.classList.contains("remove-node")) {
                 target.closest(".component-node").remove();
+                refreshLinkRuleChoices(form);
             }
         });
         form.addEventListener("change", (event) => {
@@ -1793,6 +2077,9 @@
                 if (["SELECT", "MULTI_SELECT"].includes(node.querySelector(".node-type").value)) {
                     refreshNodeEditor(node);
                 }
+            }
+            if (event.target.classList.contains("node-key") || event.target.classList.contains("node-label")) {
+                refreshLinkRuleChoices(form);
             }
         });
     };
@@ -2061,26 +2348,39 @@
                     syncPrizeIconPreview(prize);
                 }
             }
+            validateUniqueArrayFieldsClient(document.getElementById("activity-form"));
             return;
         }
         const removeButton = event.target.closest(".remove-array-item");
         if (removeButton) {
             removeButton.closest(".dynamic-component-item").remove();
+            validateUniqueArrayFieldsClient(document.getElementById("activity-form"));
         }
     });
     document.getElementById("activity-dynamic-fields").addEventListener("change", (event) => {
         if (event.target.matches("[data-prize-type]")) {
             syncPrizeEditor(event.target.closest(".prize-component"), true);
         }
+        validateUniqueArrayFieldsClient(document.getElementById("activity-form"));
+        validateLinkedFields(document.getElementById("activity-form"));
     });
     document.getElementById("activity-dynamic-fields").addEventListener("input", (event) => {
         if (event.target.matches("[data-prize-icon]")) {
             syncPrizeIconPreview(event.target.closest(".prize-component"));
         }
+        validateUniqueArrayFieldsClient(document.getElementById("activity-form"));
+        validateLinkedFields(document.getElementById("activity-form"));
     });
     document.getElementById("activity-form").addEventListener("submit", async (event) => {
         event.preventDefault();
         const form = event.currentTarget;
+        const dynamicInvalid = validateDynamicFields(form);
+        const linkedInvalid = validateLinkedFields(form);
+        if (dynamicInvalid || linkedInvalid) {
+            focusFirstInvalidField(form);
+            showNotice("请先修正输入框下方的提示。", true);
+            return;
+        }
         if (!state.currentForm) {
             showNotice("请先选择一个活动模板。", true);
             return;
@@ -2092,10 +2392,6 @@
                 : input.value;
         });
         const validForever = form.validForever.checked;
-        if (!validForever && (!form.validStartTime.value || !form.validEndTime.value)) {
-            showNotice("非永久有效的活动必须设置开始时间和结束时间。", true);
-            return;
-        }
         try {
             const activityPath = state.editingActivityId ? `/activities/${state.editingActivityId}` : "/activities";
             await request(activityPath, {
@@ -2110,9 +2406,10 @@
             });
             const editing = state.editingActivityId !== null;
             resetActivityForm();
+            scrollToConfigurationTop();
             showNotice(editing ? "活动配置已更新。" : "活动配置已保存。");
             await loadAll();
-        } catch (error) { showNotice(error.message, true); }
+        } catch (error) { showActivityValidationFailure(form, error); }
     });
 
     addNode(componentNodes);

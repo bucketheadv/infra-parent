@@ -1,6 +1,7 @@
 package io.infra.structure.activity.admin.dto
 
 import io.infra.structure.activity.admin.domain.model.ComponentDefinition
+import io.infra.structure.activity.admin.domain.model.ComponentLinkRule
 import io.infra.structure.activity.admin.domain.model.ComponentNodeType
 import io.infra.structure.activity.admin.domain.model.ComponentOption
 import io.infra.structure.activity.admin.domain.model.ComponentReferenceMode
@@ -370,6 +371,10 @@ data class ActivityFormField(
     val type: ComponentNodeType,
     /** 是否必须填写。 */
     val required: Boolean,
+    /** 当字段所在组件以数组挂载时，要求数组各项的值不能重复。 */
+    val uniqueInArray: Boolean = false,
+    /** 当前字段与其他字段之间的联动比较规则，目标键已展开为活动表单路径。 */
+    val linkRules: List<ComponentLinkRule> = emptyList(),
     /** 输入提示。 */
     val placeholder: String?,
     /** 动态表单初次渲染时填充的默认值。 */

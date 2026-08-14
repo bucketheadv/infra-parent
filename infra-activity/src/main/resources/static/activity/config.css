@@ -309,6 +309,7 @@ select:disabled { cursor: not-allowed; color: #7d8986; background: #edf2f0; }
 .prize-icon-preview img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .dynamic-field { display: grid; gap: .4rem; padding-left: calc(var(--depth) * .8rem); }
 .dynamic-field label { padding-left: .7rem; border-left: 2px solid var(--teal-soft); }
+.field-hint { color: var(--teal-text); font-size: .7rem; font-weight: 700; }
 /* 多选控件采用柔和的候选项高亮，避免浏览器默认的强对比选中底色。 */
 select[multiple] {
     min-height: 7.15rem;
@@ -333,7 +334,9 @@ select[multiple]:focus option:checked {
     box-shadow: 0 0 0 100vmax #1d4ed8 inset;
 }
 .empty-state { margin: 0; padding: .8rem; color: var(--muted); background: #f7faf9; font-size: .88rem; }
-.notice { position: sticky; top: 1rem; z-index: 2; margin: 0 0 1rem; padding: .75rem .9rem; border: 1px solid var(--teal); border-radius: .35rem; color: var(--teal-text); background: var(--teal-pale); font-size: .9rem; font-weight: 700; }
+.notice { position: fixed; top: 1.25rem; left: 50%; z-index: 20; width: min(calc(100% - 2rem), 34rem); margin: 0; padding: .7rem .9rem; border: 1px solid var(--teal); border-radius: .55rem; color: var(--teal-text); background: var(--teal-pale); box-sizing: border-box; font-size: .86rem; font-weight: 700; text-align: center; transform: translateX(-50%); }
+.field-validation-error { display: block; margin-top: .35rem; color: #b8324a; font-size: .72rem; font-weight: 700; line-height: 1.4; }
+.has-validation-error, .has-link-error, .has-unique-error { border-color: #dc4c64 !important; box-shadow: 0 0 0 3px rgba(220,76,100,.1) !important; }
 .notice.is-error { border-color: var(--danger-border); color: var(--danger-text); background: var(--danger-soft); }
 
 @media (max-width: 1280px) {
@@ -570,6 +573,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); box-shado
 .theme-option.is-active { border-color: var(--teal); background: var(--teal-soft); box-shadow: inset 0 0 0 1px var(--teal); }
 
 @media (max-width: 860px) {
+    .node-link-rule { grid-template-columns: minmax(0, 1fr) auto; }
+    .node-link-rule .node-link-target { grid-column: 1 / -1; }
+}
+
+@media (max-width: 860px) {
     .navigation::after { display: none; }
     .navigation { padding-right: 0; }
     .workspace { padding-left: 0; }
@@ -708,6 +716,17 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); box-shado
 .form-heading-actions { gap: .65rem; }
 .navigation-menu-title { font-size: .72rem; }
 .tab-button { padding: .76rem .9rem; font-size: .9rem; line-height: 1.35; }
+.node-flags { display: flex; flex-wrap: wrap; gap: .9rem; align-items: center; }
+.node-unique-field { color: var(--teal-text); }
+.node-unique-field input { accent-color: var(--teal); }
+.node-link-rules-field { display: grid; gap: .6rem; padding: .7rem; border: 1px solid #dbe3ef; border-radius: .55rem; background: #fff; }
+.node-link-rules-heading { display: flex; align-items: center; justify-content: space-between; gap: .7rem; }
+.node-link-rules-heading strong { color: var(--ink-soft); font-size: .76rem; }
+.node-link-rules-heading small { display: block; margin-top: .15rem; color: var(--muted); font-size: .68rem; font-weight: 600; }
+.node-link-rules { display: grid; gap: .45rem; }
+.node-link-rule { display: grid; grid-template-columns: minmax(0, 1fr) 7.4rem auto; gap: .45rem; align-items: center; }
+.node-link-rule select { min-width: 0; padding-top: .48rem; padding-bottom: .48rem; font-size: .75rem; }
+.remove-link-rule { width: 1.85rem; height: 1.85rem; padding: 0; border: 1px solid var(--danger-border); border-radius: .45rem; color: var(--danger-text); background: #fff; font-size: 1rem; line-height: 1; }
 @media (max-width: 1280px) {
     .config-shell { width: min(100% - 2rem, 72rem); }
     .work-grid { grid-template-columns: minmax(0, 1fr); }

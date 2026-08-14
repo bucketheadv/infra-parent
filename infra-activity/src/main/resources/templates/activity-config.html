@@ -173,7 +173,8 @@
     <fieldset class="component-node">
         <div class="node-toolbar"><span class="node-caption">字段节点</span><button class="remove-node" type="button" title="移除节点">移除</button></div>
         <div class="node-grid"><label>字段键<input class="node-key" required placeholder="venue"></label><label>字段标题<input class="node-label" required placeholder="活动地点"></label><label>类型<select class="node-type"><option value="TEXT">单行文本</option><option value="TEXTAREA">多行文本</option><option value="NUMBER">数字</option><option value="DATE">日期</option><option value="DATE_TIME">日期时间</option><option value="SELECT">下拉菜单</option><option value="MULTI_SELECT">多选下拉</option><option value="COMPONENT">子组件</option><option value="GROUP">分组</option></select></label><label>提示<input class="node-placeholder" placeholder="请输入内容"></label></div>
-        <label class="check-field"><input class="node-required" type="checkbox">必填</label>
+        <div class="node-flags"><label class="check-field"><input class="node-required" type="checkbox">必填</label><label class="check-field node-unique-field"><input class="node-unique" type="checkbox">数组内唯一</label></div>
+        <section class="node-link-rules-field" hidden><div class="node-link-rules-heading"><div><strong>联动校验</strong><small>当前字段值将按规则与其他字段比较</small></div><button class="secondary-button add-link-rule" type="button">添加联动</button></div><div class="node-link-rules"></div></section>
         <label class="node-options-field">下拉选项<textarea class="node-options" rows="2" placeholder="online:线上活动&#10;offline:线下活动"></textarea></label>
         <div class="node-component-fields" hidden><label>引用组件<select class="node-component-id"></select></label><label>承载形式<select class="node-component-mode"><option value="SINGLE">单个组件</option><option value="ARRAY">组件数组</option></select></label></div>
         <label class="node-default-field">默认值<input class="node-default" placeholder="可选"></label>
