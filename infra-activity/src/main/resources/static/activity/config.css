@@ -778,3 +778,158 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); box-shado
     .navigation > .navigation-copy { width: auto; }
     .navigation-menu { padding: 0; }
 }
+
+/* Clear color system: a crisp blue canvas with explicit semantic action colors. */
+:root {
+    --ink: #14213d;
+    --ink-soft: #334a6e;
+    --muted: #667996;
+    --line: #d5e1f2;
+    --surface: #ffffff;
+    --canvas: #edf3fb;
+    --teal: #2563eb;
+    --teal-strong: #1d4ed8;
+    --teal-deep: #1e3a8a;
+    --teal-text: #2455b5;
+    --teal-soft: #e8f0ff;
+    --teal-pale: #f5f8ff;
+    --teal-rgb: 37, 99, 235;
+    --amber: #d88910;
+    --accent-strong: #b96a08;
+    --accent-deep: #885000;
+    --accent-soft: #fff2d9;
+    --accent-pale: #fff9ef;
+    --accent-border: #f1ce92;
+    --success: #0e9f6e;
+    --success-text: #087456;
+    --success-soft: #e5f8f0;
+    --success-border: #9bdcc4;
+}
+
+body { background: var(--canvas); }
+.topbar { border-bottom-color: #d4e0f1; background: #ffffff; box-shadow: 0 2px 12px rgba(40, 78, 132, .06); backdrop-filter: none; }
+.navigation { background: #ffffff; }
+.navigation::after { background: #d8e4f3; }
+.navigation-menu-title { color: #5c7192; }
+.tab-button { color: #536a8c; }
+.tab-button:hover { color: var(--teal); background: #edf4ff; }
+.tab-button.is-active { color: #1748ac; background: #e4eeff; box-shadow: inset 3px 0 0 #2563eb; }
+
+.editor-form, .inventory { border-color: #d3e0f1; background: #ffffff; box-shadow: 0 .75rem 1.8rem rgba(44, 78, 126, .09); }
+.editor-status { border-left-color: #3b82f6; color: #526985; background: #eff5ff; }
+.editor-form.is-editing { border-color: #9fc2ff; box-shadow: inset 4px 0 0 #f59e0b, 0 .75rem 1.8rem rgba(44, 78, 126, .1); }
+.component-node, .template-bindings, .activity-validity, .node-link-rules-field { border-color: #cadbf3; background: #f8fbff; }
+.template-binding { border: 1px solid #dbe6f5; background: #f7faff; }
+.child-nodes { border-left-color: #80adff; border-top-color: #cadbf3; }
+.dynamic-component { border-color: #c8daf4; background: #f7fbff; }
+.dynamic-component-item { border-color: #9fc1f5; border-left-color: #3b82f6; background: #f1f6ff; box-shadow: 0 .25rem .75rem rgba(37, 99, 235, .1); }
+.dynamic-component-item:hover { border-color: #5d98f4; border-left-color: #2563eb; background: #eaf2ff; }
+.prize-component { border-color: #f1cf93; border-left-color: #e19a1b; background: #fffaf1; }
+.prize-extension-fields { border-color: #f0cb8f; background: #fffdf8; }
+
+input, select, textarea { border-color: #c7d8ef; color: var(--ink); background: #ffffff; }
+input:hover, select:hover, textarea:hover { border-color: #91b4ea; background: #ffffff; }
+input:focus, select:focus, textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .16); }
+
+.primary-button { background: #2563eb; box-shadow: 0 .4rem .9rem rgba(37, 99, 235, .28); }
+.primary-button:hover { background: #1d4ed8; box-shadow: 0 .45rem 1rem rgba(37, 99, 235, .34); }
+.secondary-button, .pagination-button, .record-icon-button, .dialog-close-button {
+    border-color: #b9cdea;
+    color: #2455b5;
+    background: #f8fbff;
+    box-shadow: none;
+}
+.secondary-button:hover, .pagination-button:hover:not(:disabled), .record-icon-button:hover, .dialog-close-button:hover {
+    border-color: #2563eb;
+    color: #1748ac;
+    background: #e9f1ff;
+}
+
+.record { border-color: #d5e2f3; border-left-color: #3b82f6; background: #ffffff; box-shadow: 0 .35rem .9rem rgba(44, 78, 126, .06); }
+.record:hover { border-color: #9dc0ee; box-shadow: 0 .6rem 1.3rem rgba(44, 78, 126, .12); }
+.record-title { color: var(--ink); }
+.record-code { color: #587098; }
+.record-tag { border-color: #c9dbf4; color: #2455b5; background: #edf4ff; }
+.record-tag:first-child { border-color: #b9d0f5; color: #2455b5; background: #e7f0ff; }
+.online-status-tag { border-color: #9bdcc4; color: #087456; background: #e5f8f0; }
+.offline-status-tag { border-color: #f1ce92; color: #9a5b05; background: #fff4e1; }
+.debug-status-tag { border-color: #c8b7ed; color: #6542a8; background: #f1ecff; }
+
+.record-icon-button.configure-activity-debug { border-color: #f1ce92; color: #a66308; background: #fff5e5 !important; }
+.record-icon-button.copy-activity { border-color: #cbbcf2; color: #6842b0; background: #f3efff !important; }
+.record-icon-button.edit-activity,
+.record-actions .secondary-button:not(.delete-configuration),
+.task-definition-edit { border-color: #b8d0f6; color: #2455b5; background: #eaf2ff !important; }
+.online-activity, .query-prize { border-color: #9bdcc4; color: #087456; background: #e5f8f0 !important; }
+.offline-activity { border-color: #f1ce92; color: #9a5b05; background: #fff3de !important; }
+.delete-configuration, .remove-node, .remove-array-item, .remove-template-binding, .remove-link-rule { border-color: #f2bbc6 !important; color: #b8324a !important; background: #fff0f3 !important; }
+.add-array-item, .add-child-node { border-color: #b8d0f6; color: #2455b5; background: #eaf2ff !important; }
+.record-icon-button.configure-activity-debug:hover { border-color: #d88910; color: #7f4a00; background: #ffedcc !important; }
+.record-icon-button.copy-activity:hover { border-color: #7c52c6; color: #55358f; background: #e9e1ff !important; }
+.record-icon-button.edit-activity:hover,
+.record-actions .secondary-button:not(.delete-configuration):hover,
+.task-definition-edit:hover,
+.add-array-item:hover, .add-child-node:hover { border-color: #2563eb; color: #1748ac; background: #dceaff !important; }
+.online-activity:hover, .query-prize:hover { border-color: #0e9f6e; color: #075a43; background: #d6f3e6 !important; }
+.offline-activity:hover { border-color: #d88910; color: #805000; background: #ffe9c0 !important; }
+.delete-configuration:hover, .remove-node:hover, .remove-array-item:hover, .remove-template-binding:hover, .remove-link-rule:hover { border-color: #dc4c64 !important; color: #9f213a !important; background: #ffe2e8 !important; }
+
+.notice { border-color: #9fc2ff; color: #1748ac; background: #e9f1ff; box-shadow: 0 .5rem 1.1rem rgba(37, 99, 235, .18); }
+.notice.is-error { border-color: #f2bbc6; color: #b8324a; background: #fff0f3; }
+.empty-state { border: 1px dashed #bfd1eb; color: #5e7394; background: #f7faff; }
+
+/* Theme variants use the selected primary color everywhere structural blue was used above. */
+.tab-button.is-active { color: var(--teal-deep); background: var(--teal-soft); box-shadow: inset 3px 0 0 var(--teal); }
+.editor-status { border-left-color: var(--teal); background: var(--teal-pale); }
+.editor-form.is-editing { border-color: rgba(var(--teal-rgb), .42); }
+.component-node, .template-bindings, .activity-validity, .node-link-rules-field { border-color: rgba(var(--teal-rgb), .22); background: var(--teal-pale); }
+.template-binding { border-color: rgba(var(--teal-rgb), .16); background: var(--teal-pale); }
+.child-nodes { border-left-color: rgba(var(--teal-rgb), .55); border-top-color: rgba(var(--teal-rgb), .22); }
+.dynamic-component { border-color: rgba(var(--teal-rgb), .23); background: var(--teal-pale); }
+.dynamic-component-item { border-color: rgba(var(--teal-rgb), .42); border-left-color: var(--teal); background: var(--teal-soft); box-shadow: 0 .25rem .75rem rgba(var(--teal-rgb), .12); }
+.dynamic-component-item:hover { border-color: rgba(var(--teal-rgb), .7); border-left-color: var(--teal-strong); background: var(--teal-soft); }
+input, select, textarea { border-color: rgba(var(--teal-rgb), .25); }
+input:hover, select:hover, textarea:hover { border-color: rgba(var(--teal-rgb), .5); }
+input:focus, select:focus, textarea:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(var(--teal-rgb), .16); }
+.primary-button { background: var(--teal); box-shadow: 0 .4rem .9rem rgba(var(--teal-rgb), .28); }
+.primary-button:hover { background: var(--teal-strong); box-shadow: 0 .45rem 1rem rgba(var(--teal-rgb), .34); }
+.secondary-button, .pagination-button, .record-icon-button, .dialog-close-button { border-color: rgba(var(--teal-rgb), .34); color: var(--teal-text); background: var(--teal-pale); }
+.secondary-button:hover, .pagination-button:hover:not(:disabled), .record-icon-button:hover, .dialog-close-button:hover { border-color: var(--teal); color: var(--teal-deep); background: var(--teal-soft); }
+.record { border-left-color: var(--teal); }
+.record:hover { border-color: rgba(var(--teal-rgb), .42); }
+.record-tag { border-color: rgba(var(--teal-rgb), .25); color: var(--teal-text); background: var(--teal-pale); }
+.record-tag:first-child { border-color: rgba(var(--teal-rgb), .36); color: var(--teal-text); background: var(--teal-soft); }
+.record-icon-button.edit-activity,
+.record-actions .secondary-button:not(.delete-configuration),
+.task-definition-edit,
+.add-array-item, .add-child-node { border-color: rgba(var(--teal-rgb), .32); color: var(--teal-text); background: var(--teal-soft) !important; }
+.record-icon-button.edit-activity:hover,
+.record-actions .secondary-button:not(.delete-configuration):hover,
+.task-definition-edit:hover,
+.add-array-item:hover, .add-child-node:hover { border-color: var(--teal); color: var(--teal-deep); background: var(--teal-soft) !important; }
+.notice { border-color: rgba(var(--teal-rgb), .4); color: var(--teal-deep); background: var(--teal-soft); box-shadow: 0 .5rem 1.1rem rgba(var(--teal-rgb), .18); }
+
+/* Keep the full work surface in the chosen theme instead of leaving blue remnants behind. */
+body { background: color-mix(in srgb, var(--teal) 5%, #f8fafc); }
+.topbar { border-bottom-color: rgba(var(--teal-rgb), .16); }
+.navigation { background: var(--surface); }
+.navigation::after, .navigation-menu-title::after { background: rgba(var(--teal-rgb), .16); }
+.navigation-menu-title { color: var(--muted); }
+.navigation-menu-title::before { background: rgba(var(--teal-rgb), .28); }
+.navigation > .navigation-copy, .tab-button { color: var(--muted); }
+.tab-button:hover { color: var(--teal-text); background: var(--teal-pale); }
+.back-link { border-color: rgba(var(--teal-rgb), .32); }
+.account-menu summary:hover, .account-menu[open] summary { border-color: rgba(var(--teal-rgb), .32); }
+.editor-form, .inventory { border-color: rgba(var(--teal-rgb), .18); }
+.editor-status { color: var(--muted); }
+.record { border-color: rgba(var(--teal-rgb), .18); }
+.empty-state { border-color: rgba(var(--teal-rgb), .24); background: var(--teal-pale); }
+select[multiple] { border-color: rgba(var(--teal-rgb), .32); background: var(--teal-pale); }
+select[multiple] option:checked {
+    background: var(--teal);
+    box-shadow: 0 0 0 100vmax var(--teal) inset;
+}
+select[multiple]:focus option:checked {
+    background: var(--teal-strong);
+    box-shadow: 0 0 0 100vmax var(--teal-strong) inset;
+}
