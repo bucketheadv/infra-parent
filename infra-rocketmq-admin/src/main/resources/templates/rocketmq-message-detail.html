@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{rocketmq-layout :: layout('消息查询', 'messages', ~{::main})}">
+<head></head>
+<body>
+<main class="main-content" th:fragment="main">
+    <input type="hidden" id="msg-id" th:value="${msgId}">
+    <input type="hidden" id="msg-topic" th:value="${topic}">
+    <header class="page-header">
+        <div>
+            <p class="eyebrow">消息详情</p>
+            <h1 th:text="${msgId}">msgId</h1>
+            <p class="subtitle" id="message-subtitle">正在加载消息</p>
+        </div>
+        <div class="toolbar">
+            <a class="secondary-button" th:href="@{/messages}">返回查询</a>
+            <button class="icon-button" type="button" id="refresh-button" title="刷新" aria-label="刷新">↻</button>
+        </div>
+    </header>
+
+    <section class="panel" aria-labelledby="meta-heading">
+        <div class="panel-header">
+            <div><h2 id="meta-heading">消息元数据</h2></div>
+        </div>
+        <dl class="detail-grid" id="meta-list"></dl>
+    </section>
+
+    <section class="panel" aria-labelledby="body-heading">
+        <div class="panel-header">
+            <div>
+                <h2 id="body-heading">消息体</h2>
+                <p id="body-size-label"></p>
+            </div>
+            <div class="toolbar">
+                <button class="secondary-button" type="button" id="body-toggle">显示十六进制</button>
+                <button class="secondary-button" type="button" id="resend-button">重发消息</button>
+            </div>
+        </div>
+        <pre class="code-block" id="message-body"></pre>
+    </section>
+
+    <section class="panel" aria-labelledby="props-heading">
+        <div class="panel-header">
+            <div><h2 id="props-heading">系统属性</h2></div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>属性</th><th>值</th></tr></thead>
+                <tbody id="props-body"></tbody>
+            </table>
+            <div class="empty-state" id="props-empty" hidden>无系统属性</div>
+        </div>
+    </section>
+<dialog id="resend-dialog" class="dialog">
+    <form id="resend-form" method="dialog">
+        <div class="dialog-header"><div><p class="eyebrow">重发消息</p><h2>重发到指定 Topic</h2></div><button class="close-button" type="button" data-close-dialog aria-label="关闭">×</button></div>
+        <div class="form-grid">
+            <label class="full-width">目标 Topic<input id="resend-topic" placeholder="留空表示回投原 Topic"></label>
+            <label>延迟等级<input id="resend-delay-level" type="number" min="0" max="100" value="0" title="0 表示立即投递"></label>
+        </div>
+        <p class="form-error" id="resend-form-error" role="alert"></p>
+        <div class="dialog-actions"><button class="secondary-button" type="button" data-close-dialog>取消</button><button class="primary-button" type="submit">确认重发</button></div>
+    </form>
+</dialog>
+</main>
+</body>
+</html>

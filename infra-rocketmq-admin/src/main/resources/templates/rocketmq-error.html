@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{rocketmq-layout :: layout('出错了', 'dashboard', ~{::main})}">
+<head></head>
+<body>
+<main class="main-content" th:fragment="main">
+    <header class="page-header">
+        <div>
+            <p class="eyebrow">页面异常</p>
+            <h1>页面加载失败</h1>
+        </div>
+    </header>
+    <section class="panel">
+        <p class="error-panel" th:text="${errorMessage}">管理操作失败</p>
+        <div class="dialog-actions">
+            <a class="secondary-button" th:href="@{/}">返回首页</a>
+        </div>
+    </section>
+</main>
+</body>
+</html>

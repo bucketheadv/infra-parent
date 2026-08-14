@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      th:fragment="layout(title, active, content)">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Infra RocketMQ 消息管理后台">
+    <title th:text="${title} + ' · Infra RocketMQ'">Infra RocketMQ</title>
+    <link rel="icon" type="image/svg+xml" th:href="@{/rocketmq-admin/favicon.svg}" href="/rocketmq-admin/favicon.svg">
+    <link rel="stylesheet" th:href="@{/rocketmq-admin/dashboard.css(v=${#dates.createNow().time})}">
+</head>
+<body th:attr="data-page=${active},data-admin-auth-enabled=${adminAuthEnabled},data-admin-access-token=${adminAccessToken}">
+<div class="app-shell">
+    <aside class="sidebar">
+        <a class="brand" th:href="@{/}" aria-label="Infra RocketMQ 首页">
+            <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span>Infra RocketMQ</span>
+        </a>
+        <nav class="navigation" aria-label="主导航">
+            <a class="nav-item" th:href="@{/}" th:classappend="${active == 'dashboard'} ? 'active'">仪表盘</a>
+            <a class="nav-item" th:href="@{/topics}" th:classappend="${active == 'topics'} ? 'active'">Topic 管理</a>
+            <a class="nav-item" th:href="@{/consumer-groups}" th:classappend="${active == 'consumer-groups'} ? 'active'">消费组</a>
+            <a class="nav-item" th:href="@{/messages}" th:classappend="${active == 'messages'} ? 'active'">消息查询</a>
+        </nav>
+        <div class="sidebar-footer">
+            <span class="live-dot"></span>
+            <span th:text="${namesrvAddr}">127.0.0.1:9876</span>
+        </div>
+    </aside>
+
+    <main class="main-content" th:replace="${content}"></main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" popover="manual"></div>
+<script th:src="@{/rocketmq-admin/dashboard.js(v=${#dates.createNow().time})}"></script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{rocketmq-layout :: layout('Topic 管理', 'topics', ~{::main})}">
+<head></head>
+<body>
+<main class="main-content" th:fragment="main">
+    <header class="page-header">
+        <div>
+            <p class="eyebrow">消息主题</p>
+            <h1>Topic 管理</h1>
+            <p class="subtitle">创建、查看与删除业务主题</p>
+        </div>
+        <button class="primary-button" type="button" id="create-topic-button">新建 Topic</button>
+    </header>
+
+    <section class="panel" aria-labelledby="topics-heading">
+        <div class="panel-header">
+            <div>
+                <h2 id="topics-heading">Topic 列表</h2>
+                <p id="topic-count-label">正在加载</p>
+            </div>
+            <div class="toolbar">
+                <label class="search-field"><span class="sr-only">搜索 Topic</span><input id="topic-search" type="search" placeholder="搜索 Topic"></label>
+                <button class="icon-button" type="button" id="refresh-button" title="刷新" aria-label="刷新">↻</button>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Topic</th><th>读队列</th><th>写队列</th><th>权限</th><th>消息数</th><th class="actions-heading">操作</th></tr></thead>
+                <tbody id="topics-body"></tbody>
+            </table>
+            <div class="empty-state" id="topics-empty" hidden>暂无业务 Topic</div>
+        </div>
+    </section>
+<dialog id="topic-dialog" class="dialog">
+    <form id="topic-form" method="dialog">
+        <div class="dialog-header"><div><p class="eyebrow">新建</p><h2>新建 Topic</h2></div><button class="close-button" type="button" data-close-dialog aria-label="关闭">×</button></div>
+        <div class="form-grid">
+            <label class="full-width">Topic 名称<input id="topic-name" name="name" required maxlength="64" placeholder="例如：order-created"></label>
+            <label>读队列数<input id="read-queue-nums" name="readQueueNums" type="number" min="1" max="1024" value="4" required></label>
+            <label>写队列数<input id="write-queue-nums" name="writeQueueNums" type="number" min="1" max="1024" value="4" required></label>
+        </div>
+        <p class="form-error" id="form-error" role="alert"></p>
+        <div class="dialog-actions"><button class="secondary-button" type="button" data-close-dialog>取消</button><button class="primary-button" type="submit">创建 Topic</button></div>
+    </form>
+</dialog>
+
+<dialog id="confirm-dialog" class="dialog confirm-dialog" aria-labelledby="confirm-title">
+    <div class="confirm-shell">
+        <div class="confirm-copy">
+            <p class="eyebrow" id="confirm-eyebrow">请确认</p>
+            <h2 id="confirm-title">确认操作</h2>
+            <p class="confirm-message" id="confirm-message"></p>
+        </div>
+        <div class="dialog-actions confirm-actions">
+            <button class="secondary-button" type="button" id="confirm-cancel">取消</button>
+            <button class="primary-button danger-button" type="button" id="confirm-ok">确认</button>
+        </div>
+    </div>
+</dialog>
+</main>
+</body>
+</html>

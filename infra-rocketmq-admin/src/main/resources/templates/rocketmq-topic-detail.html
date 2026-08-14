@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{rocketmq-layout :: layout('Topic 管理', 'topics', ~{::main})}">
+<head></head>
+<body>
+<main class="main-content" th:fragment="main">
+    <header class="page-header">
+        <div>
+            <p class="eyebrow">消息主题</p>
+            <h1 th:text="${topicName}">topic</h1>
+            <p class="subtitle" id="topic-detail-subtitle">正在加载详情</p>
+        </div>
+        <div class="toolbar">
+            <a class="secondary-button" th:href="@{/topics}">返回列表</a>
+            <button class="icon-button" type="button" id="refresh-button" title="刷新" aria-label="刷新">↻</button>
+        </div>
+    </header>
+
+    <section class="metrics" aria-label="Topic 概览">
+        <article class="metric metric-total">
+            <div class="metric-top"><div class="metric-heading"><span class="metric-icon" aria-hidden="true">↔</span><span class="metric-label">读队列</span></div><span class="metric-index" aria-hidden="true">01</span></div>
+            <div class="metric-value"><strong id="read-queue-count">-</strong><span>个</span></div>
+            <p class="metric-note">队列分片读取容量</p>
+            <span class="metric-state">读队列数</span>
+        </article>
+        <article class="metric metric-started">
+            <div class="metric-top"><div class="metric-heading"><span class="metric-icon" aria-hidden="true">↔</span><span class="metric-label">写队列</span></div><span class="metric-index" aria-hidden="true">02</span></div>
+            <div class="metric-value"><strong id="write-queue-count">-</strong><span>个</span></div>
+            <p class="metric-note">队列分片写入容量</p>
+            <span class="metric-state">写队列数</span>
+        </article>
+        <article class="metric metric-stopped">
+            <div class="metric-top"><div class="metric-heading"><span class="metric-icon" aria-hidden="true">▣</span><span class="metric-label">权限</span></div><span class="metric-index" aria-hidden="true">03</span></div>
+            <div class="metric-value"><strong id="topic-perm">-</strong><span></span></div>
+            <p class="metric-note">读写权限标记</p>
+            <span class="metric-state">权限</span>
+        </article>
+        <article class="metric metric-online">
+            <div class="metric-top"><div class="metric-heading"><span class="metric-icon" aria-hidden="true">◉</span><span class="metric-label">消费组</span></div><span class="metric-index" aria-hidden="true">04</span></div>
+            <div class="metric-value"><strong id="consumer-count">-</strong><span>个</span></div>
+            <p class="metric-note">订阅该主题的消费组</p>
+            <span class="metric-state">订阅消费组</span>
+        </article>
+    </section>
+
+    <section class="panel" aria-labelledby="queues-heading">
+        <div class="panel-header">
+            <div>
+                <h2 id="queues-heading">队列位点</h2>
+                <p id="queues-count-label">正在加载</p>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Broker</th><th>队列 ID</th><th>最小位点</th><th>最大位点</th><th>消息数</th><th>最后更新时间</th></tr></thead>
+                <tbody id="queues-body"></tbody>
+            </table>
+            <div class="empty-state" id="queues-empty" hidden>无队列位点数据</div>
+        </div>
+    </section>
+
+    <section class="panel" aria-labelledby="consumers-heading">
+        <div class="panel-header">
+            <div>
+                <h2 id="consumers-heading">订阅消费组</h2>
+                <p id="consumers-count-label">正在加载</p>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>消费组</th></tr></thead>
+                <tbody id="consumers-body"></tbody>
+            </table>
+            <div class="empty-state" id="consumers-empty" hidden>暂无订阅消费组</div>
+        </div>
+    </section>
+</main>
+</body>
+</html>

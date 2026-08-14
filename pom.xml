@@ -27,6 +27,7 @@
         <module>infra-sso</module>
         <module>infra-sso-login</module>
         <module>infra-activity</module>
+        <module>infra-rocketmq-admin</module>
     </modules>
     <properties>
         <infra.kotlin.version>${kotlin.version}</infra.kotlin.version>

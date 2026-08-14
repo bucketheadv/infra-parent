@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{rocketmq-layout :: layout('消费组', 'consumer-groups', ~{::main})}">
+<head></head>
+<body>
+<main class="main-content" th:fragment="main">
+    <header class="page-header">
+        <div>
+            <p class="eyebrow">消息消费</p>
+            <h1>消费组</h1>
+            <p class="subtitle">查看消费组订阅、进度与客户端连接</p>
+        </div>
+    </header>
+
+    <section class="panel" aria-labelledby="groups-heading">
+        <div class="panel-header">
+            <div>
+                <h2 id="groups-heading">消费组列表</h2>
+                <p id="group-count-label">正在加载</p>
+            </div>
+            <div class="toolbar">
+                <label class="search-field"><span class="sr-only">搜索消费组</span><input id="group-search" type="search" placeholder="搜索消费组"></label>
+                <button class="icon-button" type="button" id="refresh-button" title="刷新" aria-label="刷新">↻</button>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>消费组</th><th>订阅 Topic</th><th>消费 TPS</th><th>堆积</th><th>状态</th></tr></thead>
+                <tbody id="groups-body"></tbody>
+            </table>
+            <div class="empty-state" id="groups-empty" hidden>暂无消费组</div>
+        </div>
+    </section>
+</main>
+</body>
+</html>

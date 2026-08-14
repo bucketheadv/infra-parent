@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: infra-rocketmq-admin
+
+# 默认 18082 与调度管理后台（18080）、调度执行器示例（18081）错开，避免本地端口冲突。
+server:
+  port: ${ROCKETMQ_ADMIN_PORT:18082}
+
+infra:
+  rocketmq:
+    admin:
+      enabled: true
+      namesrv-addr: ${ROCKETMQ_NAMESRV_ADDR:127.0.0.1:9876}
+      access-key: ${ROCKETMQ_ADMIN_ACCESS_KEY:}
+      secret-key: ${ROCKETMQ_ADMIN_SECRET_KEY:}
+      use-tls: ${ROCKETMQ_ADMIN_USE_TLS:false}
+      operation-timeout-millis: 5000
+      auth-enabled: ${ROCKETMQ_ADMIN_AUTH_ENABLED:false}
+      access-token: ${ROCKETMQ_ADMIN_ACCESS_TOKEN:}

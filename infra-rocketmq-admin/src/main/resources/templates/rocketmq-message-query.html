@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{rocketmq-layout :: layout('消息查询', 'messages', ~{::main})}">
+<head></head>
+<body>
+<main class="main-content" th:fragment="main">
+    <header class="page-header">
+        <div>
+            <p class="eyebrow">消息检索</p>
+            <h1>消息查询</h1>
+            <p class="subtitle">按 Topic、Key 与时间范围检索消息，支持重发死信</p>
+        </div>
+    </header>
+
+    <section class="panel query-panel" aria-labelledby="query-heading">
+        <div class="panel-header">
+            <div><h2 id="query-heading">查询条件</h2></div>
+        </div>
+        <form id="query-form" class="form-grid query-form">
+            <label>Topic<select id="query-topic" required><option value="">请选择 Topic</option></select></label>
+            <label>Message Key<input id="query-key" placeholder="可选；留空读取最近消息"></label>
+            <label>开始时间<input id="query-begin" type="datetime-local"></label>
+            <label>结束时间<input id="query-end" type="datetime-local"></label>
+            <label>数量<input id="query-max-num" type="number" min="1" max="500" value="100"></label>
+            <div class="query-actions">
+                <button class="primary-button" type="submit">查询</button>
+                <button class="secondary-button" type="button" id="send-test-button">发送测试消息</button>
+            </div>
+        </form>
+        <p class="form-error" id="query-error" role="alert"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="results-heading">
+        <div class="panel-header">
+            <div>
+                <h2 id="results-heading">查询结果</h2>
+                <p id="result-count-label">请先设置查询条件</p>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>消息 ID</th><th>Topic</th><th>Tag / Key</th><th>存储时间</th><th>重试次数</th><th class="actions-heading">操作</th></tr></thead>
+                <tbody id="results-body"></tbody>
+            </table>
+            <div class="empty-state" id="results-empty" hidden>未查询到消息</div>
+        </div>
+    </section>
+<dialog id="send-dialog" class="dialog">
+    <form id="send-form" method="dialog">
+        <div class="dialog-header"><div><p class="eyebrow">发送测试</p><h2>发送测试消息</h2></div><button class="close-button" type="button" data-close-dialog aria-label="关闭">×</button></div>
+        <div class="form-grid">
+            <label class="full-width">Topic<select id="send-topic" required></select></label>
+            <label>Tag<input id="send-tags" placeholder="可选"></label>
+            <label>Key<input id="send-keys" placeholder="可选"></label>
+            <label>延迟等级<input id="send-delay-level" type="number" min="0" max="100" value="0" title="0 表示立即投递"></label>
+            <label class="full-width">消息内容<textarea id="send-body" rows="4" required placeholder="JSON 或文本消息体"></textarea></label>
+        </div>
+        <p class="form-error" id="send-form-error" role="alert"></p>
+        <div class="dialog-actions"><button class="secondary-button" type="button" data-close-dialog>取消</button><button class="primary-button" type="submit">发送</button></div>
+    </form>
+</dialog>
+</main>
+</body>
+</html>

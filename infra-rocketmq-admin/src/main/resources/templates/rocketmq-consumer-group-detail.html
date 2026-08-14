@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{rocketmq-layout :: layout('消费组', 'consumer-groups', ~{::main})}">
+<head></head>
+<body>
+<main class="main-content" th:fragment="main">
+    <header class="page-header">
+        <div>
+            <p class="eyebrow">消息消费</p>
+            <h1 th:text="${groupName}">group</h1>
+            <p class="subtitle" id="group-detail-subtitle">正在加载详情</p>
+        </div>
+        <div class="toolbar">
+            <a class="secondary-button" th:href="@{/consumer-groups}">返回列表</a>
+            <button class="icon-button" type="button" id="refresh-button" title="刷新" aria-label="刷新">↻</button>
+        </div>
+    </header>
+
+    <section class="panel" aria-labelledby="progress-heading">
+        <div class="panel-header">
+            <div>
+                <h2 id="progress-heading">消费进度</h2>
+                <p id="progress-count-label">正在加载</p>
+            </div>
+            <button class="secondary-button" type="button" id="reset-offset-button">重置位点</button>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Topic</th><th>Broker</th><th>队列 ID</th><th>客户端位点</th><th>Broker 位点</th><th>堆积</th><th>最后消费时间</th></tr></thead>
+                <tbody id="progress-body"></tbody>
+            </table>
+            <div class="empty-state" id="progress-empty" hidden>暂无消费进度</div>
+        </div>
+    </section>
+
+    <section class="panel" aria-labelledby="connections-heading">
+        <div class="panel-header">
+            <div>
+                <h2 id="connections-heading">客户端连接</h2>
+                <p id="connections-count-label">正在加载</p>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>客户端 ID</th><th>地址</th><th>语言</th><th>版本</th></tr></thead>
+                <tbody id="connections-body"></tbody>
+            </table>
+            <div class="empty-state" id="connections-empty" hidden>无在线客户端</div>
+        </div>
+    </section>
+<dialog id="reset-dialog" class="dialog">
+    <form id="reset-form" method="dialog">
+        <div class="dialog-header"><div><p class="eyebrow">位点重置</p><h2>重置消费位点</h2></div><button class="close-button" type="button" data-close-dialog aria-label="关闭">×</button></div>
+        <div class="form-grid">
+            <label class="full-width">目标 Topic<input id="reset-topic" placeholder="留空表示该消费组全部 Topic"></label>
+            <label class="full-width">重置到时间<input id="reset-timestamp" type="datetime-local" required></label>
+            <label>强制重置<input id="reset-force" type="checkbox" title="跳过“新位点晚于当前位点”检查"></label>
+        </div>
+        <p class="form-error" id="form-error" role="alert"></p>
+        <div class="dialog-actions"><button class="secondary-button" type="button" data-close-dialog>取消</button><button class="primary-button" type="submit">执行重置</button></div>
+    </form>
+</dialog>
+</main>
+</body>
+</html>
