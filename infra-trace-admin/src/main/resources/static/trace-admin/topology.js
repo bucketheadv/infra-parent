@@ -180,7 +180,7 @@
 
         // 节点投影
         var filter = el("filter", { id: "nshadow", x: "-12%", y: "-12%", width: "124%", height: "140%" });
-        filter.appendChild(el("feDropShadow", { dx: "0", dy: "3", stdDeviation: "6", "flood-color": "rgba(20,32,48,0.10)" }));
+        filter.appendChild(el("feDropShadow", { dx: "0", dy: "3", stdDeviation: "6", "flood-color": "rgba(0,0,0,0.55)" }));
         defs.appendChild(filter);
         svg.appendChild(defs);
 
@@ -213,7 +213,7 @@
 
             // 阴影
             g.appendChild(el("path", {
-                d: d, stroke: "rgba(20,32,48,0.05)", "stroke-width": strokeW + 3,
+                d: d, stroke: "rgba(0,0,0,0.45)", "stroke-width": strokeW + 3,
                 fill: "none", "stroke-linecap": "round"
             }));
 

@@ -1,6 +1,12 @@
 spring:
   application:
     name: infra-trace-admin
+  thymeleaf:
+    cache: false
+  web:
+    resources:
+      cache:
+        period: 0
 
 server:
   port: ${TRACE_ADMIN_PORT:18090}
