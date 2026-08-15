@@ -18,10 +18,12 @@
                     class="io.infra.structure.logging.converter.ClassColorConverter"/>
     <conversionRule conversionWord="msgColor"
                     class="io.infra.structure.logging.converter.MsgColorConverter"/>
+    <conversionRule conversionWord="mask"
+                    class="io.infra.structure.logging.mask.FieldMaskConverter"/>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} %levelColor(%-5level) %red(${PID}) ${appName} %threadColor([%thread]) %X{traceId} %X{spanId} %loggerColor(%logger{50}) %classColor((%file:%line\)) - %msgColor(%msg) %n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} %levelColor(%-5level) %red(${PID}) ${appName} %threadColor([%thread]) %X{traceId} %X{spanId} %loggerColor(%logger{50}) %classColor((%file:%line\)) - %msgColor(%mask(%msg)) %n</pattern>
         </encoder>
     </appender>
 
