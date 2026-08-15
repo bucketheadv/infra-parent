@@ -54,7 +54,16 @@
         <div class="form-grid">
             <label class="full-width">目标 Topic<input id="reset-topic" placeholder="留空表示该消费组全部 Topic"></label>
             <label class="full-width">重置到时间<input id="reset-timestamp" type="datetime-local" required></label>
-            <label>强制重置<input id="reset-force" type="checkbox" title="跳过“新位点晚于当前位点”检查"></label>
+            <label class="full-width reset-force-field">
+                <span class="toggle-wrap">
+                    <span class="toggle-copy">
+                        <strong>强制重置</strong>
+                        <small>跳过"新位点晚于当前位点"检查</small>
+                    </span>
+                    <input id="reset-force" type="checkbox" class="toggle">
+                    <span class="toggle-track" aria-hidden="true"></span>
+                </span>
+            </label>
         </div>
         <p class="form-error" id="form-error" role="alert"></p>
         <div class="dialog-actions"><button class="secondary-button" type="button" data-close-dialog>取消</button><button class="primary-button" type="submit">执行重置</button></div>

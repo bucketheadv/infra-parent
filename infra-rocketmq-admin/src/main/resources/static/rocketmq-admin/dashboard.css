@@ -392,6 +392,55 @@ tbody tr:hover { background: #f7faff; }
     font-size: 13px;
     font-weight: 400;
 }
+
+/* 开关样式：用于"强制重置"等布尔选项，替代原生复选框。 */
+.reset-force-field { grid-column: 1 / -1; margin-top: 2px; }
+.toggle-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 14px;
+    border: 1px solid #e3e7f0;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #fbfcfe, #f6f8fc);
+}
+.toggle-copy { display: grid; gap: 3px; min-width: 0; }
+.toggle-copy strong { color: #3a4659; font-size: 13px; font-weight: 650; }
+.toggle-copy small { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.toggle {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+.toggle-track {
+    position: relative;
+    flex: 0 0 auto;
+    width: 42px;
+    height: 24px;
+    border-radius: 999px;
+    background: #d7dde7;
+    box-shadow: inset 0 1px 2px rgba(20, 32, 48, .16);
+    transition: background .18s ease;
+    cursor: pointer;
+}
+.toggle-track::after {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    content: "";
+    background: #fff;
+    box-shadow: 0 2px 4px rgba(20, 32, 48, .28);
+    transition: transform .18s ease;
+}
+.toggle:checked + .toggle-track { background: var(--accent); }
+.toggle:checked + .toggle-track::after { transform: translateX(18px); }
+.toggle:focus-visible + .toggle-track { box-shadow: 0 0 0 3px rgba(50, 107, 255, .2); }
 .form-grid textarea { resize: vertical; }
 .form-grid input:focus, .form-grid textarea:focus, .form-grid select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(50, 107, 255, .1); }
 .full-width { grid-column: 1 / -1; }
@@ -905,7 +954,7 @@ h1 { color: #242047; font-size: 30px; letter-spacing: -.7px; }
 .dashboard-metrics .metric-label { color: #383451; font-size: 13px; font-weight: 750; letter-spacing: .01em; }
 .dashboard-metrics .metric-route { overflow: hidden; color: #817d99; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-metrics .metric-reading { display: flex; align-items: baseline; gap: 7px; margin: 19px 18px 10px; }
-.dashboard-metrics .metric strong { color: #201b42; font-size: 42px; letter-spacing: -1.5px; }
+.dashboard-metrics .metric strong { color: #201b42; font-size: 34px; letter-spacing: -.5px; }
 .dashboard-metrics .metric-reading span { color: #77728e; font-size: 12px; font-weight: 650; }
 .dashboard-metrics .metric-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: auto 18px 15px; }
 .dashboard-metrics .metric-note { max-width: none; color: #736f89; font-size: 11px; }

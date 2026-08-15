@@ -275,10 +275,14 @@
         const topic = document.querySelector("h1") ? document.querySelector("h1").textContent.trim() : "";
         const load = function () {
             api("/topics/" + encodeURIComponent(topic)).then(function (detail) {
-                document.getElementById("read-queue-count").textContent = detail.readQueueNums;
-                document.getElementById("write-queue-count").textContent = detail.writeQueueNums;
-                document.getElementById("topic-perm").textContent = permText(detail.perm);
-                document.getElementById("consumer-count").textContent = (detail.consumerGroups || []).length;
+                const readEl = document.getElementById("read-queue-count");
+                const writeEl = document.getElementById("write-queue-count");
+                const permEl = document.getElementById("topic-perm");
+                const consumerEl = document.getElementById("consumer-count");
+                if (readEl) readEl.textContent = detail.readQueueNums;
+                if (writeEl) writeEl.textContent = detail.writeQueueNums;
+                if (permEl) permEl.textContent = permText(detail.perm);
+                if (consumerEl) consumerEl.textContent = (detail.consumerGroups || []).length;
                 name.textContent = "队列位点与订阅消费组";
                 renderQueues(detail.queueOffsets || []);
                 renderTopicConsumers(detail.consumerGroups || []);

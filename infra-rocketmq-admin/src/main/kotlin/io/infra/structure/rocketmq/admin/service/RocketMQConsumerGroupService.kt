@@ -7,6 +7,7 @@ import io.infra.structure.rocketmq.admin.dto.RocketMQConsumerGroupView
 import io.infra.structure.rocketmq.admin.properties.RocketMQAdminProperties
 import io.infra.structure.rocketmq.admin.support.RocketMQAdminClient
 import io.infra.structure.rocketmq.admin.web.RocketMQAdminException
+import org.apache.rocketmq.common.message.MessageQueue
 import org.apache.rocketmq.remoting.protocol.admin.ConsumeStats
 import org.apache.rocketmq.remoting.protocol.body.ConsumerConnection
 import org.springframework.stereotype.Service
@@ -69,10 +70,25 @@ class RocketMQConsumerGroupService(
     /** 按时间戳重置消费位点；topic 为空时重置该消费组的所有 Topic。 */
     fun resetOffsetByTimestamp(group: String, topic: String?, timestamp: Long, force: Boolean): List<RocketMQConsumeProgressView> =
         client.execute { admin ->
-            val reset = try {
-                admin.resetOffsetByTimestamp(group, topic ?: "", timestamp, force)
-            } catch (exception: Exception) {
-                throw translate("重置消费位点失败：$group", exception)
+            // topic 为空时先从消费统计中枚举该组已订阅的 Topic，逐个重置。
+            val topics = if (topic.isNullOrBlank()) {
+                (consumeStats(group)?.offsetTable?.keys?.map { it.topic }?.distinct() ?: emptyList())
+                    .also {
+                        if (it.isEmpty()) {
+                            throw RocketMQAdminException("消费组 $group 暂无订阅 Topic，无法重置位点")
+                        }
+                    }
+            } else {
+                listOf(topic)
+            }
+            val reset = LinkedHashMap<MessageQueue, Long>()
+            for (target in topics) {
+                try {
+                    // RocketMQ 5.x：resetOffsetByTimestamp(topic, group, timestamp, isForce)
+                    reset.putAll(admin.resetOffsetByTimestamp(target, group, timestamp, force))
+                } catch (exception: Exception) {
+                    throw translate("重置消费位点失败：$group，Topic $target", exception)
+                }
             }
             reset
                 .map { (queue, offset) ->
