@@ -22,7 +22,7 @@ class DemoExceptionHandler {
 
     @ExceptionHandler(Throwable::class)
     fun handle(exception: Throwable): ResponseEntity<Map<String, String>> {
-        logger.error("接口异常，traceId={}，error={}", TraceContext.getTraceId(), exception.message)
+        logger.error("接口异常，traceId={}，error={}", TraceContext.getTraceId(), exception.message, exception)
         TraceContext.recordError(exception)
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
             .body(mapOf("code" to "500", "message" to (exception.message ?: "内部错误")))

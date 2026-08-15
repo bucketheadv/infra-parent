@@ -30,10 +30,14 @@ data class TraceSpan(
     val durationMillis: Long,
     /** 请求是否成功（无异常且 HTTP 状态码 < 400） */
     val success: Boolean,
+    /** 异常类型（异常类全名，如 java.lang.IllegalStateException），无异常时为 null */
+    val errorType: String? = null,
     /** 异常信息（message），无异常时为 null */
     val errorMessage: String? = null,
     /** 异常堆栈，仅采集到异常时存在 */
     val errorStackTrace: String? = null,
+    /** 调用栈（线程栈采样，方法名按调用顺序排列），仅开启调用栈采集时存在 */
+    val callStack: String? = null,
     /** 入参（请求体），按配置采集并截断 */
     val requestBody: String? = null,
     /** 返回值（响应体），按配置采集并截断 */

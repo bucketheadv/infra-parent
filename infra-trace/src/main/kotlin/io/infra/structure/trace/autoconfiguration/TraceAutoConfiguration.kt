@@ -5,7 +5,9 @@ import io.infra.structure.trace.TraceContext
 import io.infra.structure.trace.filter.TraceFilter
 import io.infra.structure.trace.logging.MemoryLogAppender
 import io.infra.structure.trace.properties.TraceProperties
+import io.infra.structure.trace.report.HttpLogReporter
 import io.infra.structure.trace.report.HttpTraceReporter
+import io.infra.structure.trace.report.LogReporter
 import io.infra.structure.trace.report.TraceReporter
 import io.infra.structure.trace.task.TraceTaskDecorator
 import org.slf4j.LoggerFactory
@@ -45,12 +47,13 @@ class TraceAutoConfiguration {
     fun traceFilterRegistration(
         properties: TraceProperties,
         environment: Environment,
-        reporterProvider: ObjectProvider<TraceReporter>
+        reporterProvider: ObjectProvider<TraceReporter>,
+        logReporterProvider: ObjectProvider<LogReporter>
     ): FilterRegistrationBean<TraceFilter> {
         TraceContext.configure(properties.headerName, properties.mdcKey, properties.spanHeaderName, properties.spanMdcKey)
         val serviceName = environment.getProperty("spring.application.name", "")
         return FilterRegistrationBean<TraceFilter>().apply {
-            setFilter(TraceFilter(properties, reporterProvider.ifAvailable, serviceName))
+            setFilter(TraceFilter(properties, reporterProvider.ifAvailable, serviceName, logReporterProvider.ifAvailable))
             addUrlPatterns("/*")
             order = Ordered.HIGHEST_PRECEDENCE
         }
@@ -64,6 +67,14 @@ class TraceAutoConfiguration {
     fun traceReporter(properties: TraceProperties): TraceReporter =
         HttpTraceReporter(properties.report.url, properties.report.timeoutMillis)
 
+    /** 配置日志采集地址时创建日志上报器，随 span 一并上报链路日志。 */
+    @Bean
+    @ConditionalOnProperty(prefix = "infra.trace.report", name = ["enabled"], havingValue = "true")
+    @ConditionalOnProperty(name = ["infra.trace.report.logs-url"])
+    @ConditionalOnMissingBean
+    fun logReporter(properties: TraceProperties): LogReporter =
+        HttpLogReporter(properties.report.logsUrl, properties.report.timeoutMillis)
+
     /** 异步任务 MDC 传播，引用方未自定义 TaskDecorator 时生效。 */
     @Bean
     @ConditionalOnMissingBean
@@ -76,9 +87,9 @@ class TraceAutoConfiguration {
      * 同时调用 [MemoryLogAppender.register] 挂载到 Logback ROOT logger。
      */
     @Bean(destroyMethod = "")
-    fun memoryLogAppender(): MemoryLogAppender {
+    fun memoryLogAppender(environment: Environment): MemoryLogAppender {
         val ctx = LoggerFactory.getILoggerFactory() as? LoggerContext
-        MemoryLogAppender.register(ctx)
+        MemoryLogAppender.register(ctx, environment.getProperty("spring.application.name", ""))
         return MemoryLogAppender()
     }
 }

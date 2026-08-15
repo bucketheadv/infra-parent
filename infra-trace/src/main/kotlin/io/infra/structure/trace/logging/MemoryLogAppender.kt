@@ -26,11 +26,13 @@ class MemoryLogAppender : AppenderBase<ILoggingEvent>() {
         val entry = LogEntry(
             timestamp = event.timeStamp,
             level = event.level.toString(),
+            serviceName = serviceNameHolder,
             logger = event.loggerName?.substringAfterLast('.') ?: "",
             message = event.formattedMessage ?: "",
             traceId = traceId,
             spanId = spanId,
             parentSpanId = parentSpanId,
+            exceptionType = event.throwableProxy?.className,
             exception = event.throwableProxy?.let { formatThrowable(it) }
         )
         val deque: ConcurrentLinkedDeque<LogEntry> = buffer.getOrPut(traceId) { ConcurrentLinkedDeque() }
@@ -52,26 +54,24 @@ class MemoryLogAppender : AppenderBase<ILoggingEvent>() {
         return sb.toString()
     }
 
-    private fun trimGlobal() {
-        if (buffer.size <= MAX_TRACES) return
-        val iterator = buffer.entries.iterator()
-        while (buffer.size > MAX_TRACES && iterator.hasNext()) {
-            iterator.next()
-            iterator.remove()
-        }
-    }
+    private fun trimGlobal() = Companion.trimGlobal()
 
     companion object {
         private const val MAX_TRACES = 200
         private const val MAX_PER_TRACE = 500
         private val buffer = ConcurrentHashMap<String, ConcurrentLinkedDeque<LogEntry>>()
         private val registered = AtomicBoolean(false)
+        private var serviceNameHolder: String? = null
 
         /**
          * 注册 appender 到 Logback ROOT logger（仅执行一次）。
+         *
+         * @param context 可选的 [LoggerContext]；为 null 时从 [LoggerFactory] 获取
+         * @param serviceName 产生日志的应用名（spring.application.name），随日志条目一并采集
          */
         @JvmStatic
-        fun register(context: LoggerContext? = null) {
+        fun register(context: LoggerContext? = null, serviceName: String? = null) {
+            if (serviceName != null) serviceNameHolder = serviceName
             if (!registered.compareAndSet(false, true)) return
             val ctx = context ?: run {
                 val factory = LoggerFactory.getILoggerFactory()
@@ -92,8 +92,36 @@ class MemoryLogAppender : AppenderBase<ILoggingEvent>() {
         /** 按 traceId 查询日志 */
         fun findByTraceId(traceId: String, limit: Int = 200): List<LogEntry> {
             val deque = buffer[traceId] ?: return emptyList()
-            val list = deque.toList()
+            val list = deque.toList().sortedBy { it.timestamp }
             return if (list.size > limit) list.takeLast(limit) else list
+        }
+
+        /** 取出并清空某 traceId 的全部日志，供请求结束时批量上报 */
+        fun drainByTraceId(traceId: String): List<LogEntry> {
+            val deque = buffer.remove(traceId) ?: return emptyList()
+            return deque.toList()
+        }
+
+        /** 写入一批日志（供追踪后台接收各服务上报后存储） */
+        fun addEntries(logs: List<LogEntry>) {
+            for (entry in logs) {
+                val deque = buffer.getOrPut(entry.traceId) { ConcurrentLinkedDeque() }
+                deque.add(entry)
+                while (deque.size > MAX_PER_TRACE) {
+                    deque.poll()
+                }
+            }
+            trimGlobal()
+        }
+
+        /** 缓存总量超限时，按插入序淘汰最早的 trace，防止内存无界增长 */
+        private fun trimGlobal() {
+            if (buffer.size <= MAX_TRACES) return
+            val iterator = buffer.entries.iterator()
+            while (buffer.size > MAX_TRACES && iterator.hasNext()) {
+                iterator.next()
+                iterator.remove()
+            }
         }
 
         /** 按关键字搜索 traceId（匹配日志内容） */

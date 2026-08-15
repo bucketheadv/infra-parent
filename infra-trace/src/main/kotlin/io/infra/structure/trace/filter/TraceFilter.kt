@@ -1,7 +1,9 @@
 package io.infra.structure.trace.filter
 
 import io.infra.structure.trace.TraceContext
+import io.infra.structure.trace.logging.MemoryLogAppender
 import io.infra.structure.trace.properties.TraceProperties
+import io.infra.structure.trace.report.LogReporter
 import io.infra.structure.trace.report.TraceReporter
 import io.infra.structure.trace.report.TraceSpan
 import jakarta.servlet.FilterChain
@@ -15,6 +17,8 @@ import java.nio.charset.StandardCharsets
 import java.util.HexFormat
 import java.util.UUID
 import java.util.concurrent.ThreadLocalRandom
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * 入站 HTTP 请求的 traceId/spanId 过滤器。
@@ -35,10 +39,21 @@ import java.util.concurrent.ThreadLocalRandom
 class TraceFilter(
     private val properties: TraceProperties,
     private val reporter: TraceReporter? = null,
-    private val serviceName: String? = null
+    private val serviceName: String? = null,
+    private val logReporter: LogReporter? = null
 ) : OncePerRequestFilter() {
 
     private val logger = LoggerFactory.getLogger(TraceFilter::class.java)
+
+    /** 调用栈采样线程池：在请求处理中途采集请求线程栈，从而捕获到业务方法调用 */
+    private val callStackSampler: java.util.concurrent.ScheduledExecutorService? =
+        if (properties.report.captureCallStack) {
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor { runnable ->
+                Thread(runnable, "trace-callstack-sampler").apply { isDaemon = true }
+            }
+        } else {
+            null
+        }
 
     override fun doFilterInternal(
         request: HttpServletRequest,
@@ -88,6 +103,18 @@ class TraceFilter(
             }
         }
         var propagated: Throwable? = null
+        // 6.1 开启调用栈采集时，延迟采样请求线程栈，捕获请求处理途中的业务方法调用
+        val sampledCallStack = AtomicReference<Array<StackTraceElement>?>()
+        val sampleFuture = if (properties.report.captureCallStack) {
+            val requestThread = Thread.currentThread()
+            callStackSampler?.schedule(
+                { sampledCallStack.set(requestThread.stackTrace) },
+                properties.report.callStackSampleDelayMillis,
+                TimeUnit.MILLISECONDS
+            )
+        } else {
+            null
+        }
         try {
             // 6. 继续过滤链；异步/错误重分发不再重复生成，保证链路上下文一致
             filterChain.doFilter(effectiveRequest, effectiveResponse)
@@ -98,10 +125,21 @@ class TraceFilter(
             val status = effectiveResponse.status
             // 7. 配置上报时，把本服务这段 span 异步上报给追踪后台（须在清理 MDC 之前读取异常上下文）
             if (traceId != null && spanId != null) {
+                sampleFuture?.let { future ->
+                    try {
+                        // 等待采样完成（限定超时，保证诊断功能不阻塞业务太久）
+                        future.get(properties.report.callStackSampleDelayMillis + 200, TimeUnit.MILLISECONDS)
+                    } catch (ignored: Exception) {
+                        // 采样超时/中断不影响 span 上报
+                    }
+                }
                 reportSpan(
                     traceId, spanId, parentSpanId, effectiveRequest, status,
-                    startTimeMillis, propagated, requestWrapper, responseWrapper
+                    startTimeMillis, propagated, requestWrapper, responseWrapper,
+                    callStack = formatCallStack(sampledCallStack.get())
                 )
+                // 7.1 上报本服务进程内该 traceId 采集到的日志（取出后清空，避免重复上报）
+                reportLogs(traceId)
             }
             // 8. 请求结束必须清理 MDC，避免线程池复用导致上下文串扰
             TraceContext.clear()
@@ -128,7 +166,8 @@ class TraceFilter(
         startTimeMillis: Long,
         propagated: Throwable?,
         requestWrapper: ContentCachingRequestWrapper?,
-        responseWrapper: ContentCachingResponseWrapper?
+        responseWrapper: ContentCachingResponseWrapper?,
+        callStack: String? = null
     ) {
         val effectiveServiceName = serviceName?.takeIf { it.isNotBlank() } ?: properties.report.serviceName
         if (reporter == null || !properties.report.enabled ||
@@ -152,6 +191,7 @@ class TraceFilter(
             startTimeMillis = startTimeMillis,
             durationMillis = System.currentTimeMillis() - startTimeMillis,
             success = error == null && responseStatus < 400,
+            errorType = error?.javaClass?.name,
             errorMessage = error?.message,
             errorStackTrace = error?.stackTraceToString(),
             requestBody = requestWrapper?.contentAsByteArray?.takeIf { it.isNotEmpty() }
@@ -159,6 +199,7 @@ class TraceFilter(
             responseBody = responseWrapper?.contentAsByteArray?.takeIf { it.isNotEmpty() }
                 ?.toString(StandardCharsets.UTF_8)?.take(properties.report.maxBodyLength),
             requestHeaders = requestHeaders,
+            callStack = callStack,
             uid = uid
         )
         try {
@@ -166,6 +207,50 @@ class TraceFilter(
         } catch (exception: Exception) {
             logger.debug("上报 span 失败，traceId={}", span.traceId, exception)
         }
+    }
+
+    /**
+     * 把本服务进程内某 traceId 采集到的日志批量上报给追踪后台。
+     *
+     * 日志由 [MemoryLogAppender] 在本进程按 traceId 缓存；请求结束取出后清空，
+     * 保证同一 span 的日志只在本次请求上报一次。上报为可降级行为，失败不影响业务。
+     */
+    private fun reportLogs(traceId: String) {
+        val reporter = logReporter ?: return
+        if (!properties.report.enabled || properties.report.logsUrl.isBlank()) return
+        val logs = MemoryLogAppender.drainByTraceId(traceId)
+        if (logs.isEmpty()) return
+        try {
+            reporter.reportLogs(logs)
+        } catch (exception: Exception) {
+            logger.debug("上报日志失败，traceId={}", traceId, exception)
+        }
+    }
+
+    /**
+     * 把调用栈帧格式化为逐行方法名（类名.方法名）。
+     *
+     * 先过滤 JVM/容器/协程调度的框架噪音帧；配置了业务包前缀 `call-stack-include-prefix` 时，
+     * 仅保留该包内的帧（业务 API 接口及其内部方法），并把顺序从"最深层在前"反转，使其从业务 API 接口开始自上而下展示，
+     * 层级与前端缩进一一对应。
+     */
+    private fun formatCallStack(frames: Array<StackTraceElement>?): String? {
+        if (frames == null || frames.isEmpty()) return null
+        val noisePrefixes = listOf(
+            "java.", "jdk.", "sun.", "javax.",
+            "org.apache.catalina.", "org.apache.tomcat.",
+            "kotlinx.coroutines.scheduling."
+        )
+        var kept = frames.asSequence()
+            .filterNot { frame -> noisePrefixes.any { frame.className.startsWith(it) } }
+        val prefix = properties.report.callStackIncludePrefix
+        if (prefix.isNotBlank()) {
+            kept = kept.filter { it.className.startsWith(prefix) }
+        }
+        val businessFrames = kept.take(properties.report.callStackMaxDepth).toList()
+        val ordered = if (prefix.isNotBlank()) businessFrames.reversed() else businessFrames
+        return ordered.joinToString("\n") { "${it.className}.${it.methodName}" }
+            .takeIf { it.isNotBlank() }
     }
 
     /** traceId 使用 32 位 hex（UUID 去横线），全链路保持一致 */

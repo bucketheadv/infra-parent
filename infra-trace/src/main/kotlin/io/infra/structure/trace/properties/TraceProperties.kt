@@ -38,6 +38,8 @@ data class TraceReportProperties(
     var enabled: Boolean = false,
     /** 追踪后台采集接口地址，如 http://127.0.0.1:18090/api/trace/spans */
     var url: String = "",
+    /** 链路日志采集接口地址，如 http://127.0.0.1:18090/api/trace/logs；为空时不采集日志 */
+    var logsUrl: String = "",
     /** 上报的服务名；为空时回退到 spring.application.name */
     var serviceName: String = "",
     /** 上报超时（毫秒） */
@@ -48,6 +50,14 @@ data class TraceReportProperties(
     var captureResponseBody: Boolean = false,
     /** 是否采集并上报请求头，默认关闭避免额外开销 */
     var captureRequestHeaders: Boolean = false,
+    /** 是否采集调用栈（处理请求线程的栈采样，展示方法名），默认关闭避免额外开销 */
+    var captureCallStack: Boolean = false,
+    /** 调用栈采样延迟（毫秒）：进入过滤链后延迟多久采集请求线程栈，越接近业务耗时越能采到业务方法 */
+    var callStackSampleDelayMillis: Long = 20,
+    /** 调用栈最大帧数，超出部分截断 */
+    var callStackMaxDepth: Int = 60,
+    /** 调用栈仅保留的业务包前缀（业务 API 接口所在包，如 io.infra.structure.trace.service.a）；为空时保留过滤后的全部帧 */
+    var callStackIncludePrefix: String = "",
     /** 入参/返回值采集的最大长度（字符），超出部分截断 */
     var maxBodyLength: Int = 2_000
 )

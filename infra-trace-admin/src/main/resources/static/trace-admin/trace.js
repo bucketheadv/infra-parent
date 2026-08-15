@@ -179,8 +179,6 @@
         var responseEl = document.getElementById("detail-response");
         var headersEl = document.getElementById("detail-headers");
         var headersBlock = document.getElementById("detail-headers-block");
-        var errorBlock = document.getElementById("detail-error-block");
-        var errorEl = document.getElementById("detail-error");
 
         function traceIdFromPath() {
             var parts = location.pathname.split("/");
@@ -229,6 +227,57 @@
             statusEl.innerHTML = statusBadge(ok);
         }
 
+        function buildMethodTree(spans) {
+            var childrenByParent = {};
+            var roots = [];
+            spans.forEach(function (span) {
+                var parent = span.parentSpanId;
+                if (!parent || !spans.some(function (s) { return s.spanId === parent; })) {
+                    roots.push(span);
+                } else {
+                    (childrenByParent[parent] = childrenByParent[parent] || []).push(span);
+                }
+            });
+            Object.keys(childrenByParent).forEach(function (key) {
+                childrenByParent[key].sort(function (a, b) { return a.startTimeMillis - b.startTimeMillis; });
+            });
+            function build(span) {
+                var frames = (span.callStack || "").split("\n").filter(function (line) { return line.length > 0; });
+                var nodes = frames.map(function (frame) { return { text: frame, children: [] }; });
+                if (!nodes.length) {
+                    nodes = [{ text: span.serviceName + " · " + span.operation, children: [] }];
+                }
+                for (var i = 1; i < nodes.length; i++) {
+                    nodes[i - 1].children.push(nodes[i]);
+                }
+                var last = nodes[nodes.length - 1];
+                (childrenByParent[span.spanId] || []).forEach(function (child) {
+                    build(child).forEach(function (node) { last.children.push(node); });
+                });
+                return nodes;
+            }
+            var tree = [];
+            roots.forEach(function (root) {
+                build(root).forEach(function (node) { tree.push(node); });
+            });
+            return tree;
+        }
+
+        function renderMethodTree(nodes) {
+            var html = "";
+            (function walk(nodeList, prefix, isTop) {
+                nodeList.forEach(function (node, index) {
+                    var isLast = index === nodeList.length - 1;
+                    var connector = isTop ? "" : (isLast ? "└─ " : "├─ ");
+                    html += '<div class="mt-node">' + escapeHtml(prefix + connector + node.text) + "</div>";
+                    if (node.children.length) {
+                        walk(node.children, prefix + (isTop ? "" : (isLast ? "   " : "│  ")), false);
+                    }
+                });
+            })(nodes, "", true);
+            return html;
+        }
+
         function renderWaterfall(traceId, spans) {
             if (!spans || !spans.length) {
                 waterfallLabel.textContent = "该链路暂无 span";
@@ -242,13 +291,49 @@
             var total = Math.max(maxEnd - minStart, 1);
 
             waterfallEl.innerHTML = "";
+
+            // 方法调用树：合并各 span 调用栈，下游调用作为父方法下的同级分支展示
+            var methodTree = buildMethodTree(spans);
+            if (methodTree.length) {
+                var treeBlock = document.createElement("div");
+                treeBlock.className = "method-tree";
+                treeBlock.innerHTML =
+                    '<div class="method-tree-title" role="button" tabindex="0" title="展开/收起调用栈">调用栈 · 方法调用树</div>' +
+                    '<div class="method-tree-body">' + renderMethodTree(methodTree) + "</div>";
+                var treeTitle = treeBlock.querySelector(".method-tree-title");
+                treeTitle.addEventListener("click", function () {
+                    var body = treeBlock.querySelector(".method-tree-body");
+                    var collapsed = body.hidden;
+                    body.hidden = !collapsed;
+                    treeTitle.classList.toggle("collapsed", !collapsed);
+                });
+                waterfallEl.appendChild(treeBlock);
+            }
+
+            // span 深度，用于行缩进呈现调用层级
+            var bySpanId = {};
+            spans.forEach(function (s) { bySpanId[s.spanId] = s; });
+            var depthBySpanId = {};
+            spans.forEach(function (span) {
+                var depth = 0;
+                var parent = span.parentSpanId;
+                var seen = {};
+                while (parent && bySpanId[parent] && !seen[parent]) {
+                    seen[parent] = true;
+                    depth++;
+                    parent = bySpanId[parent].parentSpanId;
+                }
+                depthBySpanId[span.spanId] = depth;
+            });
+
             buildTree(spans).forEach(function (span) {
                 var left = ((span.startTimeMillis - minStart) / total * 100).toFixed(2);
                 var width = Math.max(span.durationMillis / total * 100, 0.4).toFixed(2);
+                var depth = depthBySpanId[span.spanId] || 0;
                 var row = document.createElement("div");
                 row.className = "wf-row";
                 row.innerHTML =
-                    '<div class="wf-service">' +
+                    '<div class="wf-service" style="padding-left:' + (8 + depth * 22) + 'px">' +
                     '<span class="wf-service-name">' + escapeHtml(span.serviceName) + "</span>" +
                     '<span class="wf-operation">' + escapeHtml(span.operation) + "</span>" +
                     '<span class="wf-ids mono">span ' + escapeHtml(span.spanId) +
@@ -292,14 +377,6 @@
                 headersBlock.hidden = true;
                 headersEl.textContent = "";
             }
-            if (span.errorMessage || span.errorStackTrace) {
-                errorBlock.hidden = false;
-                errorEl.textContent = (span.errorMessage ? "message: " + span.errorMessage + "\n\n" : "") +
-                    (span.errorStackTrace || "");
-            } else {
-                errorBlock.hidden = true;
-                errorEl.textContent = "";
-            }
             detailPanel.scrollIntoView({ behavior: "smooth", block: "start" });
         }
 
@@ -341,17 +418,23 @@
                         row.className = "log-row log-level-" + log.level.toLowerCase();
                         var time = new Date(log.timestamp);
                         var pad = function (n) { return n < 10 ? "0" + n : String(n); };
-                        var ts = pad(time.getHours()) + ":" + pad(time.getMinutes()) + ":" + pad(time.getSeconds()) + "." + String(time.getMilliseconds()).padStart(3, "0");
+                        var ts = pad(time.getFullYear()) + "-" + pad(time.getMonth() + 1) + "-" + pad(time.getDate()) +
+                            " " + pad(time.getHours()) + ":" + pad(time.getMinutes()) + ":" + pad(time.getSeconds()) +
+                            "." + String(time.getMilliseconds()).padStart(3, "0");
                         row.innerHTML =
                             '<span class="log-time">' + ts + '</span>' +
                             '<span class="log-level">' + log.level + '</span>' +
+                            '<span class="log-app">' + escapeHtml(log.serviceName || "-") + '</span>' +
                             '<span class="log-logger">' + escapeHtml(log.logger) + '</span>' +
-                            '<span class="log-msg">' + escapeHtml(log.message) + '</span>';
+                            '<span class="log-msg"><span class="log-msg-text">' + escapeHtml(log.message) + '</span>' +
+                            (log.exception
+                                ? '<button class="log-exc-btn" type="button" title="查看完整异常堆栈">查看详情</button>'
+                                : "") + '</span>';
                         if (log.exception) {
-                            var exc = document.createElement("pre");
-                            exc.className = "log-exception";
-                            exc.textContent = log.exception;
-                            row.appendChild(exc);
+                            var excBtn = row.querySelector(".log-exc-btn");
+                            excBtn.addEventListener("click", function () {
+                                openStackModal(log.exceptionType, log.exception);
+                            });
                         }
                         logsBody.appendChild(row);
                     });
@@ -360,6 +443,29 @@
                     logsLabel.textContent = "日志加载失败";
                 });
         }
+
+        function openStackModal(type, stack) {
+            var modal = document.getElementById("log-stack-modal");
+            var title = document.getElementById("log-stack-title");
+            var content = document.getElementById("log-stack-content");
+            title.textContent = "异常堆栈 · " + (type || "");
+            content.textContent = stack || "(无堆栈)";
+            modal.hidden = false;
+            document.body.classList.add("modal-open");
+        }
+
+        function closeStackModal() {
+            document.getElementById("log-stack-modal").hidden = true;
+            document.body.classList.remove("modal-open");
+        }
+
+        document.getElementById("close-stack-modal").addEventListener("click", closeStackModal);
+        document.getElementById("log-stack-modal").addEventListener("click", function (e) {
+            if (e.target === this) closeStackModal();
+        });
+        document.addEventListener("keydown", function (e) {
+            if (e.key === "Escape" && !document.getElementById("log-stack-modal").hidden) closeStackModal();
+        });
 
         document.getElementById("refresh").addEventListener("click", loadDetail);
         loadDetail();

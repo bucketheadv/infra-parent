@@ -11,10 +11,14 @@ infra:
     report:
       enabled: ${TRACE_REPORT_ENABLED:true}
       url: ${TRACE_ADMIN_URL:http://127.0.0.1:18090/api/trace/spans}
-      # 演示采集入参、返回值与请求头（生产可按需开关）
+      logs-url: ${TRACE_ADMIN_URL:http://127.0.0.1:18090}/api/trace/logs
+      # 演示采集入参、返回值、请求头与调用栈（生产可按需开关）
       capture-request-body: true
       capture-response-body: true
       capture-request-headers: true
+      capture-call-stack: true
+      # 调用栈仅保留业务包内的帧（API 入口及其内部方法），过滤框架帧
+      call-stack-include-prefix: io.infra.structure.trace.service.b
       max-body-length: 2000
 
 logging:

@@ -10,6 +10,8 @@ data class LogEntry(
     val timestamp: Long,
     /** 日志级别（INFO / WARN / ERROR 等） */
     val level: String,
+    /** 产生该日志的应用名（spring.application.name） */
+    val serviceName: String? = null,
     /** 输出该日志的 Logger 简称（类名） */
     val logger: String,
     /** 日志消息正文 */
@@ -20,6 +22,8 @@ data class LogEntry(
     val spanId: String? = null,
     /** 父 span 的 spanId（可能为 null） */
     val parentSpanId: String? = null,
+    /** 异常类型（异常类全名，仅异常日志存在） */
+    val exceptionType: String? = null,
     /** 异常堆栈文本（仅异常日志存在） */
     val exception: String? = null
 )

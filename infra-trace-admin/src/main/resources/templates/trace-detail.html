@@ -93,10 +93,6 @@
                     <div class="detail-block-title">请求头 headers</div>
                     <pre class="code-block" id="detail-headers"></pre>
                 </div>
-                <div class="detail-block" id="detail-error-block" hidden>
-                    <div class="detail-block-title">异常 error</div>
-                    <pre class="code-block code-error" id="detail-error"></pre>
-                </div>
             </div>
         </section>
 
@@ -114,6 +110,17 @@
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<div class="modal-overlay" id="log-stack-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="log-stack-title">
+        <div class="modal-header">
+            <h3 id="log-stack-title">异常堆栈</h3>
+            <button class="icon-button" type="button" id="close-stack-modal" title="关闭" aria-label="关闭">✕</button>
+        </div>
+        <pre class="modal-body" id="log-stack-content"></pre>
+    </div>
+</div>
+
 <script th:src="@{/trace-admin/trace.js(v=${#dates.createNow().time})}"></script>
 </body>
 </html>
