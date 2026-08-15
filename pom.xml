@@ -24,6 +24,9 @@
         <module>infra-doc</module>
         <module>infra-logging</module>
         <module>infra-trace</module>
+        <module>infra-trace-admin</module>
+        <module>infra-trace-service-a</module>
+        <module>infra-trace-service-b</module>
         <module>infra-script</module>
         <module>infra-sso</module>
         <module>infra-sso-login</module>

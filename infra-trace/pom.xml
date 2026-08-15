@@ -42,6 +42,12 @@
             <version>4.12.0</version>
             <scope>provided</scope>
         </dependency>
+        <!-- Logback 日志框架，MemoryLogAppender 需要；运行时由引用方提供 -->
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

@@ -89,11 +89,34 @@ object TraceContext {
     }
 
     /**
+     * 获取当前线程的父 spanId；调用方未透传时返回 null。
+     */
+    fun getParentSpanId(): String? = MDC.get(PARENT_SPAN_MDC_KEY)
+
+    /**
+     * 记录本次请求捕获到的异常，供过滤器在请求结束后随 span 上报。
+     *
+     * 异常体（堆栈）较大且不参与日志模式匹配，故存于线程局部而非 MDC；引用方的
+     * 全局异常处理器可在处理异常时调用本方法，从而让追踪后台看到异常原因与堆栈。
+     */
+    fun recordError(throwable: Throwable) {
+        errorHolder.set(throwable)
+    }
+
+    /**
+     * 读取本次请求捕获到的异常，无异常时返回 null。
+     */
+    fun getError(): Throwable? = errorHolder.get()
+
+    /**
      * 清除当前线程的链路上下文，请求结束或任务完成时必须调用。
      */
     fun clear() {
         MDC.remove(mdcKey)
         MDC.remove(spanMdcKey)
         MDC.remove(PARENT_SPAN_MDC_KEY)
+        errorHolder.remove()
     }
+
+    private val errorHolder = ThreadLocal<Throwable>()
 }

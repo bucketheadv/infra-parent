@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: infra-trace-admin
+
+server:
+  port: ${TRACE_ADMIN_PORT:18090}
+
+infra:
+  trace:
+    enabled: true
+    report:
+      enabled: false

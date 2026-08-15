@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Infra Trace 分布式链路追踪观测台">
+    <title th:text="${pageTitle} + ' · Infra Trace'">链路追踪 · Infra Trace</title>
+    <link rel="icon" type="image/svg+xml" th:href="@{/trace-admin/favicon.svg}" href="/trace-admin/favicon.svg">
+    <link rel="stylesheet" th:href="@{/trace-admin/trace.css(v=${#dates.createNow().time})}">
+</head>
+<body data-page="traces">
+<div class="app-shell">
+    <header class="topbar">
+        <a class="brand" th:href="@{/}" aria-label="Infra Trace 首页">
+            <span class="brand-mark">IT</span>
+            <span>Infra Trace</span>
+        </a>
+        <nav class="navigation" aria-label="主导航">
+            <a class="nav-item active" th:href="@{/}">链路列表</a>
+            <a class="nav-item" th:href="@{/topology}">服务拓扑</a>
+        </nav>
+        <div class="topbar-footer">
+            <span class="live-dot"></span>
+            追踪采集运行中
+        </div>
+    </header>
+
+    <main class="main-content">
+        <header class="page-header">
+            <div>
+                <p class="eyebrow">分布式追踪</p>
+                <h1>链路列表</h1>
+                <p class="subtitle">查看跨服务调用链、耗时分布与异常路由</p>
+            </div>
+            <button class="icon-button" type="button" id="refresh" title="刷新链路列表" aria-label="刷新链路列表">↻</button>
+        </header>
+
+        <section class="log-filter-shell" aria-label="过滤条件">
+            <div class="log-quick-ranges" role="group" aria-label="快捷时间范围">
+                <button type="button" class="log-chip active" data-minutes="30">最近 30 分钟</button>
+                <button type="button" class="log-chip" data-minutes="60">最近 1 小时</button>
+                <button type="button" class="log-chip" data-minutes="360">最近 6 小时</button>
+                <button type="button" class="log-chip" data-minutes="1440">最近 24 小时</button>
+                <button type="button" class="log-chip" data-minutes="0">全部</button>
+            </div>
+            <div class="log-filter-grid">
+                <label>关键字 <span class="label-hint">traceId / spanId / uid / 服务名 / 接口 / 请求头 / 请求体 / 返回值</span>
+                    <input id="filter-keyword" type="text" placeholder="输入关键字，逗号分隔多条件">
+                </label>
+                <label>开始时间
+                    <div class="time-input-group">
+                        <input id="filter-from-date" type="date">
+                        <input id="filter-from-time" type="time" step="1" value="00:00:00">
+                    </div>
+                </label>
+                <label>结束时间
+                    <div class="time-input-group">
+                        <input id="filter-to-date" type="date">
+                        <input id="filter-to-time" type="time" step="1" value="00:00:00">
+                    </div>
+                </label>
+                <div class="log-filter-actions">
+                    <button class="primary-button" type="button" id="apply-filter">查询</button>
+                    <button class="secondary-button" type="button" id="reset-filter">清除</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="metrics" aria-label="概览">
+            <article class="metric metric-total">
+                <div class="metric-top">
+                    <div class="metric-heading">
+                        <span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5h10M8 12h10M8 18.5h10M4.5 5.5h.01M4.5 12h.01M4.5 18.5h.01"/></svg></span>
+                        <span class="metric-label">链路数</span>
+                    </div>
+                    <span class="metric-badge">TRACES</span>
+                </div>
+                <div class="metric-value"><strong id="metric-traces">0</strong><span>条</span></div>
+                <p class="metric-note"><i aria-hidden="true"></i>命中当前时间范围</p>
+            </article>
+            <article class="metric metric-spans">
+                <div class="metric-top">
+                    <div class="metric-heading">
+                        <span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2"/><circle cx="12" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><circle cx="18" cy="12" r="2"/><path d="M7.6 10.8 10.4 7.2M7.6 13.2l2.8 3.6M14 8.4l2.4 2.4M12.4 9.6 14 14"/></svg></span>
+                        <span class="metric-label">span 数</span>
+                    </div>
+                    <span class="metric-badge">SPANS</span>
+                </div>
+                <div class="metric-value"><strong id="metric-spans">0</strong><span>个</span></div>
+                <p class="metric-note"><i aria-hidden="true"></i>跨服务调用节点</p>
+            </article>
+            <article class="metric metric-services">
+                <div class="metric-top">
+                    <div class="metric-heading">
+                        <span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4.5" y="5" width="15" height="14" rx="2"/><path d="M8 9h.01M8 13h.01M12 9h4M12 13h4"/></svg></span>
+                        <span class="metric-label">服务数</span>
+                    </div>
+                    <span class="metric-badge">SERVICES</span>
+                </div>
+                <div class="metric-value"><strong id="metric-services">0</strong><span>个</span></div>
+                <p class="metric-note"><i aria-hidden="true"></i>涉及不同服务</p>
+            </article>
+            <article class="metric metric-failed">
+                <div class="metric-top">
+                    <div class="metric-heading">
+                        <span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8.5v4M12 16h.01M10.3 4.2 3.6 16.5A2 2 0 0 0 5.3 19.6h13.4a2 2 0 0 0 1.7-3.1L13.7 4.2a2 2 0 0 0-3.4 0Z"/></svg></span>
+                        <span class="metric-label">异常链路</span>
+                    </div>
+                    <span class="metric-badge">FAILED</span>
+                </div>
+                <div class="metric-value"><strong id="metric-failed">0</strong><span>条</span></div>
+                <p class="metric-note"><i aria-hidden="true"></i>含失败 span</p>
+            </article>
+        </section>
+
+        <section class="panel" aria-labelledby="traces-heading">
+            <div class="panel-header">
+                <div>
+                    <h2 id="traces-heading">链路列表</h2>
+                    <p id="result-label">正在加载链路</p>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr>
+                        <th>traceId</th>
+                        <th>开始时间</th>
+                        <th>总耗时</th>
+                        <th>涉及服务</th>
+                        <th>span 数</th>
+                        <th>uid</th>
+                        <th>状态</th>
+                        <th class="actions-heading">操作</th>
+                    </tr></thead>
+                    <tbody id="traces-body"></tbody>
+                </table>
+                <div class="empty-state" id="empty" hidden>时间范围内暂无链路数据</div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script th:src="@{/trace-admin/trace.js(v=${#dates.createNow().time})}"></script>
+</body>
+</html>

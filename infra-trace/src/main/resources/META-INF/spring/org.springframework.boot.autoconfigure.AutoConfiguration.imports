@@ -1,1 +1,4 @@
 io.infra.structure.trace.autoconfiguration.TraceAutoConfiguration
+io.infra.structure.trace.autoconfiguration.TraceRestTemplateAutoConfiguration
+io.infra.structure.trace.autoconfiguration.TraceWebClientAutoConfiguration
+io.infra.structure.trace.autoconfiguration.TraceOkHttpAutoConfiguration

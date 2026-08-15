@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Infra Trace 链路详情">
+    <title th:text="'链路详情 · Infra Trace'">链路详情 · Infra Trace</title>
+    <link rel="icon" type="image/svg+xml" th:href="@{/trace-admin/favicon.svg}" href="/trace-admin/favicon.svg">
+    <link rel="stylesheet" th:href="@{/trace-admin/trace.css(v=${#dates.createNow().time})}">
+</head>
+<body data-page="detail">
+<div class="app-shell">
+    <header class="topbar">
+        <a class="brand" th:href="@{/}" aria-label="Infra Trace 首页">
+            <span class="brand-mark">IT</span>
+            <span>Infra Trace</span>
+        </a>
+        <nav class="navigation" aria-label="主导航">
+            <a class="nav-item" th:href="@{/}">链路列表</a>
+            <a class="nav-item" th:href="@{/topology}">服务拓扑</a>
+        </nav>
+        <div class="topbar-footer">
+            <span class="live-dot"></span>
+            追踪采集运行中
+        </div>
+    </header>
+
+    <main class="main-content">
+        <header class="page-header">
+            <div>
+                <p class="eyebrow">分布式追踪</p>
+                <h1>链路详情</h1>
+                <p class="subtitle mono">traceId: <span id="trace-id-label">-</span></p>
+            </div>
+            <div class="toolbar">
+                <a class="secondary-button" th:href="@{/topology}">查看拓扑</a>
+                <a class="secondary-button" th:href="@{/}">返回列表</a>
+                <button class="icon-button" type="button" id="refresh" title="刷新详情" aria-label="刷新详情">↻</button>
+            </div>
+        </header>
+
+        <section class="panel trace-summary" id="meta-panel" hidden>
+            <div class="panel-header">
+                <div>
+                    <h2>链路概览</h2>
+                    <p>trace 级别的聚合信息</p>
+                </div>
+            </div>
+            <div class="summary-grid">
+                <div class="summary-cell"><span class="summary-label">traceId</span><span class="summary-value mono" id="m-trace-id">-</span></div>
+                <div class="summary-cell"><span class="summary-label">开始时间</span><span class="summary-value" id="m-start">-</span></div>
+                <div class="summary-cell"><span class="summary-label">总耗时</span><span class="summary-value" id="m-duration">-</span></div>
+                <div class="summary-cell"><span class="summary-label">span 数</span><span class="summary-value" id="m-spans">-</span></div>
+                <div class="summary-cell"><span class="summary-label">涉及服务</span><span class="summary-value" id="m-services">-</span></div>
+                <div class="summary-cell"><span class="summary-label">状态</span><span class="summary-value" id="m-status">-</span></div>
+            </div>
+        </section>
+
+        <section class="panel" aria-labelledby="waterfall-heading">
+            <div class="panel-header">
+                <div>
+                    <h2 id="waterfall-heading">调用树 · 瀑布图</h2>
+                    <p id="waterfall-label">正在加载 span</p>
+                </div>
+                <div class="waterfall-legend" aria-label="图例">
+                    <span><i class="legend-bar ok"></i>成功</span>
+                    <span><i class="legend-bar err"></i>异常</span>
+                </div>
+            </div>
+            <div id="waterfall" class="waterfall"></div>
+            <div class="empty-state" id="empty" hidden>该链路暂无 span</div>
+        </section>
+
+        <section class="panel" id="span-detail-panel" hidden>
+            <div class="panel-header">
+                <div>
+                    <h2>span 详情 <span class="panel-sub mono" id="detail-span-id"></span></h2>
+                    <p>点击瀑布图行查看具体 span 的入参、返回值与异常</p>
+                </div>
+                <button class="secondary-button" type="button" id="close-detail">关闭</button>
+            </div>
+            <div class="detail-body">
+                <dl class="kv mono" id="detail-kv"></dl>
+                <div class="detail-block">
+                    <div class="detail-block-title">入参 request</div>
+                    <pre class="code-block" id="detail-request"></pre>
+                </div>
+                <div class="detail-block">
+                    <div class="detail-block-title">返回值 response</div>
+                    <pre class="code-block" id="detail-response"></pre>
+                </div>
+                <div class="detail-block" id="detail-headers-block" hidden>
+                    <div class="detail-block-title">请求头 headers</div>
+                    <pre class="code-block" id="detail-headers"></pre>
+                </div>
+                <div class="detail-block" id="detail-error-block" hidden>
+                    <div class="detail-block-title">异常 error</div>
+                    <pre class="code-block code-error" id="detail-error"></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" aria-labelledby="logs-heading">
+            <div class="panel-header">
+                <div>
+                    <h2 id="logs-heading">关联日志</h2>
+                    <p id="logs-label">该链路产生的日志</p>
+                </div>
+            </div>
+            <div class="logs-wrap" id="logs-body"></div>
+            <div class="empty-state" id="logs-empty" hidden>暂无关联日志</div>
+        </section>
+    </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script th:src="@{/trace-admin/trace.js(v=${#dates.createNow().time})}"></script>
+</body>
+</html>

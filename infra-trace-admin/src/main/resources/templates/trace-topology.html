@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Infra Trace 服务拓扑">
+    <title th:text="${pageTitle} + ' · Infra Trace'">服务拓扑 · Infra Trace</title>
+    <link rel="icon" type="image/svg+xml" th:href="@{/trace-admin/favicon.svg}" href="/trace-admin/favicon.svg">
+    <link rel="stylesheet" th:href="@{/trace-admin/trace.css(v=${#dates.createNow().time})}">
+</head>
+<body data-page="topology">
+<div class="app-shell">
+    <header class="topbar">
+        <a class="brand" th:href="@{/}" aria-label="Infra Trace 首页">
+            <span class="brand-mark">IT</span>
+            <span>Infra Trace</span>
+        </a>
+        <nav class="navigation" aria-label="主导航">
+            <a class="nav-item" th:href="@{/}">链路列表</a>
+            <a class="nav-item active" th:href="@{/topology}">服务拓扑</a>
+        </nav>
+        <div class="topbar-footer">
+            <span class="live-dot"></span>
+            追踪采集运行中
+        </div>
+    </header>
+
+    <main class="main-content">
+        <header class="page-header">
+            <div>
+                <p class="eyebrow">分布式追踪</p>
+                <h1>服务拓扑</h1>
+                <p class="subtitle">服务间调用关系、调用量与异常概览</p>
+            </div>
+            <div class="toolbar">
+                <label class="search-field"><span class="sr-only">过滤</span>
+                    <input id="filter-service" type="search" placeholder="筛选服务名">
+                </label>
+                <button class="icon-button" type="button" id="refresh" title="刷新拓扑" aria-label="刷新拓扑">↻</button>
+            </div>
+        </header>
+
+        <section class="panel topo-panel" aria-labelledby="topo-heading">
+            <div class="panel-header">
+                <div>
+                    <h2 id="topo-heading">调用拓扑</h2>
+                    <p id="topo-label">正在加载拓扑数据</p>
+                </div>
+                <div class="topo-legend">
+                    <span><i class="legend-bar ok"></i>成功链路</span>
+                    <span><i class="legend-bar err"></i>异常链路</span>
+                    <span class="legend-dot"><i class="topo-dot in"></i>入口</span>
+                    <span class="legend-dot"><i class="topo-dot mid"></i>中间</span>
+                    <span class="legend-dot"><i class="topo-dot out"></i>终端</span>
+                </div>
+            </div>
+
+            <div class="topo-stats">
+                <div class="topo-stat">
+                    <div class="topo-stat-value" id="stat-services">-</div>
+                    <div class="topo-stat-label">服务节点</div>
+                </div>
+                <div class="topo-stat">
+                    <div class="topo-stat-value" id="stat-links">-</div>
+                    <div class="topo-stat-label">调用关系</div>
+                </div>
+                <div class="topo-stat">
+                    <div class="topo-stat-value" id="stat-calls">-</div>
+                    <div class="topo-stat-label">总调用次数</div>
+                </div>
+                <div class="topo-stat">
+                    <div class="topo-stat-value" id="stat-err-rate">-</div>
+                    <div class="topo-stat-label">整体异常率</div>
+                </div>
+            </div>
+
+            <div class="topo-canvas" id="topo-canvas"></div>
+            <div class="empty-state" id="empty" hidden>暂无跨服务调用数据</div>
+        </section>
+
+        <section class="panel" aria-labelledby="topo-table-heading">
+            <div class="panel-header">
+                <div>
+                    <h2 id="topo-table-heading">调用明细</h2>
+                    <p id="topo-table-label">按调用量降序排列</p>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr>
+                        <th>调用方</th>
+                        <th>被调方</th>
+                        <th>调用次数</th>
+                        <th>异常次数</th>
+                        <th>平均耗时</th>
+                    </tr></thead>
+                    <tbody id="topo-body"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script th:src="@{/trace-admin/topology.js(v=${#dates.createNow().time})}"></script>
+</body>
+</html>

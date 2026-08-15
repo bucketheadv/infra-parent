@@ -5,7 +5,7 @@
 ## 仓库概览
 
 - Maven 多模块仓库：父工程 `io.infra.structure:infra-parent`，继承 `com.github.bucketheadv:infra-pom`。
-- 模块按职责拆分：`infra-core`、`infra-db`、`infra-redis`、`infra-rocketmq`、`infra-logging`、`infra-trace`、`infra-schedule`、`infra-schedule-admin`、`infra-sso`、`infra-sso-login`、`infra-job`、`infra-api`、`infra-activity`、`infra-doc`、`infra-script` 等。
+- 模块按职责拆分：`infra-core`、`infra-db`、`infra-redis`、`infra-rocketmq`、`infra-logging`、`infra-trace`、`infra-trace-admin`、`infra-trace-service-a`、`infra-trace-service-b`、`infra-schedule`、`infra-schedule-admin`、`infra-sso`、`infra-sso-login`、`infra-job`、`infra-api`、`infra-activity`、`infra-doc`、`infra-script` 等。
 - 技术栈：Kotlin（主语言，与 Java 混编）、Spring Boot、MyBatis-Flex、MySQL、Redis、RocketMQ、Ktor、Lombok、Jackson。
 - 编译方式：kotlin-maven-plugin 先编译 `src/main/kotlin`，maven-compiler-plugin 再编译 `src/main/java`（混编仓库，勿单独改动编译顺序）。
 - 基础包名 `io.infra.structure.*`；源码位于各模块 `src/main/kotlin` 与 `src/main/java`。
@@ -36,6 +36,8 @@
 - ORM 统一使用 MyBatis-Flex，优先沿用已有 DAO/Mapper 查询写法。数据库字段使用下划线命名；主键为 `id`（BIGINT），时间字段为 `create_time`、`update_time`。
 - 时间处理优先沿用所在模块既有惯例（Joda Time 或 `java.time`），不跨模块引入不一致的时间 API。请求与响应使用对象封装，避免散落的原始参数。
 - 保持 Kotlin 空安全，避免滥用 `!!`；方法命名应表达业务语义，不保留未使用的方法。发现重复逻辑时优先提取复用方法。
+- **Model / DTO / Entity 类的每个字段必须有 KDoc 注释**（`/** ... */`），说明字段含义、格式或约束；注释缺失时不得提交。
+- **日志格式自动携带链路标识**：日志 pattern 中必须包含 `%X{traceId}`、`%X{spanId}`、`%X{parentSpanId}`，由 TraceFilter 通过 MDC 自动注入，业务代码无需手动设置。日志格式示例：`%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{traceId}] [%X{spanId}] [%X{parentSpanId}] - %msg%n`。
 
 ## API、异常与日志（适用于含对外接口的模块：`infra-api`、`infra-activity`、`infra-sso-login`、`infra-schedule-admin` 等）
 

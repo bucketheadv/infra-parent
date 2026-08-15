@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: infra-trace-service-a
+
+server:
+  port: ${TRACE_SERVICE_A_PORT:18091}
+
+infra:
+  trace:
+    enabled: true
+    report:
+      enabled: ${TRACE_REPORT_ENABLED:true}
+      url: ${TRACE_ADMIN_URL:http://127.0.0.1:18090/api/trace/spans}
+      # 演示采集入参、返回值与请求头（生产可按需开关）
+      capture-request-body: true
+      capture-response-body: true
+      capture-request-headers: true
+      max-body-length: 2000
+
+trace:
+  demo:
+    # 服务 B 的地址；跨机部署时不要用 127.0.0.1
+    downstream-url: ${TRACE_SERVICE_B_URL:http://127.0.0.1:18092/api/demo/downstream}
+    # 服务 B 异常路由测试地址（下游异常）
+    downstream-error-url: ${TRACE_SERVICE_B_ERROR_URL:http://127.0.0.1:18092/api/demo/downstream-error}
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{traceId}] [%X{spanId}] [%X{parentSpanId}] - %msg%n"

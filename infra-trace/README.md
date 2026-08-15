@@ -8,6 +8,7 @@
 - **链路语义完整**：`traceId` 整条链路保持一致；每次入站请求新建 `spanId`，上游 spanId 记为 `parentSpanId`，可在日志中还原调用树。
 - **出站多客户端传播**：开箱即用的 Ktor / RestTemplate / WebClient / OkHttp 传播组件。
 - **异步透传**：提供 `TaskDecorator`，异步线程内日志归属同一条链路。
+- **span 上报**：可配置把每次入站请求的 span 异步上报给追踪后台（`infra-trace-admin`），默认关闭，不影响存量调用。
 - **可配置**：header 名称、MDC key、开关等均通过 `infra.trace.*` 配置项控制。
 
 ## 工作原理
@@ -87,6 +88,44 @@ fun executor(decorator: TaskDecorator): Executor {
 | `infra.trace.span-mdc-key` | `spanId` | spanId 的 MDC key |
 | `infra.trace.generate-if-absent` | `true` | 入站未携带 traceId 时是否自动生成 |
 | `infra.trace.include-response-header` | `true` | 是否在响应头回写 traceId/spanId |
+| `infra.trace.report.enabled` | `false` | 是否开启 span 上报 |
+| `infra.trace.report.url` | 空 | 追踪后台采集地址，如 `http://127.0.0.1:18090/api/trace/spans` |
+| `infra.trace.report.service-name` | 空 | 上报的服务名，为空时回退 `spring.application.name` |
+| `infra.trace.report.timeout-millis` | `3000` | 上报超时（毫秒） |
+| `infra.trace.report.capture-request-body` | `false` | 是否采集入参（请求体）一并上报 |
+| `infra.trace.report.capture-response-body` | `false` | 是否采集返回值（响应体）一并上报 |
+| `infra.trace.report.max-body-length` | `2000` | 入参/返回值采集最大长度（字符），超出截断 |
+
+## span 上报
+
+开启 `infra.trace.report.enabled=true` 并配置 `infra.trace.report.url` 后，每次入站请求结束会自动把本服务这段 span（traceId/spanId/parentSpanId/服务名/路径/耗时/是否成功）异步上报给追踪后台。上报失败仅记录 debug 日志，不影响业务请求。
+
+```yaml
+infra:
+  trace:
+    report:
+      enabled: true
+      url: http://127.0.0.1:18090/api/trace/spans
+      capture-request-body: true
+      capture-response-body: true
+      max-body-length: 2000
+```
+
+- **入参与返回值**：开启 `capture-request-body` / `capture-response-body` 后，过滤器通过缓存包装器采集请求体与响应体（按 `max-body-length` 截断），便于后台查看入参和返回值。注意只有业务真正读取了请求体（如 `@RequestBody`）才会采集到内容；请求被路由层直接拒绝（如 405）时请求体可能为空。
+- **异常原因与堆栈**：异常优先取过滤器捕获的向上抛出的异常；若异常由全局异常处理器处理（不会传播到过滤器），请在处理器中调用 `TraceContext.recordError(throwable)` 记录，后台即可展示异常原因与堆栈：
+
+```kotlin
+@RestControllerAdvice
+class DemoExceptionHandler {
+    @ExceptionHandler(Throwable::class)
+    fun handle(exception: Throwable): ResponseEntity<*> {
+        TraceContext.recordError(exception)   // 让过滤器随 span 上报异常原因与堆栈
+        // ...
+    }
+}
+```
+
+配套的 `infra-trace-admin` 提供采集、查询接口与观测台页面（链路列表 + 瀑布图 + span 详情，支持按时间过滤、查看异常原因/堆栈/入参返回值），`infra-trace-service-a` / `infra-trace-service-b` 是演示跨服务链路透传与上报的示例微服务。
 
 ## 本地验证
 
