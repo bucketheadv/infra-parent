@@ -3,6 +3,7 @@ package io.infra.structure.logging.aspect
 import io.infra.structure.logging.LogContext
 import io.infra.structure.logging.LogLevel
 import io.infra.structure.logging.PolyLog
+import io.infra.structure.logging.PolyLogPropagation
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.annotation.Around
 import org.aspectj.lang.annotation.Aspect
@@ -17,6 +18,11 @@ import org.springframework.stereotype.Component
  * - 方法执行后：自动 flush 并清理 LogContext
  * - 异常时：也会自动 flush 并清理 LogContext
  *
+ * 传播规则（见 [PolyLogPropagation]）：
+ * - REQUIRED（默认）：外层已有 LogContext 时复用同一日志流，仅最外层方法负责 flush
+ * - REQUIRES_NEW：无论外层是否已有 LogContext，都挂起外层上下文、新开独立日志流，
+ *   方法结束立即 flush，随后恢复外层上下文，保证新开日志流与调用方日志流互不干扰
+ *
  * @author sven
  */
 @Aspect
@@ -28,38 +34,42 @@ class PolyLogAspect {
     fun around(joinPoint: ProceedingJoinPoint): Any? {
         // 获取注解（优先使用方法上的，如果没有则使用类上的）
         val annotation = getAnnotation(joinPoint)
-        
+
         if (annotation == null || annotation.value.isEmpty()) {
             // 如果没有注解或前缀为空，直接执行方法
             return joinPoint.proceed()
         }
 
+        // REQUIRES_NEW 时挂起外层上下文，确保本方法开启独立日志流
+        val requireNew = annotation.propagation == PolyLogPropagation.REQUIRES_NEW
+        val suspendedContext = if (requireNew) LogContext.suspend() else null
+
         // 增加嵌套深度
         val depth = LogContext.enter()
         val isOuterMethod = depth == 1
-        
+
         // 如果是外层方法，清除可能存在的旧 context
         if (isOuterMethod) {
             LogContext.clear()
         }
-        
+
         // 获取或创建 context
-        val context = LogContext.get()
+        val context = LogContext.instance()
         // 保存旧的前缀（用于嵌套调用时恢复）
         val oldPrefix = if (isOuterMethod) "" else context.getCurrentPrefix()
-        
+
         // 设置新前缀（嵌套调用时也设置，这样内层的前缀会拼接到日志中）
         context.setPrefix(annotation.value, isNested = !isOuterMethod)
-        
+
         try {
             // 执行方法
             val result = joinPoint.proceed()
-            
+
             // 方法执行成功后，只有最外层方法才 flush 日志
             if (isOuterMethod && !context.isEmpty()) {
                 context.flush()
             }
-            
+
             return result
         } catch (e: Throwable) {
             // 发生异常时，只有最外层方法才 flush 日志（使用 ERROR 级别）
@@ -72,12 +82,17 @@ class PolyLogAspect {
             if (!isOuterMethod && oldPrefix.isNotEmpty()) {
                 context.setPrefix(oldPrefix, isNested = true)
             }
-            
+
             // 减少嵌套深度
             val newDepth = LogContext.exit()
             // 只有最外层方法结束时才清理 ThreadLocal
             if (newDepth == 0) {
                 LogContext.clear()
+            }
+
+            // REQUIRES_NEW 时恢复被挂起的外层上下文
+            if (suspendedContext != null) {
+                LogContext.resume()
             }
         }
     }
@@ -87,21 +102,21 @@ class PolyLogAspect {
      */
     private fun getAnnotation(joinPoint: ProceedingJoinPoint): PolyLog? {
         val signature = joinPoint.signature as? MethodSignature ?: return null
-        
+
         // 先查找方法上的注解
         val method = signature.method
         val methodAnnotation = method.getAnnotation(PolyLog::class.java)
         if (methodAnnotation != null && methodAnnotation.value.isNotEmpty()) {
             return methodAnnotation
         }
-        
+
         // 如果方法上没有，查找类上的注解
         val targetClass = joinPoint.target.javaClass
         val classAnnotation = targetClass.getAnnotation(PolyLog::class.java)
         if (classAnnotation != null && classAnnotation.value.isNotEmpty()) {
             return classAnnotation
         }
-        
+
         return null
     }
 }

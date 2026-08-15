@@ -191,6 +191,19 @@
                             </sourceDirs>
                         </configuration>
                     </execution>
+                    <execution>
+                        <id>test-compile</id>
+                        <phase>process-test-sources</phase>
+                        <goals>
+                            <goal>test-compile</goal>
+                        </goals>
+                        <configuration>
+                            <sourceDirs>
+                                <source>src/test/kotlin</source>
+                                <source>src/test/java</source>
+                            </sourceDirs>
+                        </configuration>
+                    </execution>
                 </executions>
                 <configuration>
                     <!-- 自动 open 这些注解修饰的类 -->

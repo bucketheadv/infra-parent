@@ -21,13 +21,15 @@ class LogContext private constructor() {
     companion object {
         private val contextHolder = ThreadLocal<LogContext>()
         private val depthHolder = ThreadLocal<Int>() // 嵌套深度计数器
+        private val suspendedHolder = ThreadLocal<MutableList<LogContext>>() // 被挂起的外层上下文栈（REQUIRES_NEW 使用）
+        private val suspendedDepthHolder = ThreadLocal<MutableList<Int>>() // 与被挂起上下文对应的外层深度
         private val logger: Logger = LoggerFactory.getLogger(LogContext::class.java)
         
         /**
          * 获取当前线程的 LogContext，如果不存在则创建
          * 会自动检测当前调用栈中的 @PolyLog 注解来设置前缀
          */
-        fun get(): LogContext {
+        fun instance(): LogContext {
             var context = contextHolder.get()
             if (context == null) {
                 context = LogContext()
@@ -37,6 +39,53 @@ class LogContext private constructor() {
             }
             return context
         }
+        
+        /**
+         * 判断当前线程是否已有活跃的 LogContext
+         */
+        fun isActive(): Boolean = contextHolder.get() != null
+        
+        /**
+         * 挂起当前线程的 LogContext（用于 REQUIRES_NEW 新开日志流时保存外层上下文与深度）
+         * @return 被挂起的上下文，若当前没有活跃上下文则返回 null
+         */
+        fun suspend(): LogContext? {
+            val current = contextHolder.get() ?: return null
+            val stack = suspendedHolder.get() ?: mutableListOf<LogContext>().also { suspendedHolder.set(it) }
+            val depthStack = suspendedDepthHolder.get() ?: mutableListOf<Int>().also { suspendedDepthHolder.set(it) }
+            stack.add(current)
+            depthStack.add(depthHolder.get() ?: 0)
+            contextHolder.remove()
+            // 重置深度，使 REQUIRES_NEW 方法成为新的最外层
+            depthHolder.set(0)
+            return current
+        }
+        
+        /**
+         * 恢复最近被挂起的 LogContext（与 [suspend] 成对使用），同时恢复外层深度
+         */
+        fun resume() {
+            val stack = suspendedHolder.get() ?: return
+            val depthStack = suspendedDepthHolder.get() ?: return
+            if (stack.isEmpty()) {
+                suspendedHolder.remove()
+                suspendedDepthHolder.remove()
+                return
+            }
+            val context = stack.removeAt(stack.size - 1)
+            val depth = depthStack.removeAt(depthStack.size - 1)
+            contextHolder.set(context)
+            depthHolder.set(depth)
+            if (stack.isEmpty()) {
+                suspendedHolder.remove()
+                suspendedDepthHolder.remove()
+            }
+        }
+        
+        /**
+         * 当前是否存在被挂起的外层上下文
+         */
+        fun hasSuspended(): Boolean = !suspendedHolder.get().isNullOrEmpty()
         
         /**
          * 增加嵌套深度（进入带注解的方法时调用）
@@ -70,7 +119,7 @@ class LogContext private constructor() {
          * 这是一个便捷方法，可以在方法开始时调用，方法结束时自动 flush
          */
         fun withContext(block: (LogContext) -> Unit) {
-            val context = get()
+            val context = instance()
             try {
                 block(context)
             } finally {
@@ -85,14 +134,14 @@ class LogContext private constructor() {
          * 记录 INFO 级别日志
          */
         fun info(message: String) {
-            get().log(message, LogLevel.INFO)
+            instance().log(message, LogLevel.INFO)
         }
         
         /**
          * 记录 INFO 级别日志（带格式化参数）
          */
         fun info(format: String, vararg args: Any?) {
-            get().log(format, *args, level = LogLevel.INFO)
+            instance().log(format, *args, level = LogLevel.INFO)
         }
     }
     
@@ -125,17 +174,49 @@ class LogContext private constructor() {
      * @param level 日志级别，默认为 INFO
      */
     fun log(message: String, level: LogLevel = LogLevel.INFO) {
+        // 捕获实际业务调用位置，避免日志统一由 LogContext 输出时 %file:%line 恒为 LogContext.kt
+        val caller = captureCaller()
         // 如果当前前缀不为空，且与外层前缀不同，则在消息前加上当前前缀
         val logMessage = if (currentPrefix.isNotEmpty() && currentPrefix != prefix) {
-            "[$currentPrefix] $message"
+            "[$currentPrefix] ($caller) $message"
         } else {
-            message
+            "($caller) $message"
         }
         logs.add(logMessage)
         // 使用最高级别的日志级别（ERROR > WARN > INFO > DEBUG > TRACE）
         if (level.ordinal > logLevel.ordinal) {
             logLevel = level
         }
+    }
+
+    /**
+     * 通过调用栈捕获实际业务调用的文件与行号
+     * @return 形如 "OrderService.kt:42"，无法定位时返回 "unknown"
+     */
+    private fun captureCaller(): String {
+        val stackTrace = Thread.currentThread().stackTrace
+        for (element in stackTrace) {
+            val className = element.className
+            if (className == LogContext::class.java.name ||
+                className.startsWith("io.infra.structure.logging.aspect.") ||
+                className.startsWith("java.") ||
+                className.startsWith("jdk.") ||
+                className.startsWith("kotlin.") ||
+                className.startsWith("sun.") ||
+                className.startsWith("org.springframework") ||
+                className.startsWith("org.aspectj") ||
+                className.contains('$')) {
+                continue
+            }
+            val fileName = element.fileName
+            val line = element.lineNumber
+            return if (fileName != null && line > 0) {
+                "$fileName:$line"
+            } else {
+                className.substringAfterLast('.')
+            }
+        }
+        return "unknown"
     }
     
     /**
