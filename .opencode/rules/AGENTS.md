@@ -36,6 +36,7 @@
 - ORM 统一使用 MyBatis-Flex，优先沿用已有 DAO/Mapper 查询写法。数据库字段使用下划线命名；主键为 `id`（BIGINT），时间字段为 `create_time`、`update_time`。
 - 时间处理优先沿用所在模块既有惯例（Joda Time 或 `java.time`），不跨模块引入不一致的时间 API。请求与响应使用对象封装，避免散落的原始参数。
 - 保持 Kotlin 空安全，避免滥用 `!!`；方法命名应表达业务语义，不保留未使用的方法。发现重复逻辑时优先提取复用方法。
+- **优先使用 Lombok**：Java 类的 getter/setter、构造器、`toString`、`equals`/`hashCode` 等样板代码优先用 `@Getter`/`@Setter`/`@RequiredArgsConstructor`/`@ToString`/`@Data` 等注解生成，避免手写无逻辑的样板方法；字段或方法语义需注释说明时保留 Javadoc。注解的使用不得改变业务语义或线程安全行为。
 - **Model / DTO / Entity 类的每个字段必须有 KDoc 注释**（`/** ... */`），说明字段含义、格式或约束；注释缺失时不得提交。
 - **日志格式自动携带链路标识**：日志 pattern 中必须包含 `%X{traceId}`、`%X{spanId}`、`%X{parentSpanId}`，由 TraceFilter 通过 MDC 自动注入，业务代码无需手动设置。日志格式示例：`%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{traceId}] [%X{spanId}] [%X{parentSpanId}] - %msg%n`。
 
