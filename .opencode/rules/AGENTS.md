@@ -5,7 +5,7 @@
 ## 仓库概览
 
 - Maven 多模块仓库：父工程 `io.infra.structure:infra-parent`，继承 `com.github.bucketheadv:infra-pom`。
-- 模块按职责拆分：`infra-core`、`infra-db`、`infra-redis`、`infra-rocketmq`、`infra-logging`、`infra-schedule`、`infra-schedule-admin`、`infra-sso`、`infra-sso-login`、`infra-job`、`infra-api`、`infra-activity`、`infra-doc`、`infra-script` 等。
+- 模块按职责拆分：`infra-core`、`infra-db`、`infra-redis`、`infra-rocketmq`、`infra-logging`、`infra-trace`、`infra-schedule`、`infra-schedule-admin`、`infra-sso`、`infra-sso-login`、`infra-job`、`infra-api`、`infra-activity`、`infra-doc`、`infra-script` 等。
 - 技术栈：Kotlin（主语言，与 Java 混编）、Spring Boot、MyBatis-Flex、MySQL、Redis、RocketMQ、Ktor、Lombok、Jackson。
 - 编译方式：kotlin-maven-plugin 先编译 `src/main/kotlin`，maven-compiler-plugin 再编译 `src/main/java`（混编仓库，勿单独改动编译顺序）。
 - 基础包名 `io.infra.structure.*`；源码位于各模块 `src/main/kotlin` 与 `src/main/java`。

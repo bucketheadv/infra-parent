@@ -23,6 +23,7 @@
         <module>infra-schedule-executor-sample</module>
         <module>infra-doc</module>
         <module>infra-logging</module>
+        <module>infra-trace</module>
         <module>infra-script</module>
         <module>infra-sso</module>
         <module>infra-sso-login</module>

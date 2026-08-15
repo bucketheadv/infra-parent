@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.infra.structure</groupId>
+        <artifactId>infra-parent</artifactId>
+        <version>0.9.6-RELEASE</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+    <artifactId>infra-trace</artifactId>
+    <packaging>jar</packaging>
+
+    <dependencies>
+        <!-- 提供 Servlet 过滤链与 spring-web 能力，仅编译期需要；引用方为 MVC 应用时自行生效 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- 提供 WebClient 链路传播能力，仅编译期需要；引用方使用 WebFlux/WebClient 时自行生效 -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webflux</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-core</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Ktor 客户端链路传播插件，仅编译期需要（版本由 infra-pom 管理） -->
+        <dependency>
+            <groupId>io.ktor</groupId>
+            <artifactId>ktor-client-core</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- OkHttp 客户端链路传播拦截器，仅编译期需要；引用方使用 OkHttp 时自行生效 -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp</artifactId>
+            <version>4.12.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 仅供 IDEA 识别 KAPT；具体执行配置继承自父 POM。 -->
+            <plugin>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>kapt</id>
+                        <goals><goal>kapt</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
