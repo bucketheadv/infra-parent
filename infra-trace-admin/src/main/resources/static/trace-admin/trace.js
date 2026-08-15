@@ -242,10 +242,16 @@
                 childrenByParent[key].sort(function (a, b) { return a.startTimeMillis - b.startTimeMillis; });
             });
             function build(span) {
-                var frames = (span.callStack || "").split("\n").filter(function (line) { return line.length > 0; });
+                // 展示业务调用与 I/O 调用（HTTP/MySQL/Redis 等）帧
+                var frames = (span.callStack || "").split("\n").filter(function (line) {
+                    return line.length > 0;
+                });
                 var nodes = frames.map(function (frame) { return { text: frame, children: [] }; });
                 if (!nodes.length) {
-                    nodes = [{ text: span.serviceName + " · " + span.operation, children: [] }];
+                    // 无调用栈帧时（协程/异步客户端或未采集到），用 HTTP 端点兜底表示该次调用
+                    var fallback = (span.httpMethod ? span.httpMethod + " " : "") + (span.operation || "");
+                    if (!fallback) return [];
+                    nodes = [{ text: fallback, children: [] }];
                 }
                 for (var i = 1; i < nodes.length; i++) {
                     nodes[i - 1].children.push(nodes[i]);

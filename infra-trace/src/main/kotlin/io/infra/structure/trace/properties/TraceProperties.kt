@@ -58,6 +58,15 @@ data class TraceReportProperties(
     var callStackMaxDepth: Int = 60,
     /** 调用栈仅保留的业务包前缀（业务 API 接口所在包，如 io.infra.structure.trace.service.a）；为空时保留过滤后的全部帧 */
     var callStackIncludePrefix: String = "",
+    /** 调用栈中视为 I/O 调用的包前缀（HTTP/MySQL/Redis/MQ 等），与业务前缀共同决定保留哪些帧 */
+    var callStackIoPrefixes: List<String> = listOf(
+        "io.ktor.", "okhttp3.", "org.apache.http.", "jdk.internal.net.http.", "java.net.http.",
+        "org.springframework.http.", "org.springframework.web.client.", "org.springframework.web.reactive.function.client.",
+        "com.mysql.", "org.mybatis.", "org.apache.ibatis.", "com.baomidou.", "java.sql.", "javax.sql.",
+        "com.zaxxer.hikari.", "com.alibaba.druid.",
+        "io.lettuce.", "redis.clients.", "org.springframework.data.redis.",
+        "org.apache.rocketmq.", "org.apache.kafka."
+    ),
     /** 入参/返回值采集的最大长度（字符），超出部分截断 */
     var maxBodyLength: Int = 2_000
 )

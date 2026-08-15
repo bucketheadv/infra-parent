@@ -230,26 +230,33 @@ class TraceFilter(
     /**
      * 把调用栈帧格式化为逐行方法名（类名.方法名）。
      *
-     * 先过滤 JVM/容器/协程调度的框架噪音帧；配置了业务包前缀 `call-stack-include-prefix` 时，
-     * 仅保留该包内的帧（业务 API 接口及其内部方法），并把顺序从"最深层在前"反转，使其从业务 API 接口开始自上而下展示，
-     * 层级与前端缩进一一对应。
+     * 参照 SkyWalking，只保留业务相关的调用：业务包内的帧（业务 API 入口及其内部方法）与
+     * I/O 调用帧（HTTP/MySQL/Redis/MQ 等，配置项 `call-stack-io-prefixes`），
+     * 其余框架帧一律丢弃。顺序从"最深层在前"反转为从业务方法开始；连续的 I/O 帧仅保留
+     * 靠近业务的一端，避免库内部栈帧刷屏。
      */
     private fun formatCallStack(frames: Array<StackTraceElement>?): String? {
         if (frames == null || frames.isEmpty()) return null
-        val noisePrefixes = listOf(
-            "java.", "jdk.", "sun.", "javax.",
-            "org.apache.catalina.", "org.apache.tomcat.",
-            "kotlinx.coroutines.scheduling."
-        )
-        var kept = frames.asSequence()
-            .filterNot { frame -> noisePrefixes.any { frame.className.startsWith(it) } }
-        val prefix = properties.report.callStackIncludePrefix
-        if (prefix.isNotBlank()) {
-            kept = kept.filter { it.className.startsWith(prefix) }
+        val businessPrefix = properties.report.callStackIncludePrefix
+        val ioPrefixes = properties.report.callStackIoPrefixes
+        val filtered = frames.filter { frame ->
+            val className = frame.className
+            ioPrefixes.any { className.startsWith(it) } ||
+                (businessPrefix.isNotBlank() && className.startsWith(businessPrefix))
         }
-        val businessFrames = kept.take(properties.report.callStackMaxDepth).toList()
-        val ordered = if (prefix.isNotBlank()) businessFrames.reversed() else businessFrames
-        return ordered.joinToString("\n") { "${it.className}.${it.methodName}" }
+        if (filtered.isEmpty()) return null
+        val ordered = filtered.asReversed()
+        val result = mutableListOf<StackTraceElement>()
+        for (frame in ordered) {
+            val className = frame.className
+            val isIo = ioPrefixes.any { className.startsWith(it) }
+            val lastIsIo = result.isNotEmpty() &&
+                ioPrefixes.any { result.last().className.startsWith(it) }
+            if (isIo && lastIsIo) continue
+            result.add(frame)
+        }
+        return result.take(properties.report.callStackMaxDepth)
+            .joinToString("\n") { "${it.className}.${it.methodName}" }
             .takeIf { it.isNotBlank() }
     }
 
