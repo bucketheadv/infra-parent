@@ -100,3 +100,10 @@
 
 - 变更 Kotlin/Java 后，按受影响模块执行适当的 Maven 编译、测试或最小验证（`mvn -pl <模块> -am compile` 等）；未运行时说明原因。
 - 对接口改动说明验证方式、兼容性与安全/灰度影响；必要时给出接口、SQL、日志或关键路径的本地验证步骤。
+
+## 版本发布（适用于 infra-pom 与 infra-parent 版本升级）
+
+- **版本号必须同步**：升级 infra-pom 的 `<version>` 时，必须同时更新 `<infra.parent.version>` 属性，二者必须保持一致。infra-pom 的 `dependencyManagement` 通过该属性统一管理 `io.infra.structure:*` 各模块版本，只改 `<version>` 会导致下游模块仍解析旧版本。
+- 升级 infra-parent 时，根 pom 的 `<parent><version>` 与自身 `<version>` 必须同步为新版本，并运行 `upgrade.sh` 将全部子模块的 `<parent>` 版本同步为新版本；升级后检查仓库内无旧版本残留。
+- JitPack 按 tag 缓存构建结果：删除并重建同名 tag 不会触发重新构建，必须删除本地与远程旧 tag 后打新版本 tag 推送；JitPack 缓存清理需在 jitpack.io 页面操作。
+- 发布后应通过 `mvn install:install-file` 将新版本 infra-pom 装入本地仓库，并验证本地编译（`JAVA_HOME=~/.sdkman/candidates/java/25-graal`）通过。

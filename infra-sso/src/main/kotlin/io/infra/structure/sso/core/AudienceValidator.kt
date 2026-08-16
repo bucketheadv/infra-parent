@@ -14,7 +14,7 @@ class AudienceValidator(private val audience: String) : OAuth2TokenValidator<Jwt
      * audience 不匹配时返回标准 invalid_token 错误，令牌不会被转换为已认证用户。
      */
     override fun validate(token: Jwt): OAuth2TokenValidatorResult {
-        return if (token.audience.contains(audience)) {
+        return if (token.audience?.contains(audience) == true) {
             OAuth2TokenValidatorResult.success()
         } else {
             OAuth2TokenValidatorResult.failure(INVALID_AUDIENCE)

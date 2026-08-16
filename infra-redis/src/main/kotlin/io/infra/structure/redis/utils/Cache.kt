@@ -3,6 +3,7 @@ package io.infra.structure.redis.utils
 import io.infra.structure.core.tool.JsonTool
 import io.infra.structure.db.model.DbEntity
 import io.infra.structure.redis.replication.core.JedisTemplate
+import redis.clients.jedis.params.SetParams
 import java.io.Serializable
 import kotlin.text.isNullOrBlank
 import kotlin.time.Duration
@@ -22,7 +23,7 @@ inline fun <reified T> JedisTemplate.fetch(key: String, expires: Long, lambda: (
     }
     val data = lambda.invoke()
     data?.let {
-        setex(key, expires, JsonTool.toJsonString(data))
+        set(key, JsonTool.toJsonString(data), SetParams().ex(expires))
     }
     return data
 }
@@ -52,7 +53,7 @@ inline fun <reified T : DbEntity<ID>, reified ID : Serializable> JedisTemplate.f
     val data = lambda(missingIds)
     data.forEach {
         val key = "$suffix:${it.id}"
-        setex(key, expireSeconds, JsonTool.toJsonString(it))
+        set(key, JsonTool.toJsonString(it), SetParams().ex(expireSeconds))
         result.add(it)
     }
     return result

@@ -32,7 +32,7 @@ class ProfileController {
         val oidcUser = authentication.principal as? OidcUser
         if (oidcUser != null) {
             return ProfileResponse(
-                subject = oidcUser.subject,
+                subject = oidcUser.subject.orEmpty(),
                 username = oidcUser.getClaimAsString("preferred_username"),
                 email = oidcUser.email,
                 authorities = oidcUser.authorities.mapNotNullTo(linkedSetOf()) { it.authority }

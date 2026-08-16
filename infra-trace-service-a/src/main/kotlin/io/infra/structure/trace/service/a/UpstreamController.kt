@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api/demo")
 class UpstreamController(
-    @Value("\${trace.demo.downstream-url:http://127.0.0.1:18092/api/demo/downstream}") private val downstreamUrl: String
+    @param:Value("\${trace.demo.downstream-url:http://127.0.0.1:18092/api/demo/downstream}") private val downstreamUrl: String
 ) {
 
     private val logger = LoggerFactory.getLogger(UpstreamController::class.java)

@@ -1,6 +1,10 @@
+# JitPack 构建配置
+#
+# 仅对 JitPack 构建生效，本地 Maven 构建不受影响。
+# 通过 -pl '!<模块>' 排除仅本地测试/演示用的模块（sample、service-a/b、各管理后台等），
+# 只发布被其他业务模块引用的库模块，避免测试模块被部署到 JitPack 仓库。
 jdk:
   - openjdk21
-build:
-  script:
-    - FILE=infra-parent/pom.xml
-    - mvn clean install -DskipTests
+
+install:
+  - mvn install -DskipTests -pl '!infra-schedule-executor-sample,!infra-trace-service-a,!infra-trace-service-b,!infra-trace-admin,!infra-schedule-admin,!infra-rocketmq-admin,!infra-sso-login,!infra-activity'

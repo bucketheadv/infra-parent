@@ -1,5 +1,6 @@
 package io.infra.structure.trace.filter
 
+import io.infra.structure.core.utils.Loggable
 import io.infra.structure.trace.TraceContext
 import io.infra.structure.trace.logging.MemoryLogAppender
 import io.infra.structure.trace.properties.TraceProperties
@@ -9,7 +10,6 @@ import io.infra.structure.trace.report.TraceSpan
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import org.slf4j.LoggerFactory
 import org.springframework.web.filter.OncePerRequestFilter
 import org.springframework.web.util.ContentCachingRequestWrapper
 import org.springframework.web.util.ContentCachingResponseWrapper
@@ -41,9 +41,7 @@ class TraceFilter(
     private val reporter: TraceReporter? = null,
     private val serviceName: String? = null,
     private val logReporter: LogReporter? = null
-) : OncePerRequestFilter() {
-
-    private val logger = LoggerFactory.getLogger(TraceFilter::class.java)
+) : OncePerRequestFilter(), Loggable {
 
     /** 调用栈采样线程池：在请求处理中途采集请求线程栈，从而捕获到业务方法调用 */
     private val callStackSampler: java.util.concurrent.ScheduledExecutorService? =
@@ -205,7 +203,7 @@ class TraceFilter(
         try {
             reporter.report(span)
         } catch (exception: Exception) {
-            logger.debug("上报 span 失败，traceId={}", span.traceId, exception)
+            log.debug("上报 span 失败，traceId={}", span.traceId, exception)
         }
     }
 
@@ -223,7 +221,7 @@ class TraceFilter(
         try {
             reporter.reportLogs(logs)
         } catch (exception: Exception) {
-            logger.debug("上报日志失败，traceId={}", traceId, exception)
+            log.debug("上报日志失败，traceId={}", traceId, exception)
         }
     }
 

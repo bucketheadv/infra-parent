@@ -1055,6 +1055,7 @@ class ActivityConfigurationService(
     }
 
     /** 将单个点号路径写入目标对象，并根据下一级路径自动创建对象或数组。 */
+    @Suppress("UNCHECKED_CAST")
     private fun putNestedValue(target: MutableMap<String, Any?>, path: List<String>, value: Any?) {
         val key = path.first()
         if (path.size == 1) {
@@ -1071,6 +1072,7 @@ class ActivityConfigurationService(
     }
 
     /** 将包含数组索引的剩余路径写入列表对应的对象或嵌套列表。 */
+    @Suppress("UNCHECKED_CAST")
     private fun putNestedListValue(target: MutableList<Any?>, path: List<String>, value: Any?) {
         val index = path.first().toIntOrNull() ?: throw IllegalArgumentException("活动配置数组索引不合法")
         require(index >= 0) { "活动配置数组索引不能小于 0" }

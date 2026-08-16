@@ -530,14 +530,16 @@
             if (key) params.set("key", key);
             if (beginMs) params.set("begin", String(beginMs));
             if (endMs) params.set("end", String(endMs));
+            setQueryLoading(true);
             api("/messages/query?" + params.toString()).then(function (list) {
+                setQueryLoading(false);
                 renderResults(list || []);
             }).catch(function (error) {
+                setQueryLoading(false);
                 if (errorEl) errorEl.textContent = error.message;
                 toast(error.message, true);
             });
         });
-
         const sendButton = document.getElementById("send-test-button");
         if (sendButton) sendButton.addEventListener("click", function () { openDialog("send-dialog"); });
         const sendForm = document.getElementById("send-form");
@@ -575,6 +577,15 @@
         }).join("");
     }
 
+    function setQueryLoading(loading) {
+        const loadingEl = document.getElementById("results-loading");
+        const emptyEl = document.getElementById("results-empty");
+        const bodyEl = document.getElementById("results-body");
+        if (loadingEl) loadingEl.hidden = !loading;
+        if (emptyEl && loading) emptyEl.hidden = true;
+        if (bodyEl && loading) bodyEl.innerHTML = "";
+    }
+
     function renderResults(list) {
         const body = document.getElementById("results-body");
         const empty = document.getElementById("results-empty");
@@ -582,7 +593,10 @@
         if (label) label.textContent = "共查询到 " + list.length + " 条消息";
         if (!body) return;
         if (!list.length) {
-            if (empty) empty.hidden = false;
+            if (empty) {
+                empty.textContent = "未查询到消息";
+                empty.hidden = false;
+            }
             body.innerHTML = "";
             return;
         }

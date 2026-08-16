@@ -148,9 +148,10 @@ class LoginSecurityConfiguration {
     @ConditionalOnMissingBean(RegisteredClientRepository::class)
     fun registeredClientRepository(properties: SsoLoginProperties, encoder: PasswordEncoder): RegisteredClientRepository =
         InMemoryRegisteredClientRepository(properties.clients.values.map { client ->
+            val clientSecret: String = requireNotNull(client.clientSecret)
             RegisteredClient.withId(UUID.randomUUID().toString())
                 .clientId(client.clientId)
-                .clientSecret(encoder.encode(client.clientSecret))
+                .clientSecret(encoder.encode(clientSecret)!!)
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
                 .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
@@ -202,13 +203,13 @@ class LoginSecurityConfiguration {
      */
     @Bean
     fun jwtTokenCustomizer(): OAuth2TokenCustomizer<JwtEncodingContext> = OAuth2TokenCustomizer { context ->
-        val principal = context.getPrincipal<Authentication>().principal as? SsoLoginUserDetails ?: return@OAuth2TokenCustomizer
+        val principal = context.getPrincipal<Authentication>()?.principal as? SsoLoginUserDetails ?: return@OAuth2TokenCustomizer
         context.claims.subject(principal.userId.toString())
 
         if (context.tokenType == OAuth2TokenType.ACCESS_TOKEN) {
-            val roles = context.getPrincipal<Authentication>().authorities.mapNotNull { authority ->
+            val roles = context.getPrincipal<Authentication>()?.authorities?.mapNotNull { authority ->
                 authority.authority?.removePrefix("ROLE_")
-            }
+            } ?: emptyList()
             context.claims.claim("roles", roles)
             context.claims.audience(listOf(context.registeredClient.clientId))
         }

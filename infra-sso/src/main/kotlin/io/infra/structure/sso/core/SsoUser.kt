@@ -25,7 +25,7 @@ data class SsoUser(
          * 因而不能直接使用原始 JWT 的 roles 声明替代。
          */
         fun from(jwt: Jwt, authorities: Set<String>): SsoUser = SsoUser(
-            subject = jwt.subject,
+            subject = jwt.subject.orEmpty(),
             username = jwt.getClaimAsString("preferred_username"),
             name = jwt.getClaimAsString("name"),
             email = jwt.getClaimAsString("email"),

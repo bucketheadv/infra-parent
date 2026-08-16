@@ -11,7 +11,7 @@ import org.apache.rocketmq.acl.common.AclClientRPCHook
 import org.apache.rocketmq.acl.common.SessionCredentials
 import org.apache.rocketmq.client.exception.MQBrokerException
 import org.apache.rocketmq.client.exception.MQClientException
-import org.apache.rocketmq.client.consumer.DefaultMQPullConsumer
+import org.apache.rocketmq.client.consumer.DefaultLitePullConsumer
 import org.apache.rocketmq.client.producer.DefaultMQProducer
 import org.apache.rocketmq.common.MixAll
 import org.apache.rocketmq.common.message.Message
@@ -149,47 +149,49 @@ class RocketMQMessageService(
         return client.execute { admin ->
             try {
                 admin.queryMessage(null, topic, msgId)
-            } catch (exception: Exception) {
+            } catch (_: Exception) {
                 null
             }
         }
     }
 
     /** 未指定 Key 时，从各队列末尾读取指定时间范围内的最近消息。 */
-    private fun queryRecentMessages(topic: String, begin: Long, end: Long, limit: Int): List<MessageExt> =
-        withPullConsumer { consumer ->
-            val queues = try {
-                consumer.fetchSubscribeMessageQueues(topic)
-            } catch (exception: Exception) {
-                throw translate("无法获取 Topic 队列：$topic", exception)
-            }
-            queues.flatMap { queue ->
-                try {
-                    val minOffset = consumer.minOffset(queue)
-                    val endOffset = consumer.searchOffset(queue, end)
-                    var offset = (endOffset - limit).coerceAtLeast(minOffset)
+    private fun queryRecentMessages(topic: String, begin: Long, end: Long, limit: Int): List<MessageExt> {
+        val queues = try {
+            withPullConsumer { it.fetchMessageQueues(topic) }
+        } catch (exception: Exception) {
+            throw translate("无法获取 Topic 队列：$topic", exception)
+        }
+        if (queues.isEmpty()) return emptyList()
+        // 每个队列独立 assign + seek + poll：各队列并行、专注单队列，取回最近 limit 条
+        return queues.flatMap { queue ->
+            try {
+                withPullConsumer { consumer ->
+                    consumer.assign(listOf(queue))
+                    val seekOffset = (consumer.offsetForTimestamp(queue, end) ?: 0L) - limit
+                    consumer.seek(queue, seekOffset.coerceAtLeast(0L))
                     val messages = ArrayList<MessageExt>()
-                    while (messages.size < limit) {
-                        val result = consumer.pull(queue, "*", offset, minOf(32, limit - messages.size))
-                        messages += result.msgFoundList.orEmpty()
-                            .filter { it.storeTimestamp in begin..end }
-                        if (result.nextBeginOffset <= offset || result.nextBeginOffset >= endOffset) break
-                        offset = result.nextBeginOffset
+                    val deadline = System.currentTimeMillis() + properties.operationTimeoutMillis
+                    while (messages.size < limit && System.currentTimeMillis() < deadline) {
+                        val batch = consumer.poll(200L)
+                        if (batch.isEmpty()) break
+                        messages += batch.filter { it.storeTimestamp in begin..end }
                     }
-                    messages
-                } catch (exception: Exception) {
-                    throw translate("读取 Topic 队列消息失败：${queue.brokerName}/${queue.queueId}", exception)
+                    messages.take(limit)
                 }
+            } catch (exception: Exception) {
+                throw translate("读取 Topic 队列消息失败：${queue.brokerName}/${queue.queueId}", exception)
             }
         }
+    }
 
-    /** 创建一次性 Pull Consumer，仅用于无 Key 的管理端消息浏览。 */
-    private fun <T> withPullConsumer(block: (DefaultMQPullConsumer) -> T): T {
+    /** 创建一次性 Lite Pull Consumer，仅用于无 Key 的管理端消息浏览。 */
+    private fun <T> withPullConsumer(block: (DefaultLitePullConsumer) -> T): T {
         val rpcHook: RPCHook? = properties.accessKey?.takeIf { it.isNotBlank() }?.let {
             AclClientRPCHook(SessionCredentials(it, properties.secretKey ?: ""))
         }
         val group = "infra_rocketmq_admin_query_${UUID.randomUUID()}"
-        val consumer = if (rpcHook == null) DefaultMQPullConsumer(group) else DefaultMQPullConsumer(group, rpcHook)
+        val consumer = if (rpcHook == null) DefaultLitePullConsumer(group) else DefaultLitePullConsumer(group, rpcHook)
         consumer.namesrvAddr = properties.namesrvAddr
         consumer.instanceName = "$group-${properties.instanceName}"
         consumer.isUseTLS = properties.useTLS

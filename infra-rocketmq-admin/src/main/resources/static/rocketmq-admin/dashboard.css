@@ -277,6 +277,28 @@ tbody tr:hover { background: #f7faff; }
 .actions-heading { text-align: left; }
 .empty-state { padding: 56px 20px; color: var(--muted); text-align: center; font-size: 13px; }
 
+.loading-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 56px 20px;
+    color: var(--muted);
+    font-size: 13px;
+}
+.loading-state[hidden] { display: none; }
+.spinner {
+    width: 22px;
+    height: 22px;
+    border: 3px solid rgba(42, 116, 223, .18);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
 .action-btn {
     padding: 5px 10px;
     border: 1px solid transparent;

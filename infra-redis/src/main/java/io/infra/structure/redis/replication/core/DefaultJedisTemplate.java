@@ -11,6 +11,7 @@ import redis.clients.jedis.args.*;
 import redis.clients.jedis.exceptions.JedisException;
 import redis.clients.jedis.params.*;
 import redis.clients.jedis.resps.*;
+import redis.clients.jedis.util.CompareCondition;
 import redis.clients.jedis.util.KeyValue;
 
 import java.util.*;
@@ -1565,6 +1566,11 @@ public class DefaultJedisTemplate implements JedisTemplate {
     }
 
     @Override
+    public long delex(byte[] key, CompareCondition condition) {
+        return tryGetResource(jedis -> jedis.delex(key, condition));
+    }
+
+    @Override
     public long del(byte[]... keys) {
         return tryGetResource(jedis -> jedis.del(keys));
     }
@@ -1775,6 +1781,16 @@ public class DefaultJedisTemplate implements JedisTemplate {
     }
 
     @Override
+    public String digestKey(String key) {
+        return tryGetResource(jedis -> jedis.digestKey(key));
+    }
+
+    @Override
+    public byte[] digestKey(byte[] key) {
+        return tryGetResource(jedis -> jedis.digestKey(key));
+    }
+
+    @Override
     public long touch(String... keys) {
         return tryGetResource(jedis -> jedis.touch(keys));
     }
@@ -1807,6 +1823,11 @@ public class DefaultJedisTemplate implements JedisTemplate {
     @Override
     public long del(String key) {
         return tryGetResource(jedis -> jedis.del(key));
+    }
+
+    @Override
+    public long delex(String key, CompareCondition condition) {
+        return tryGetResource(jedis -> jedis.delex(key, condition));
     }
 
     @Override
@@ -2463,6 +2484,26 @@ public class DefaultJedisTemplate implements JedisTemplate {
     @Override
     public byte[] echo(byte[] string) {
         return tryGetResource(jedis -> jedis.echo(string));
+    }
+
+    @Override
+    public String hotkeysStart(HotkeysParams params) {
+        return tryGetResource(jedis -> jedis.hotkeysStart(params));
+    }
+
+    @Override
+    public String hotkeysStop() {
+        return tryGetResource(Jedis::hotkeysStop);
+    }
+
+    @Override
+    public String hotkeysReset() {
+        return tryGetResource(Jedis::hotkeysReset);
+    }
+
+    @Override
+    public HotkeysInfo hotkeysGet() {
+        return tryGetResource(Jedis::hotkeysGet);
     }
 
     @Override
@@ -3817,6 +3858,16 @@ public class DefaultJedisTemplate implements JedisTemplate {
     }
 
     @Override
+    public String xcfgset(String key, XCfgSetParams params) {
+        return tryGetResource(jedis -> jedis.xcfgset(key, params));
+    }
+
+    @Override
+    public byte[] xcfgset(byte[] key, XCfgSetParams params) {
+        return tryGetResource(jedis -> jedis.xcfgset(key, params));
+    }
+
+    @Override
     public List<StreamEntry> xrange(String key, StreamEntryID start, StreamEntryID end) {
         return tryGetResource(jedis -> jedis.xrange(key, start, end));
     }
@@ -4264,6 +4315,16 @@ public class DefaultJedisTemplate implements JedisTemplate {
     @Override
     public long msetnx(String... keysvalues) {
         return tryGetResource(jedis -> jedis.msetnx(keysvalues));
+    }
+
+    @Override
+    public boolean msetex(MSetExParams params, String... keysvalues) {
+        return tryGetResource(jedis -> jedis.msetex(params, keysvalues));
+    }
+
+    @Override
+    public boolean msetex(MSetExParams params, byte[]... keysvalues) {
+        return tryGetResource(jedis -> jedis.msetex(params, keysvalues));
     }
 
     @Override

@@ -12,6 +12,11 @@
     <packaging>jar</packaging>
 
     <dependencies>
+        <!-- infra-core 提供 Loggable 等工具接口 -->
+        <dependency>
+            <groupId>io.infra.structure</groupId>
+            <artifactId>infra-core</artifactId>
+        </dependency>
         <!-- 提供 Servlet 过滤链与 spring-web 能力，仅编译期需要；引用方为 MVC 应用时自行生效 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

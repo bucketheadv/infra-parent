@@ -42,7 +42,11 @@
                 <thead><tr><th>消息 ID</th><th>Topic</th><th>Tag / Key</th><th>存储时间</th><th>重试次数</th><th class="actions-heading">操作</th></tr></thead>
                 <tbody id="results-body"></tbody>
             </table>
-            <div class="empty-state" id="results-empty" hidden>未查询到消息</div>
+            <div class="empty-state" id="results-empty">请先设置查询条件</div>
+            <div class="loading-state" id="results-loading" hidden>
+                <div class="spinner"></div>
+                <span>查询中…</span>
+            </div>
         </div>
     </section>
 <dialog id="send-dialog" class="dialog">
